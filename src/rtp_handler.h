@@ -2,10 +2,9 @@
 
 class PeerConnection;
 
-class RTPHandler 
-{
+class RTPHandler {
 public:
-    RTPHandler(PeerConnection& pc);
+  RTPHandler(PeerConnection &pc);
 
-    PeerConnection& belongingPeerConnection_;
+  PeerConnection &belongingPeerConnection_;
 };
