@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta http-equiv='Content-Type' content='text/html; charset=UTF-8'>
+    <title> webrtc test </title>
+    <style type="text/css">
+        .room {
+            cursor: pointer;
+        }
+
+        div.select {
+            display: inline-block;
+            margin: 0 0 1em 0;
+        }
+    </style>
+
+
+    <script type='text/javascript'>
+
+        window.localStorage.setItem('debug', '*');
+
+        async function publish() {
+
+            let videoElement = document.getElementById('video_container_publish');
+            let streamid = document.getElementById("streamid").value;
+            let serverurl = document.getElementById("serverurl").value;
+
+            const constraints = {
+                video: { width: { exact: 640 }, height: { exact: 480 } },
+                audio: true
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+            videoElement.srcObject = stream;
+
+            var pc = new RTCPeerConnection();
+
+            await pc.addTransceiver(stream.getVideoTracks()[0], {
+                direction: "sendonly",
+                streams: [stream],
+            });
+
+            await pc.addTransceiver(stream.getAudioTracks()[0], {
+                direction: "sendonly",
+                streams: [stream],
+            });
+
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+
+            console.log(offer.sdp);
+
+            let res = await fetch(serverurl + "/whip/" + streamid, {
+                method: 'post',
+                headers: {
+                    'Content-Type': 'application/sdp'
+                },
+                body: offer.sdp
+            })
+
+            console.dir(res)
+
+            console.dir(res)
+            let ret = await res.text()
+
+            let answer = new RTCSessionDescription({
+                type: 'answer',
+                sdp: ret
+            })
+
+            await pc.setRemoteDescription(answer);
+        }
+
+    </script>
+
+</head>
+
+<body>
+    <h1>WHIP Demo</h1>
+    <br />
+
+
+    <div>
+        <form>
+            <input type="text" size="50" id="serverurl" name="serverurl" value="http://localhost:8080"><br><br>
+            <input type="text" size="50" id="streamid" name="streamid" value="teststream"><br><br>
+        </form>
+        <button onclick="publish()">Publish</button>
+
+    </div>
+
+
+    <div id="conference">
+        publish:
+        <br />
+        <div id="container">
+            <video id="video_container_publish" playsinline controls autoplay muted width="640" height="480"></video>
+        </div>
+        <br />
+
+    </div>
+
+
+
+</body>
+
+
+</html>
