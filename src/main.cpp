@@ -99,13 +99,18 @@ int main(int argc, char *argv[]) {
   struct sockaddr_in address;
   bzero(&address, sizeof(address));
   address.sin_family = AF_INET;
-  inet_pton(AF_INET, "9.218.129.75", &address.sin_addr);
+  inet_pton(AF_INET, "9.218.129.75",
+            &address.sin_addr); // taylor to change addr
   const int kListenPort = 8000;
   address.sin_port = htons(kListenPort);
 
   ret = bind(g_sock_fd, reinterpret_cast<const sockaddr *>(&address),
              sizeof(address));
-  assert(ret != -1);
+  if (ret == -1) {
+    tylog("bind return -1, errno=%d[%s]", errno, strerror(errno));
+    // before run success, should also printf to show problem directly
+    return 0;
+  }
 
   // udp no listen
   // ret = listen(g_sock_fd, 5);
