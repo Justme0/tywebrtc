@@ -8,7 +8,7 @@ WebRTC server play (closed-loop project)
 其次，本项目为了练手才造的轮子，其他开源项目可能有80%的代码是我不需要的，只需要核心的20%的代码实现的功能。
 
 # 一些设计决策和宗旨
-- 收发包的buffer用std::vector<char>，严禁C风格数组:)，不用unique_ptr<char[]>, unique_ptr<uint8_t[]>，对本条有异议请参考 https://stackoverflow.com/questions/1399891/c-vectorchar-and-sockets/1400289 。代码中尽量不出现new关键字，优先用STL，从根本上避开内存泄露问题，不手动管理内存后，理论上无需写复制构造函数、重载赋值操作符、析构函数（C++典型问题之一，写不必要的Rule of Three）
+- 收发包的buffer用`std::vector<char>`，严禁C风格数组:)，不用unique_ptr<char[]>, unique_ptr<uint8_t[]>，对本条有异议请参考 https://stackoverflow.com/questions/1399891/c-vectorchar-and-sockets/1400289 。代码中尽量不出现new关键字，优先用STL，从根本上避开内存泄露问题，不手动管理内存后，理论上无需写复制构造函数、重载赋值操作符、析构函数（C++典型问题之一，写不必要的Rule of Three）
 - 严禁magic number
 - 某些场景用std::string代替enum，方便直接打印有意义的名称而不是数字
 - 用C++风格而不是C风格（重要），如用默认构造函数代替memset，用std::string 代替 strlen, strcpy，要求开发者有较高的C++水平，请先阅读Effective C++和谷歌编程规范
