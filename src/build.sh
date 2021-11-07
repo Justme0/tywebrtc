@@ -4,35 +4,35 @@ set -ex
 
 kServerName="server_tywebrtc" # svr name is same in Makefile
 
-# format code
-find | egrep "*\.(cpp|h)$" | xargs clang-format -i || true # we don't use *.cc or *.hpp and other extension. Format code forcely :)
-
 # compile
 make V=1
 
+# format code
+# For C++ code we don't use *.cc, *.hpp or other extension. Force format code :)
+# not emit failure if no clang-format
+find | egrep ".+\.(cpp|h)$" | xargs clang-format -i --style Google || true
+
 # deploy
-rsync --port=22222 -vzrtp --progress --password-file=/data/home/taylorjiang/rsync/rsync.pass $kServerName devsync@9.218.129.75::workspace || true
+# rsync --port=22222 -vzrtp --progress --password-file=/data/home/taylorjiang/rsync/rsync.pass $kServerName devsync@9.218.129.75::workspace || true
 
 # Could move to a single file meaning run server
 runSvr()
 {
-    killall $kServerName || true
-    cp /data/$kServerName .
+    killall $kServerName || true # not emit error if no process running
+    # cp /data/$kServerName .
     chmod +x $kServerName
     ./$kServerName &
-
-    sleep 1
 
     echo ====================
     ps -eTo tid,pid,ppid,lstart,cmd | grep -v grep | grep $kServerName
     echo
     top -n 1 -b | grep $kServerName
     echo
-    ss -anp | grep $kServerName
+    ss -anp | grep $kServerName || true
     echo ====================
 
-    sleep 2
-    tailf log.txt # is same as in code
+    sleep 1
+    tail -f log.txt # is same as in code
 }
 
 # process cmd line argument
