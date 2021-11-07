@@ -14,15 +14,15 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
   tylog("stateMachine=%d", stateMachine_);
 
   switch (packType) {
-  case PacketType::STUN: {
-    // iUserNameLen = GetUfragFromIcePacket (pPackage, iLen, pUserName,
-    // REM_USER_NAME_LEN + 1);
-    ret = iceHandler_.HandleIcePacket(vBufReceive);
-    break;
-  }
+    case PacketType::STUN: {
+      // iUserNameLen = GetUfragFromIcePacket (pPackage, iLen, pUserName,
+      // REM_USER_NAME_LEN + 1);
+      ret = iceHandler_.HandleIcePacket(vBufReceive);
+      break;
+    }
 
-  default:
-    break;
+    default:
+      break;
   }
 
   return ret;

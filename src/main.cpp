@@ -1,14 +1,14 @@
-#include <vector>
 #include <string>
+#include <vector>
 
-#include <cstdio>
 #include <cassert>
+#include <cstdio>
 #include <cstring>
 
+#include <arpa/inet.h>
 #include <strings.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
 #include <unistd.h>
 
 #include "log/log.h"
@@ -16,14 +16,15 @@
 
 int g_sock_fd;
 
-struct sockaddr_in g_stConnAddr; // ipv4
+struct sockaddr_in g_stConnAddr;                  // ipv4
+const std::string &g_localip = "192.168.124.13";  // taylor change
 
 int HandleRequest() {
   int ret = 0;
 
   socklen_t addr_size = sizeof(struct sockaddr_in);
-  std::vector<char> vBufReceive(8 *
-                                1024); // to use memory pool for so large buffer
+  std::vector<char> vBufReceive(
+      8 * 1024);  // to use memory pool for so large buffer
 
   ssize_t iRecvLen =
       recvfrom(g_sock_fd, &vBufReceive[0], vBufReceive.size(), 0,
@@ -63,7 +64,7 @@ int HandleRequest() {
     tylog("pc storeClientIPPort fail, ret=%d", ret);
     return ret;
   }
-  pc.stateMachine_ = EnumStateMachine::GET_CANDIDATE_DONE; // taylor TODO
+  pc.stateMachine_ = EnumStateMachine::GET_CANDIDATE_DONE;  // taylor TODO
   ret = pc.HandlePacket(vBufReceive);
   if (ret) {
     tylog("pc.HandlePacket fail, ret=%d\n", ret);
@@ -92,17 +93,17 @@ int main(int argc, char *argv[]) {
     tylog("create listen socket failed, ret %d", ret);
     return __LINE__;
   }
-  tylog("main");
   // TODO set nonblock
 
   // step 2
   struct sockaddr_in address;
   bzero(&address, sizeof(address));
   address.sin_family = AF_INET;
-  inet_pton(AF_INET, "9.218.129.75",
-            &address.sin_addr); // taylor to change addr
+  inet_pton(AF_INET, g_localip.data(),
+            &address.sin_addr);  // taylor to change addr
   const int kListenPort = 8000;
   address.sin_port = htons(kListenPort);
+  tylog("to bind to %s:%d", g_localip.data(), kListenPort);
 
   ret = bind(g_sock_fd, reinterpret_cast<const sockaddr *>(&address),
              sizeof(address));
@@ -111,6 +112,7 @@ int main(int argc, char *argv[]) {
     // before run success, should also printf to show problem directly
     return 0;
   }
+  tylog("bind succ");
 
   // udp no listen
   // ret = listen(g_sock_fd, 5);
@@ -120,13 +122,13 @@ int main(int argc, char *argv[]) {
   // }
 
   // step 3
-  int g_efd = epoll_create(1024); // if media data IO frequently, use select(2)
+  int g_efd = epoll_create(1024);  // if media data IO frequently, use select(2)
   if (g_efd == -1) {
     tylog("epoll_create return -1, errno=%d[%s]", errno, strerror(errno));
     return 0;
   }
 
-  struct epoll_event event = { 0 };
+  struct epoll_event event = {0};
   event.data.fd = g_sock_fd;
   event.events = EPOLLIN | EPOLLHUP | EPOLLERR | EPOLLRDHUP;
   if (epoll_ctl(g_efd, EPOLL_CTL_ADD, g_sock_fd, &event) == -1) {

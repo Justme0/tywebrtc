@@ -3,10 +3,10 @@
 class PeerConnection;
 
 class DTLSHandler {
-public:
+ public:
   DTLSHandler(PeerConnection &pc);
   int startDTLS();
 
-private:
+ private:
   PeerConnection &belongingPeerConnection_;
 };

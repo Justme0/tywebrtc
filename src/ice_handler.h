@@ -1,7 +1,7 @@
 #pragma once
 
-#include <vector>
 #include <string>
+#include <vector>
 
 #define STUN_MSG_MAX_LEN (2048)
 #define STUN_MAGIC (0x2112A442)
@@ -10,18 +10,18 @@
 #define STUN_MESSGAE_INTEGRITY_LEN (20)
 #define STUN_FINGERPRINT_LEN (4)
 
-#define CMD_STUN_BINDING_REQ (0x0001) // RFC 5389
-#define CMD_STUN_BINGING_RES (0x0101) // RFC 5389
+#define CMD_STUN_BINDING_REQ (0x0001)  // RFC 5389
+#define CMD_STUN_BINGING_RES (0x0101)  // RFC 5389
 
-#define ATTRIBUTE_XOR_MAPPED_ADDR (0x0020)   // RFC 5389
-#define ATTRIBUTE_USER_NAME (0x0006)         // RFC 5389
-#define ATTRIBUTE_CONTROLLING (0x802A)       // RFC 5245
-#define ATTRIBUTE_USE_CANDIDATE (0x0025)     // RFC 5245
-#define ATTRIBUTE_PRIORITY (0x0024)          // RFC 5245
-#define ATTRIBUTE_MESSGAE_INTEGRITY (0x0008) // RFC 5389
-#define ATTRIBUTE_FINGERPRINT (0x8028)       // RFC 5389
+#define ATTRIBUTE_XOR_MAPPED_ADDR (0x0020)    // RFC 5389
+#define ATTRIBUTE_USER_NAME (0x0006)          // RFC 5389
+#define ATTRIBUTE_CONTROLLING (0x802A)        // RFC 5245
+#define ATTRIBUTE_USE_CANDIDATE (0x0025)      // RFC 5245
+#define ATTRIBUTE_PRIORITY (0x0024)           // RFC 5245
+#define ATTRIBUTE_MESSGAE_INTEGRITY (0x0008)  // RFC 5389
+#define ATTRIBUTE_FINGERPRINT (0x8028)        // RFC 5389
 
-#define ATTRIBUTE_NETWORK_INFO (0xC057) // draft-thatcher-ice-network-cost-00
+#define ATTRIBUTE_NETWORK_INFO (0xC057)  // draft-thatcher-ice-network-cost-00
 
 #pragma pack(1)
 
@@ -67,43 +67,43 @@ typedef struct StunMsgCommon {
 #define LOC_USER_PWD_LEN 256
 
 enum ICE_CAND_TYPE {
-  ICE_CAND_TYPE_HOST,  // ICE host candidate. A host candidate represents the
-                       // actual local transport address in the host.
-  ICE_CAND_TYPE_SRFLX, // ICE server reflexive candidate, which represents the
-                       // public mapped address of the local address,
+  ICE_CAND_TYPE_HOST,   // ICE host candidate. A host candidate represents the
+                        // actual local transport address in the host.
+  ICE_CAND_TYPE_SRFLX,  // ICE server reflexive candidate, which represents the
+                        // public mapped address of the local address,
   // and is obtained by sending STUN Binding request from the host candidate to
   // a STUN server.
-  ICE_CAND_TYPE_PRFLX, // ICE peer reflexive candidate, which is the address as
-                       // seen by peer agent during connectivity check.
-  ICE_CAND_TYPE_RELAYED, // ICE relayed candidate, which represents the address
-                         // allocated in TURN server.
+  ICE_CAND_TYPE_PRFLX,  // ICE peer reflexive candidate, which is the address as
+                        // seen by peer agent during connectivity check.
+  ICE_CAND_TYPE_RELAYED,  // ICE relayed candidate, which represents the address
+                          // allocated in TURN server.
   ICE_CAND_TYPE_BUTT
 };
 
 inline int IceGetTypePrefix(ICE_CAND_TYPE type) {
   switch (type) {
-  case ICE_CAND_TYPE_HOST:
-    return 'H';
+    case ICE_CAND_TYPE_HOST:
+      return 'H';
 
-  case ICE_CAND_TYPE_SRFLX:
-    return 'S';
+    case ICE_CAND_TYPE_SRFLX:
+      return 'S';
 
-  case ICE_CAND_TYPE_PRFLX:
-    return 'P';
+    case ICE_CAND_TYPE_PRFLX:
+      return 'P';
 
-  case ICE_CAND_TYPE_RELAYED:
-    return 'R';
+    case ICE_CAND_TYPE_RELAYED:
+      return 'R';
 
-  default:
-    return 'U';
+    default:
+      return 'U';
   }
 }
 
 struct ICEInfo {
-  char LocalUfrag[LOC_USER_NAME_LEN + 1];    // 4 to 256
-  char LocalPassWord[LOC_USER_PWD_LEN + 1];  // 22 to 256
-  char RemoteUfrag[REM_USER_NAME_LEN + 1];   // 4 to 256
-  char RemotePassWord[REM_USER_PWD_LEN + 1]; // 22 to 256
+  char LocalUfrag[LOC_USER_NAME_LEN + 1];     // 4 to 256
+  char LocalPassWord[LOC_USER_PWD_LEN + 1];   // 22 to 256
+  char RemoteUfrag[REM_USER_NAME_LEN + 1];    // 4 to 256
+  char RemotePassWord[REM_USER_PWD_LEN + 1];  // 22 to 256
   char Foundation[64];
   unsigned int Prio;
   char szReverse[64];
@@ -112,11 +112,11 @@ struct ICEInfo {
 class PeerConnection;
 
 class ICEHandler {
-public:
+ public:
   ICEHandler(PeerConnection &pc);
   int HandleIcePacket(const std::vector<char> &vBufReceive);
 
-private:
+ private:
   int HandleBindReq(const std::vector<char> &vBufReceive);
   int EncoderXORMappedAddress(char *pBuff, int Len);
   int DecodeStunBindingAttributesMsg(const char *pBuff, int Len);
@@ -130,7 +130,7 @@ private:
   unsigned int IceCalcCandPrio(int type, unsigned int CompId);
   void CreatUserPrio();
 
-private:
+ private:
   PeerConnection &belongingPeerConnection_;
 
   const STUN_MSG_COMMON *m_pStunUserName = nullptr;

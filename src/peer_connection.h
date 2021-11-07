@@ -2,13 +2,13 @@
 
 #include <cstring>
 
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
 
 #include "log/log.h"
 
-#include "ice_handler.h"
 #include "dtls_handler.h"
+#include "ice_handler.h"
 #include "rtp_handler.h"
 
 enum class PacketType {
@@ -19,14 +19,11 @@ enum class PacketType {
 };
 
 inline PacketType getPacketType(unsigned char cSubCmd) {
-  if ((cSubCmd == 0) || (cSubCmd == 1))
-    return PacketType::STUN;
+  if ((cSubCmd == 0) || (cSubCmd == 1)) return PacketType::STUN;
 
-  if ((cSubCmd >= 20) && (cSubCmd <= 64))
-    return PacketType::DTLS;
+  if ((cSubCmd >= 20) && (cSubCmd <= 64)) return PacketType::DTLS;
 
-  if ((cSubCmd >= 128) && (cSubCmd <= 191))
-    return PacketType::RTP;
+  if ((cSubCmd >= 128) && (cSubCmd <= 191)) return PacketType::RTP;
 
   return PacketType::UNKNOWN;
 }
@@ -43,7 +40,7 @@ enum class EnumStateMachine {
 };
 
 class PeerConnection {
-public:
+ public:
   PeerConnection();
   enum EnumStateMachine stateMachine_;
 
