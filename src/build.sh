@@ -4,13 +4,13 @@ set -ex
 
 kServerName="server_tywebrtc" # svr name is same in Makefile
 
-# compile
-make V=1
-
 # format code
 # For C++ code we don't use *.cc, *.hpp or other extension. Force format code :)
 # not emit failure if no clang-format
-find | egrep ".+\.(cpp|h)$" | xargs clang-format -i --style Google || true
+find | egrep ".+\.(c|cpp|h)$" | xargs clang-format -i --style Google || true
+
+# compile
+make V=1
 
 # deploy
 # rsync --port=22222 -vzrtp --progress --password-file=/data/home/taylorjiang/rsync/rsync.pass $kServerName devsync@9.218.129.75::workspace || true

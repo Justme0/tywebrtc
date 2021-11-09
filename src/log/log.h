@@ -19,7 +19,7 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
                                      // maybe fail? TODO: roll log
                                      // and reserve recent N files
 
-// taylor : move get now time util to tylib
+  // taylor : move get now time util to tylib
   // * time
   struct timespec t;
   clock_gettime(CLOCK_REALTIME, &t);

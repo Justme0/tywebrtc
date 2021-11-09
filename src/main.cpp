@@ -19,6 +19,15 @@ int g_sock_fd;
 struct sockaddr_in g_stConnAddr;                  // ipv4
 const std::string &g_localip = "192.168.124.13";  // taylor change
 
+class PCIns {
+ public:
+  static PCIns &ins() {
+    static PCIns ins;
+    return ins;
+  }
+  PeerConnection pc;
+};
+
 int HandleRequest() {
   int ret = 0;
 
@@ -52,13 +61,9 @@ int HandleRequest() {
 
   tylog("taylor recv buffer data addr=%p, size=%zu", vBufReceive.data(),
         vBufReceive.size());
-  for (int i = 0; i < iRecvLen; ++i) {
-    //  tylog("%d", vBufReceive[i]);
-  }
-  // tylog("\n");
 
   // get some pc according to clientip, port or ICE username
-  PeerConnection pc;
+  PeerConnection &pc = PCIns::ins().pc;
   ret = pc.StoreClientIPPort(g_stConnAddr);
   if (ret) {
     tylog("pc storeClientIPPort fail, ret=%d", ret);
@@ -75,6 +80,8 @@ int HandleRequest() {
 }
 
 int main(int argc, char *argv[]) {
+  tylog("OPENSSL_VERSION_NUMBER=0x%x, < 0x10100000L is %d",
+        OPENSSL_VERSION_NUMBER, OPENSSL_VERSION_NUMBER < 0x10100000L);
   // TODO
   //  CONFIG stConfig = {0};
   //  g_config = &stConfig;

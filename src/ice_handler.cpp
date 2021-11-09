@@ -4,7 +4,8 @@
 #include <cstring>
 
 #include <arpa/inet.h>
-#include <openssl/hmac.h>
+
+#include "openssl/hmac.h"
 
 #include "log/log.h"
 #include "peer_connection.h"
@@ -49,6 +50,12 @@ char *CreatRandString(char *str, int len) {
   return str;
 }
 
+ICEHandler::ICEHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
+  CreatLocalUserStunInfo();
+  CreatUserFoundation();
+  CreatUserPrio();
+}
+
 void ICEHandler::CreatLocalUserStunInfo() {
   /*用户初始化的时候生成本用户对应的用户名和密码*/
   std::string strTinyId = std::to_string(g_tinyid);
@@ -88,12 +95,6 @@ unsigned int ICEHandler::IceCalcCandPrio(int type, unsigned int CompId) {
 // TODO simplify
 void ICEHandler::CreatUserPrio() {
   iceInfo_.Prio = IceCalcCandPrio(ICE_CAND_TYPE_SRFLX, 1);
-}
-
-ICEHandler::ICEHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
-  CreatLocalUserStunInfo();
-  CreatUserFoundation();
-  CreatUserPrio();
 }
 
 // now always return 0

@@ -10,6 +10,7 @@
 #include "dtls_handler.h"
 #include "ice_handler.h"
 #include "rtp_handler.h"
+#include "srtp_handler.h"
 
 enum class PacketType {
   STUN,
@@ -37,17 +38,18 @@ enum class EnumStateMachine {
   // EnumStateMachine_DTLS_START,
   DTLS_DONE,
   // EnumStateMachine_RTP_START,
+  RTP_DONE,
 };
 
 class PeerConnection {
  public:
   PeerConnection();
-  enum EnumStateMachine stateMachine_;
 
   int HandlePacket(const std::vector<char> &vBufReceive);
 
   int StoreClientIPPort(const sockaddr_in &addr) {
     char str[INET_ADDRSTRLEN];
+    tylog("shit");
     const char *s = inet_ntop(AF_INET, &(addr.sin_addr), str, INET_ADDRSTRLEN);
     if (nullptr == s) {
       tylog("inet_ntop return null, errno=%d[%s]", errno, strerror(errno));
@@ -61,9 +63,12 @@ class PeerConnection {
   }
 
   // private:
+  enum EnumStateMachine stateMachine_;
+
   ICEHandler iceHandler_;
   DTLSHandler dtlsHandler_;
   RTPHandler rtpHandler_;
+  SrtpHandler srtpHandler_;
 
   std::string clientIP_;
   int clientPort_ = 0;

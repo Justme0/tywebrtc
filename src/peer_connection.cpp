@@ -3,7 +3,10 @@
 #include "log/log.h"
 
 PeerConnection::PeerConnection()
-    : iceHandler_(*this), dtlsHandler_(*this), rtpHandler_(*this) {}
+    : iceHandler_(*this),
+      dtlsHandler_(*this, false),  // taylor 写死 dtls client
+      rtpHandler_(*this),
+      srtpHandler_(*this) {}
 
 int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
   int ret = 0;
@@ -13,17 +16,40 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
   tylog("subcmd=%d, packType=%d", cSubCmd, packType);
   tylog("stateMachine=%d", stateMachine_);
 
+  // packType number is little, so we don't use map-callback style, just
+  // switch-case
   switch (packType) {
     case PacketType::STUN: {
-      // iUserNameLen = GetUfragFromIcePacket (pPackage, iLen, pUserName,
-      // REM_USER_NAME_LEN + 1);
       ret = iceHandler_.HandleIcePacket(vBufReceive);
+      if (ret) {
+        tylog("handle ice packet fail, ret=%d", ret);
+        return ret;
+      }
+      break;
+    }
+
+    case PacketType::DTLS: {
+      ret = dtlsHandler_.HandleDtlsPacket(vBufReceive);
+      if (ret) {
+        tylog("handle dtls packet fail, ret=%d", ret);
+        return ret;
+      }
+      break;
+    }
+
+    case PacketType::RTP: {
+      ret = rtpHandler_.HandleRtpPacket(vBufReceive);
+      if (ret) {
+        tylog("handle rtp packet fail, ret=%d", ret);
+        return ret;
+      }
       break;
     }
 
     default:
+      tylog("unknown packet type %d", packType);
       break;
   }
 
-  return ret;
+  return 0;
 }

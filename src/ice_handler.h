@@ -113,7 +113,7 @@ class PeerConnection;
 
 class ICEHandler {
  public:
-  ICEHandler(PeerConnection &pc);
+  explicit ICEHandler(PeerConnection &pc);
   int HandleIcePacket(const std::vector<char> &vBufReceive);
 
  private:
