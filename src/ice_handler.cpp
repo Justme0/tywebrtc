@@ -379,7 +379,7 @@ int ICEHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
     tylog("use candiate, ice done, now start dtls ...");
 
     // 收到带UseCandidate属性的STUN包后启动DTLS
-    belongingPeerConnection_.dtlsHandler_.startDTLS();
+    belongingPeerConnection_.dtlsHandler_.StartDTLS();
   }
 
   /*回包*/
