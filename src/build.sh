@@ -28,11 +28,11 @@ runSvr()
     echo
     top -n 1 -b | grep $kServerName
     echo
-    ss -anp | grep $kServerName || true
+    ss -anp | grep $kServerName || true # WSL execute ss fail
     echo ====================
 
     sleep 1
-    tail -f log.txt # is same as in code
+    tail -f log.txt # log file name is same as in code; some system have no tailf
 }
 
 # process cmd line argument
