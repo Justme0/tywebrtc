@@ -1,10 +1,9 @@
 #include "certificate_key.h"
 
-#include "openssl/err.h"
-
 #include <cstdio>
 
 #include "log/log.h"
+#include "openssl/err.h"
 
 int GetCertificateAndKey(X509*& outCert, EVP_PKEY*& pkey) {
   int ret = 0;

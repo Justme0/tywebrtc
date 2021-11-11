@@ -16,10 +16,9 @@
 #include <cassert>
 
 #include "bf_dwrap.h"
-#include "openssl/bio.h"
-
 #include "certificate_key.h"
 #include "log/log.h"
+#include "openssl/bio.h"
 #include "peer_connection.h"
 
 // To move to tylib
@@ -182,10 +181,14 @@ static inline const char* GetSslBuffStateString(int errCode) {
   }
 }
 
-static inline const char* GetSslStateString(int stateCode) {
+static inline std::string GetSslStateString(int stateCode) {
+#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
   SSL ssl;
   ssl.state = stateCode;
   return SSL_state_string_long(&ssl);
+#else
+  return "shit_cannot_get_description_in_new_openssl_version:(";
+#endif
 }
 
 static inline int dummy_cb(int d, X509_STORE_CTX* x) { return 1; }
@@ -273,8 +276,8 @@ long DtlsOutBIOCallback(BIO* bio, int cmd, const char* argp, int argi,
   }
 
   // convert BIO to string to print
-  tylog("cmd=%d, bio num=%d, argi=%d, method=%s", cmd, bio->num, argi,
-        bio->method->name);
+  // tylog("cmd=%d, bio num=%d, argi=%d, method=%s", cmd, bio->num, argi,
+  // bio->method->name);
 
   if (BIO_CB_WRITE == cmd) {
     DTLSHandler* d = reinterpret_cast<DTLSHandler*>(BIO_get_callback_arg(bio));
@@ -686,8 +689,10 @@ void DTLSHandler::writeDtlsPacket(const void* data, size_t len) {
     m_ResetFlag = false;
   }
 
-  tylog("write Dtls message len %zu, MTU %u sslMtu:%d %s", len, DTLS_MTU,
-        mSsl->d1->mtu, ToString().data());
+  // tylog("write Dtls message len %zu, MTU %u sslMtu:%d %s", len, DTLS_MTU,
+  // mSsl->d1->mtu, ToString().data());
+  tylog("write Dtls message len %zu, MTU %u %s", len, DTLS_MTU,
+        ToString().data());
 
   //    WebRtcDumpVideoPkg((char*)data,len,WEB_RTC_DUMP_ICE_OUT);
 
@@ -711,8 +716,10 @@ void DTLSHandler::rewriteDtlsPacket(const void* data, size_t len) {
   m_CheckTime = g_GetNowMs();
 
   if (NULL != mSsl) {
-    tylog("ReWrite Dtls message len %zu, MTU %u sslMtu:%d %s", len, DTLS_MTU,
-          mSsl->d1->mtu, ToString().data());
+    // tylog("ReWrite Dtls message len %zu, MTU %u sslMtu:%d %s", len, DTLS_MTU,
+    // mSsl->d1->mtu, ToString().data());
+    tylog("ReWrite Dtls message len %zu, MTU %u %s", len, DTLS_MTU,
+          ToString().data());
   }
 
   //    WebRtcDumpVideoPkg((char*)data,len,WEB_RTC_DUMP_ICE_OUT);
@@ -752,7 +759,7 @@ void DTLSHandler::CheckHandshakeComplete() {
             (SSL3_ST_CR_SESSION_TICKET_A == SSL_get_state(mSsl) ||
              SSL3_ST_CR_FINISHED_A == SSL_get_state(mSsl));
 #else
-      m_IsHandshakeCanComplete = (TLS_ST_CW_FINISHED == SSL_get_state(mSssl));
+      m_IsHandshakeCanComplete = (TLS_ST_CW_FINISHED == SSL_get_state(mSsl));
 #endif
       tylog("as client, %s", ToString().data());
       if (m_IsHandshakeCanComplete) {
@@ -853,5 +860,5 @@ std::string DTLSHandler::ToString() const {
       m_SSl_BuffState, GetSslBuffStateString(m_SSl_BuffState), m_ResetFlag,
       m_ReSendTime, mHandshakeFail, m_ClientKeySendTime,
       GetStreamDirectionString(m_StmDirect), m_IsHandshakeCanComplete,
-      m_LastSslState, GetSslStateString(m_LastSslState), m_startFlag);
+      m_LastSslState, GetSslStateString(m_LastSslState).data(), m_startFlag);
 }
