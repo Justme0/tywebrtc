@@ -7,7 +7,8 @@ kServerName="server_tywebrtc" # svr name is same in Makefile
 # format code
 # For C++ code we don't use *.cc, *.hpp or other extension. Force format code :)
 # not emit failure if no clang-format
-find | egrep ".+\.(c|cpp|h)$" | xargs clang-format -i --style Google || true
+# mac (FreeBSD style) find cmd must specify directory
+find . | egrep ".+\.(c|cpp|h)$" | xargs clang-format -i --style Google || true
 
 # compile
 make V=1

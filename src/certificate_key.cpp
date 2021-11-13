@@ -1,9 +1,10 @@
 #include "certificate_key.h"
 
+#include <cstdio>
+
+#include "openssl/bio.h"
 #include "openssl/err.h"
 #include "openssl/pem.h"
-
-#include <cstdio>
 
 #include "log/log.h"
 
