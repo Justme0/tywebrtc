@@ -45,21 +45,12 @@ class PeerConnection {
  public:
   PeerConnection();
 
-  int HandlePacket(const std::vector<char> &vBufReceive);
+  int HandlePacket(const std::vector<char>& vBufReceive);
 
-  int StoreClientIPPort(const sockaddr_in &addr) {
-    char str[INET_ADDRSTRLEN];
-    tylog("shit");
-    const char *s = inet_ntop(AF_INET, &(addr.sin_addr), str, INET_ADDRSTRLEN);
-    if (nullptr == s) {
-      tylog("inet_ntop return null, errno=%d[%s]", errno, strerror(errno));
-      return -1;
-    }
-    clientIP_ = str;
-    clientPort_ = ntohs(addr.sin_port);
+  void StoreClientIPPort(const std::string& ip, int port) {
+    clientIP_ = ip;
+    clientPort_ = port;
     tylog("src ip=%s, port=%d", clientIP_.data(), clientPort_);
-
-    return 0;
   }
 
   // private:

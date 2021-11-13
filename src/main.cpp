@@ -1,3 +1,4 @@
+#include <map>
 #include <string>
 #include <vector>
 
@@ -17,15 +18,45 @@
 int g_sock_fd;
 
 struct sockaddr_in g_stConnAddr;                  // ipv4
-const std::string &g_localip = "192.168.124.13";  // taylor change
+const std::string& g_localip = "192.168.124.13";  // taylor change
 
-class PCIns {
+// TODO: should save to remote DB ? must refactor! Now we use singleton
+class Singleton {
  public:
-  static PCIns &ins() {
-    static PCIns ins;
-    return ins;
+  static Singleton& Instance() {
+    // 1. C++11: If control enters the declaration concurrently while the
+    // variable is being initialized, the concurrent execution shall wait for
+    // completion of the initialization.
+    // 2. Lazy evaluation.
+    static Singleton s;
+
+    return s;
   }
-  PeerConnection pc;
+
+  struct MapKeyT {
+    const std::string& ip;
+    int port;
+    MapKeyT(const std::string& ip, int port) : ip(ip), port(port) {}
+
+    bool operator<(const MapKeyT& that) const {
+      return std::tie(ip, port) < std::tie(that.ip, that.port);
+    }
+  };
+
+  // if not exist, should create? TODO
+  PeerConnection& GetPeerConnection(const std::string& ip, int port,
+                                    const std::string& Ufrag) {
+    return mClientToPc[MapKeyT{ip, port}];
+  }
+
+  std::map<MapKeyT, PeerConnection>
+      mClientToPc;  // don't use global variable STL
+
+ private:
+  Singleton(const Singleton&) = delete;
+  Singleton& operator=(const Singleton&) = delete;
+
+  Singleton() {}
 };
 
 int HandleRequest() {
@@ -37,7 +68,10 @@ int HandleRequest() {
 
   ssize_t iRecvLen =
       recvfrom(g_sock_fd, &vBufReceive[0], vBufReceive.size(), 0,
-               (struct sockaddr *)&g_stConnAddr, (socklen_t *)&addr_size);
+               (struct sockaddr*)&g_stConnAddr, (socklen_t*)&addr_size);
+  std::string ip;
+  int port = 0;
+  // GetIpPort(g_stConnAddr, ip, port);
   tylog("recv len=%ld", iRecvLen);
   if (iRecvLen < -1) {
     // should not appear
@@ -62,13 +96,14 @@ int HandleRequest() {
   tylog("taylor recv buffer data addr=%p, size=%zu", vBufReceive.data(),
         vBufReceive.size());
 
-  // get some pc according to clientip, port or ICE username
-  PeerConnection &pc = PCIns::ins().pc;
-  ret = pc.StoreClientIPPort(g_stConnAddr);
-  if (ret) {
-    tylog("pc storeClientIPPort fail, ret=%d", ret);
-    return ret;
-  }
+  // get some pc according to clientip, port or ICE username (taylor FIX)
+  PeerConnection& pc = Singleton::Instance().GetPeerConnection(
+      ip, port, "");  // have bug, ufrag is ""
+  pc.StoreClientIPPort(ip, port);
+  // if (ret) {
+  //   tylog("pc storeClientIPPort fail, ret=%d", ret);
+  //   return ret;
+  // }
   pc.stateMachine_ = EnumStateMachine::GET_CANDIDATE_DONE;  // taylor TODO
   ret = pc.HandlePacket(vBufReceive);
   if (ret) {
@@ -79,7 +114,7 @@ int HandleRequest() {
   return 0;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   tylog("OPENSSL_VERSION_NUMBER=0x%x, < 0x10100000L is %d",
         OPENSSL_VERSION_NUMBER, OPENSSL_VERSION_NUMBER < 0x10100000L);
   // TODO
@@ -112,7 +147,7 @@ int main(int argc, char *argv[]) {
   address.sin_port = htons(kListenPort);
   tylog("to bind to %s:%d", g_localip.data(), kListenPort);
 
-  ret = bind(g_sock_fd, reinterpret_cast<const sockaddr *>(&address),
+  ret = bind(g_sock_fd, reinterpret_cast<const sockaddr*>(&address),
              sizeof(address));
   if (ret == -1) {
     tylog("bind return -1, errno=%d[%s]", errno, strerror(errno));

@@ -10,7 +10,7 @@
 #include "log/log.h"
 #include "peer_connection.h"
 
-// taylor to remove
+// taylor to remove, should show RETURN in naming!
 /*条件满足带返回值返回失败*/
 #define WEB_ERROR_CHECK(cond, errid, fmt, args...) \
   do {                                             \
@@ -80,8 +80,6 @@ int ICEHandler::CreatUserFoundation() {
   iceInfo_.Foundation[63] = '\0';
   tylog("taylor foundation=0x%s", iceInfo_.Foundation);
 
-  // strcpy(iceInfo_.Foundation, "1686052607"); // taylor
-
   return 0;
 }
 
@@ -97,25 +95,23 @@ void ICEHandler::CreatUserPrio() {
   iceInfo_.Prio = IceCalcCandPrio(ICE_CAND_TYPE_SRFLX, 1);
 }
 
-// now always return 0
-// TODO: argument use std::string_view (or std::span ?)
-int ICEHandler::DecodeStunBindingAttributesMsg(const char *pBuff, int Len) {
-  const char *pAttributesMsg = pBuff;
-  int LeftLen = Len;
-
-  const int kStunAttributeCommonFieldLength = 4;
+// always return 0, should return error for wrong packet
+// todo parameter can be std::span or std::string_view
+int ICEHandler::DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
+                                               int LeftLen,
+                                               bool *o_bUseCandidate) {
+  const int kStunAttributeCommonFieldLength = 4;  // attr type 2B, len 2B
   while (kStunAttributeCommonFieldLength <= LeftLen) {
-    const STUN_MSG_COMMON *pMsgComm =
-        reinterpret_cast<const STUN_MSG_COMMON *>(pAttributesMsg);
-
+    // TLV structure
     unsigned short AttributeType = ntohs(pMsgComm->AttributeType);
     int AttributeLen = ntohs(pMsgComm->Len);
     char *pData = (char *)pMsgComm + kStunAttributeCommonFieldLength;
+
     tylog("AttributeType=%hu, attr len=%d, pData=%p", AttributeType,
           AttributeLen, pData);
 
     switch (AttributeType) {
-      case ATTRIBUTE_USER_NAME: {
+      case ATTRIBUTE_USER_NAME: {    // todo use enum
         const int kEnoughLen = 513;  // input must not too long
 
         if (AttributeLen > kEnoughLen) {
@@ -134,26 +130,27 @@ int ICEHandler::DecodeStunBindingAttributesMsg(const char *pBuff, int Len) {
 
       case ATTRIBUTE_CONTROLLING: {
         char Controlling[32] = {'\0'};
-        m_pStunIceControlling = pMsgComm;
+        // m_pStunIceControlling = pMsgComm;
         std::string controlling(pData, 8);
         break;
       }
 
       case ATTRIBUTE_USE_CANDIDATE: {
-        m_pStunUseCandidate = pMsgComm;
+        // important!
+        // m_pStunUseCandidate = pMsgComm;
+        *o_bUseCandidate = true;
         tylog("recv candiate");
         break;
       } /*unsigned int*/
 
       case ATTRIBUTE_PRIORITY: {
-        unsigned int Prio = *((unsigned int *)pData);
-        m_pStunPritority = pMsgComm;
+        // m_pStunPritority = pMsgComm;
         break;
       } /*hmac 20*/
 
       case ATTRIBUTE_MESSGAE_INTEGRITY: {
         char Hmac[41] = {'\0'};
-        m_pStunMsgIntegrity = pMsgComm;
+        // m_pStunMsgIntegrity = pMsgComm;
 
         if (20 != AttributeLen) {
           // taylor m_LogStr << " MESSGAE_INTEGRITY:    Len=" << AttributeLen <<
@@ -166,17 +163,13 @@ int ICEHandler::DecodeStunBindingAttributesMsg(const char *pBuff, int Len) {
       }
 
       case ATTRIBUTE_FINGERPRINT: {
-        m_pStunFingerprint = pMsgComm;
+        // m_pStunFingerprint = pMsgComm;
         std::string Fingerprint(pData, 4);
         break;
       }
 
-      case ATTRIBUTE_NETWORK_INFO: {
-        // log
-      }
-
       default: {
-        // TODO
+        // todo log
 
         break;
       }
@@ -185,12 +178,16 @@ int ICEHandler::DecodeStunBindingAttributesMsg(const char *pBuff, int Len) {
     /*长度只标记实际value长度，真个结构长度四字节对齐，后面可能会有padding数据*/
     AttributeLen = (AttributeLen + 3) & (~3);
 
-    if (AttributeLen + (int)sizeof(AttributeLen) >= LeftLen) {
-      pAttributesMsg += LeftLen;
+    if (AttributeLen + sizeof(STUN_MSG_COMMON) /*next attr's type+len*/ >=
+        LeftLen) {
+      pMsgComm = reinterpret_cast<const STUN_MSG_COMMON *>(
+          reinterpret_cast<const char *>(pMsgComm) + LeftLen);
       LeftLen = 0;
     } else {
-      pAttributesMsg += (AttributeLen + sizeof(AttributeLen));
-      LeftLen -= (AttributeLen + sizeof(AttributeLen));
+      pMsgComm = reinterpret_cast<const STUN_MSG_COMMON *>(
+          reinterpret_cast<const char *>(pMsgComm) + AttributeLen +
+          sizeof(STUN_MSG_COMMON));
+      LeftLen -= AttributeLen + sizeof(STUN_MSG_COMMON);
     }
   }
 
@@ -362,11 +359,11 @@ int ICEHandler::EncoderFingerprint(const char *pFingerprintBuff,
 int ICEHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   int ret = 0;
 
-  /*解析客户端上行数据*/
-  const char *pRecvOffset = vBufReceive.data() + sizeof(STUN_MSG_HEAD);
-  int LeftLen = vBufReceive.size() - sizeof(STUN_MSG_HEAD);
-  ret = DecodeStunBindingAttributesMsg(pRecvOffset, LeftLen);
-
+  bool bUseCandidate = false;
+  ret = DecodeStunBindingAttributesMsg(
+      reinterpret_cast<const STUN_MSG_COMMON *>(vBufReceive.data() +
+                                                sizeof(STUN_MSG_HEAD)),
+      vBufReceive.size() - sizeof(STUN_MSG_HEAD), &bUseCandidate);
   // now always return 0
   if (0 != ret) {
     tylog("decodeStunBindingAttributesMsg fail, ret=%d", ret);
@@ -374,7 +371,7 @@ int ICEHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
     return ret;
   }
 
-  if (m_pStunUseCandidate &&
+  if (bUseCandidate &&
       EnumStateMachine::ICE_DONE > belongingPeerConnection_.stateMachine_) {
     belongingPeerConnection_.stateMachine_ = EnumStateMachine::ICE_DONE;
     tylog("use candiate, ice done, now start dtls ...");
@@ -394,7 +391,7 @@ int ICEHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
 
   // ok
   char *pOffset = SndBuff + sizeof(STUN_MSG_HEAD);
-  LeftLen = STUN_MSG_MAX_LEN - sizeof(STUN_MSG_HEAD);
+  int LeftLen = STUN_MSG_MAX_LEN - sizeof(STUN_MSG_HEAD);
   int EncLen = EncoderXORMappedAddress(pOffset, LeftLen);
   if (4 >= EncLen) {
     tylog("encoderXORMappedAddress enclen=%d", EncLen);
@@ -443,9 +440,37 @@ int ICEHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   return 0;
 }
 
+int ICEHandler::CheckIcePacket(const std::vector<char> &vBufReceive) {
+  const char *buff = vBufReceive.data();
+  int len = vBufReceive.size();
+
+  WEB_ERROR_CHECK((len < static_cast<int32_t>(sizeof(StunMsgHead))), -1,
+                  "buffer len=%d too small", len);
+  WEB_ERROR_CHECK(
+      (0x00 != *buff && 0x01 != *buff), -2,
+      "first char is either 0x00(binding req) or 0x01(binding rsp)");
+  const StunMsgHead *pHead = reinterpret_cast<const StunMsgHead *>(buff);
+  int MsgLen = ntohs(pHead->MsgLen);
+  // todo len var use signed int
+  WEB_ERROR_CHECK((MsgLen + static_cast<int32_t>(sizeof(StunMsgHead)) != len),
+                  -4,
+                  "MsgLen:%d(head stuct size)+%d(means body len) must equal to "
+                  "%d(recv buf len)",
+                  MsgLen, sizeof(StunMsgHead), len);
+  WEB_ERROR_CHECK(((MsgLen & 0x03) != 0), -5,
+                  "body len(%d) should be times of 4", MsgLen);
+
+  return 0;
+}
+
 int ICEHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
   int ret = 0;
-  // struct sockaddr_in* pSrcAddr = g_pConfig->stCmdContext.pstClientAddr;
+
+  ret = CheckIcePacket(vBufReceive);
+  if (ret) {
+    tylog("CheckIcePacket fail, ret=%d", ret);
+    return ret;
+  }
 
   const STUN_MSG_HEAD *pHead =
       reinterpret_cast<const STUN_MSG_HEAD *>(vBufReceive.data());
@@ -455,7 +480,6 @@ int ICEHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
     return -1;
   }
 
-  /*数据处理*/
   unsigned short MsgType = ntohs(pHead->StunMsgType);
   tylog("MsgType=%d", MsgType);
 
@@ -469,6 +493,8 @@ int ICEHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
 
       break;
     }
+
+      // case rsp to handle
 
     default: {}
   }

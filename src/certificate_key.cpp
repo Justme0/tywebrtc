@@ -1,6 +1,7 @@
 #include "certificate_key.h"
 
 #include "openssl/err.h"
+#include "openssl/pem.h"
 
 #include <cstdio>
 

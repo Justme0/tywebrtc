@@ -100,13 +100,16 @@ inline int IceGetTypePrefix(ICE_CAND_TYPE type) {
 }
 
 struct ICEInfo {
-  char LocalUfrag[LOC_USER_NAME_LEN + 1];     // 4 to 256
-  char LocalPassWord[LOC_USER_PWD_LEN + 1];   // 22 to 256
+  // self
+  char LocalUfrag[LOC_USER_NAME_LEN + 1];    // 4 to 256
+  char LocalPassWord[LOC_USER_PWD_LEN + 1];  // 22 to 256
+
+  // peer
   char RemoteUfrag[REM_USER_NAME_LEN + 1];    // 4 to 256
   char RemotePassWord[REM_USER_PWD_LEN + 1];  // 22 to 256
+
   char Foundation[64];
-  unsigned int Prio;
-  char szReverse[64];
+  unsigned int Prio = 0;
 };
 
 class PeerConnection;
@@ -117,9 +120,11 @@ class ICEHandler {
   int HandleIcePacket(const std::vector<char> &vBufReceive);
 
  private:
+  int CheckIcePacket(const std::vector<char> &vBufReceive);
   int HandleBindReq(const std::vector<char> &vBufReceive);
   int EncoderXORMappedAddress(char *pBuff, int Len);
-  int DecodeStunBindingAttributesMsg(const char *pBuff, int Len);
+  int DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
+                                     int LeftLen, bool *o_bUseCandidate);
   int EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
                            char *pHeadBuf, int Len);
   int EncoderFingerprint(const char *pFingerprintBuff, int FingerprintLen,
@@ -132,13 +137,6 @@ class ICEHandler {
 
  private:
   PeerConnection &belongingPeerConnection_;
-
-  const STUN_MSG_COMMON *m_pStunUserName = nullptr;
-  const STUN_MSG_COMMON *m_pStunIceControlling = nullptr;
-  const STUN_MSG_COMMON *m_pStunUseCandidate = nullptr;
-  const STUN_MSG_COMMON *m_pStunPritority = nullptr;
-  const STUN_MSG_COMMON *m_pStunMsgIntegrity = nullptr;
-  const STUN_MSG_COMMON *m_pStunFingerprint = nullptr;
 
   ICEInfo iceInfo_;
 };
