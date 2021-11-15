@@ -302,7 +302,8 @@ void CrossPlatformNetworkIO() {
       kMultiplexIOMaxEventNum);  // if media data IO frequently, use select(2)
   if (efd == -1) {
     tylog("epoll_create return -1, errno=%d[%s]", errno, strerror(errno));
-    return 0;
+
+    return;
   }
 
   struct epoll_event event = {0};
@@ -311,7 +312,8 @@ void CrossPlatformNetworkIO() {
   if (epoll_ctl(efd, EPOLL_CTL_ADD, g_sock_fd, &event) == -1) {
     tylog("epoll_ctl return -1, add g_sockfd=%d failed errno=%d[%s]", g_sock_fd,
           errno, strerror(errno));
-    return 0;
+
+    return;
   }
 
   struct epoll_event events[kMultiplexIOMaxEventNum];
@@ -331,7 +333,7 @@ void CrossPlatformNetworkIO() {
       int fd = events[i].data.fd;
       if (fd == g_sock_fd) {
         if (events[i].events | EPOLLIN) {
-          ret = HandleRequest();
+          int ret = HandleRequest();
           if (ret) {
             tylog("HandleRequest fail, ret=%d", ret);
           }

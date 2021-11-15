@@ -472,7 +472,7 @@ int ICEHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
                              reinterpret_cast<struct sockaddr *>(&g_stConnAddr),
                              sizeof(struct sockaddr_in));
   if (-1 == sendtoLen) {
-    tylog("sendto replay errorno=%d[%s]", errno, strerror(errno));
+    tylog("sendto errorno=%d[%s]", errno, strerror(errno));
     return -4;
   }
   tylog("sendto reply buf size=%ld", sendtoLen);
@@ -535,8 +535,7 @@ int ICEHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
     }
 
       // case rsp to handle
-    default: {
-    }
+    default: {}
   }
 
   return 0;
