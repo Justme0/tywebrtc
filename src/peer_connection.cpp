@@ -3,7 +3,8 @@
 #include "log/log.h"
 
 PeerConnection::PeerConnection()
-    : iceHandler_(*this),
+    : stateMachine_(EnumStateMachine::GOT_CANDIDATE),  // sdp has candiate
+      iceHandler_(*this),
       dtlsHandler_(*this, false),  // taylor 写死 dtls client
       rtpHandler_(*this),
       srtpHandler_(*this) {}
@@ -11,9 +12,9 @@ PeerConnection::PeerConnection()
 int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
   int ret = 0;
 
-  char cSubCmd = vBufReceive.front();
+  uint8_t cSubCmd = vBufReceive.front();
   PacketType packType = getPacketType(cSubCmd);
-  tylog("subcmd=%d, packType=%d", cSubCmd, packType);
+  tylog("subcmd=%hhu, packType=%d", cSubCmd, packType);
   tylog("stateMachine=%d", stateMachine_);
 
   // packType number is little, so we don't use map-callback style, just

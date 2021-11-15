@@ -68,7 +68,7 @@ void ICEHandler::CreatLocalUserStunInfo() {
   tylog("ufrag=%s, pws=%s", iceInfo_.LocalUfrag, iceInfo_.LocalPassWord);
 }
 
-extern std::string &g_localip;  // taylor change
+extern std::string g_localip;  // taylor change
 int ICEHandler::CreatUserFoundation() {
   unsigned int LocalOuterIP =
       inet_network(g_localip.data());  // taylor host order
@@ -404,13 +404,20 @@ int ICEHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
     return ret;
   }
 
-  if (bUseCandidate &&
-      EnumStateMachine::ICE_DONE > belongingPeerConnection_.stateMachine_) {
-    belongingPeerConnection_.stateMachine_ = EnumStateMachine::ICE_DONE;
+  if (bUseCandidate && EnumStateMachine::GOT_USE_CANDIDATE_ICE >
+                           belongingPeerConnection_.stateMachine_) {
+    // When in communication, will always recv use-candiate ice, so check
+    // machine state before assigning
+    belongingPeerConnection_.stateMachine_ =
+        EnumStateMachine::GOT_USE_CANDIDATE_ICE;
     tylog("use candiate, ice done, now start dtls ...");
 
     // 收到带UseCandidate属性的STUN包后启动DTLS
     belongingPeerConnection_.dtlsHandler_.StartDTLS();
+  } else if (EnumStateMachine::GOT_FIRST_ICE >
+             belongingPeerConnection_.stateMachine_) {
+    belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_FIRST_ICE;
+    tylog("got first STUN");
   }
 
   /*回包*/
@@ -508,7 +515,7 @@ int ICEHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
   const STUN_MSG_HEAD *pHead =
       reinterpret_cast<const STUN_MSG_HEAD *>(vBufReceive.data());
 
-  if (EnumStateMachine::GET_CANDIDATE_DONE >
+  if (EnumStateMachine::GOT_CANDIDATE >
       belongingPeerConnection_.stateMachine_) {
     return -1;
   }
@@ -528,7 +535,8 @@ int ICEHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
     }
 
       // case rsp to handle
-    default: {}
+    default: {
+    }
   }
 
   return 0;

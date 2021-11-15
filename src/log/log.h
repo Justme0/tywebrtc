@@ -40,7 +40,7 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
   outfile << timeBuffer;
 
   // * filename
-  outfile << "," << fileName;
+  outfile << " " << fileName;  // use space for `gf` to jump to file in Vim
 
   // * line number
   outfile << ":" << lineNumber << "L";

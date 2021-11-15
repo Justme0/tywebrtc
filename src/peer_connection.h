@@ -18,7 +18,7 @@ enum class PacketType {
   UNKNOWN,
 };
 
-inline PacketType getPacketType(unsigned char cSubCmd) {
+inline PacketType getPacketType(uint8_t cSubCmd) {
   if ((cSubCmd == 0) || (cSubCmd == 1)) return PacketType::STUN;
 
   if ((cSubCmd >= 20) && (cSubCmd <= 64)) return PacketType::DTLS;
@@ -30,14 +30,11 @@ inline PacketType getPacketType(unsigned char cSubCmd) {
 
 enum class EnumStateMachine {
   SDP_DONE,
-  GET_CANDIDATE_DONE,
-  ICE_USE_CANDIDATE_DONE,
-  // EnumStateMachine_ICE_START,
-  ICE_DONE,
-  // EnumStateMachine_DTLS_START,
+  GOT_CANDIDATE,
+  GOT_FIRST_ICE,
+  GOT_USE_CANDIDATE_ICE,
   DTLS_DONE,
-  // EnumStateMachine_RTP_START,
-  RTP_DONE,
+  GOT_RTP,
 };
 
 class PeerConnection {

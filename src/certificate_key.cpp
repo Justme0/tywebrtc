@@ -2,17 +2,16 @@
 
 #include <cstdio>
 
+#include "log/log.h"
 #include "openssl/bio.h"
 #include "openssl/err.h"
 #include "openssl/pem.h"
 
-#include "log/log.h"
-
 int GetCertificateAndKey(X509*& outCert, EVP_PKEY*& pkey) {
   int ret = 0;
   FILE* fp;
-  static char certfile[] = "cert.pem";
-  static char keyfile[] = "key.pem";
+  static char certfile[] = "test.crt";
+  static char keyfile[] = "test.pem";
 
   /* Read private key */
 

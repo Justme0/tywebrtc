@@ -25,9 +25,10 @@ runSvr()
     ./$kServerName &
 
     echo ====================
-    ps -eTo tid,pid,ppid,lstart,cmd | grep -v grep | grep $kServerName
+    # ps -eTo tid,pid,ppid,lstart,cmd | grep -v grep | grep $kServerName # ps option not support in mac os
+    ps aux | grep -v grep | grep $kServerName
     echo
-    top -n 1 -b | grep $kServerName
+    top -n 1 -b | grep $kServerName || true # mac os ps have no -b option
     echo
     ss -anp | grep $kServerName || true # WSL execute ss fail
     echo ====================
