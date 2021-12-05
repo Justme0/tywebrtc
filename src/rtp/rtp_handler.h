@@ -1,15 +1,18 @@
-#pragma once
+#ifndef RTP_RTP_HANDLER_H_
+#define RTP_RTP_HANDLER_H_
 
 #include <vector>
 
 class PeerConnection;
 
-class RTPHandler {
+class RtpHandler {
  public:
-  explicit RTPHandler(PeerConnection &pc);
+  explicit RtpHandler(PeerConnection &pc);
 
   int HandleRtpPacket(const std::vector<char> &vBufReceive);
 
   // private:
   PeerConnection &belongingPeerConnection_;
 };
+
+#endif  // RTP_RTP_HANDLER_H_

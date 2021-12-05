@@ -1,4 +1,4 @@
-#include "ice_handler.h"
+#include "ice/ice_handler.h"
 
 #include <arpa/inet.h>
 
@@ -7,7 +7,7 @@
 
 #include "log/log.h"
 #include "openssl/hmac.h"
-#include "peer_connection.h"
+#include "pc/peer_connection.h"
 
 // taylor to remove, should show RETURN in naming!
 /*条件满足带返回值返回失败*/
@@ -49,13 +49,13 @@ char *CreatRandString(char *str, int len) {
   return str;
 }
 
-ICEHandler::ICEHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
+IceHandler::IceHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
   CreatLocalUserStunInfo();
   CreatUserFoundation();
   CreatUserPrio();
 }
 
-void ICEHandler::CreatLocalUserStunInfo() {
+void IceHandler::CreatLocalUserStunInfo() {
   /*用户初始化的时候生成本用户对应的用户名和密码*/
   std::string strTinyId = std::to_string(g_tinyid);
   int strlen = strTinyId.length();
@@ -69,7 +69,7 @@ void ICEHandler::CreatLocalUserStunInfo() {
 }
 
 extern std::string g_localip;  // taylor change
-int ICEHandler::CreatUserFoundation() {
+int IceHandler::CreatUserFoundation() {
   unsigned int LocalOuterIP =
       inet_network(g_localip.data());  // taylor host order
 
@@ -82,7 +82,7 @@ int ICEHandler::CreatUserFoundation() {
   return 0;
 }
 
-unsigned int ICEHandler::IceCalcCandPrio(int type, unsigned int CompId) {
+unsigned int IceHandler::IceCalcCandPrio(int type, unsigned int CompId) {
   static unsigned char CandTypePrefs[ICE_CAND_TYPE_BUTT] = {126, 100, 110, 0};
 
   return ((CandTypePrefs[type] & 0xFF) << 24) + ((65535 & 0xFFFF) << 8) +
@@ -90,13 +90,13 @@ unsigned int ICEHandler::IceCalcCandPrio(int type, unsigned int CompId) {
 }
 
 // TODO simplify
-void ICEHandler::CreatUserPrio() {
+void IceHandler::CreatUserPrio() {
   iceInfo_.Prio = IceCalcCandPrio(ICE_CAND_TYPE_SRFLX, 1);
 }
 
 // always return 0, should return error for wrong packet
 // todo parameter can be std::span or std::string_view
-int ICEHandler::DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
+int IceHandler::DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
                                                int LeftLen,
                                                bool *o_bUseCandidate) {
   const int kStunAttributeCommonFieldLength = 4;  // attr type 2B, len 2B
@@ -148,15 +148,15 @@ int ICEHandler::DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
       } /*hmac 20*/
 
       case ATTRIBUTE_MESSGAE_INTEGRITY: {
-        char Hmac[41] = {'\0'};
+        // char Hmac[41] = {'\0'};
         // m_pStunMsgIntegrity = pMsgComm;
 
-        if (20 != AttributeLen) {
-          // taylor m_LogStr << " MESSGAE_INTEGRITY:    Len=" << AttributeLen <<
-          // " Err\n";
-        } else {
-          std::string Hmac(pData, 20);
-        }
+        // if (20 != AttributeLen) {
+        // taylor m_LogStr << " MESSGAE_INTEGRITY:    Len=" << AttributeLen <<
+        // " Err\n";
+        // } else {
+        // std::string Hmac(pData, 20);
+        // }
 
         break;
       }
@@ -177,8 +177,8 @@ int ICEHandler::DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
     /*长度只标记实际value长度，真个结构长度四字节对齐，后面可能会有padding数据*/
     AttributeLen = (AttributeLen + 3) & (~3);
 
-    if (AttributeLen + sizeof(STUN_MSG_COMMON) /*next attr's type+len*/ >=
-        LeftLen) {
+    /*next attr's type+len*/
+    if (AttributeLen + static_cast<int>(sizeof(STUN_MSG_COMMON)) >= LeftLen) {
       pMsgComm = reinterpret_cast<const STUN_MSG_COMMON *>(
           reinterpret_cast<const char *>(pMsgComm) + LeftLen);
       LeftLen = 0;
@@ -194,7 +194,8 @@ int ICEHandler::DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
 }
 
 // taylor return not error code
-int ICEHandler::EncoderXORMappedAddress(char *pBuff, int Len) {
+int IceHandler::EncoderXORMappedAddress(char *pBuff, int Len) {
+  // taylor should check Len
   STUN_XOR_MSG_MAPPED_V4_ADDRESS *pMapAddr =
       reinterpret_cast<STUN_XOR_MSG_MAPPED_V4_ADDRESS *>(pBuff);
 
@@ -210,7 +211,7 @@ int ICEHandler::EncoderXORMappedAddress(char *pBuff, int Len) {
   return (int)sizeof(STUN_XOR_MSG_MAPPED_V4_ADDRESS);
 }
 
-int ICEHandler::EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
+int IceHandler::EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
                                      char *pHeadBuf, int Len) {
   WEB_ERROR_CHECK((NULL == pMsgIntergrityBuff), -1, "pBuff is null");
   WEB_ERROR_CHECK(((int)sizeof(STUN_MSG_INTEGRITY) > LeftLen), -2,
@@ -372,7 +373,7 @@ unsigned int Crc32Calc(const unsigned char *data, int nbytes) {
   return Crc32Final(&ctx);
 }
 
-int ICEHandler::EncoderFingerprint(const char *pFingerprintBuff,
+int IceHandler::EncoderFingerprint(const char *pFingerprintBuff,
                                    int FingerprintLen, char *pHeadBuf,
                                    int Len) {
   WEB_ERROR_CHECK((NULL == pFingerprintBuff), -1, "pBuff is null");
@@ -389,7 +390,7 @@ int ICEHandler::EncoderFingerprint(const char *pFingerprintBuff,
   return (int)sizeof(STUN_MSG_FINGERPRINT);
 }
 
-int ICEHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
+int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   int ret = 0;
 
   bool bUseCandidate = false;
@@ -480,7 +481,7 @@ int ICEHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   return 0;
 }
 
-int ICEHandler::CheckIcePacket(const std::vector<char> &vBufReceive) {
+int IceHandler::CheckIcePacket(const std::vector<char> &vBufReceive) {
   const char *buff = vBufReceive.data();
   int len = vBufReceive.size();
 
@@ -503,7 +504,7 @@ int ICEHandler::CheckIcePacket(const std::vector<char> &vBufReceive) {
   return 0;
 }
 
-int ICEHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
+int IceHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
   int ret = 0;
 
   ret = CheckIcePacket(vBufReceive);

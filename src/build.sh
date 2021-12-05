@@ -4,11 +4,10 @@ set -ex
 
 kServerName="server_tywebrtc" # svr name is same in Makefile
 
-# format code
-# For C++ code we don't use *.cc, *.hpp or other extension. Force format code :)
+# force format code :)
 # not emit failure if no clang-format
 # mac (FreeBSD style) find cmd must specify directory
-find . | egrep ".+\.(c|cpp|h)$" | xargs clang-format -i --style Google || true
+find . | egrep ".+\.(c|cc|h)$" | xargs clang-format -i --style Google || true
 
 # compile
 make V=1
@@ -33,7 +32,6 @@ runSvr()
     ss -anp | grep $kServerName || true # WSL execute ss fail
     echo ====================
 
-    sleep 1
     tail -f log.txt # log file name is same as in code; some system have no tailf
 }
 

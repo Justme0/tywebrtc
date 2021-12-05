@@ -7,18 +7,21 @@
 #include <cstdio>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "log/log.h"
-#include "peer_connection.h"
+#include "pc/peer_connection.h"
 #include "tylib/ip/ip.h"
 
 int g_sock_fd;
 
+std::string g_localip = "192.168.124.13";
 struct sockaddr_in g_stConnAddr;  // ipv4, must reflector taylor
 
 // TODO: should save to remote DB ? must refactor! Now we use singleton
+// OPT2: move to tylib
 class Singleton {
  public:
   static Singleton& Instance() {
@@ -31,30 +34,53 @@ class Singleton {
     return s;
   }
 
-  struct MapKeyT {
+  struct ClientSrcId {
     std::string ip;
     int port;
-    MapKeyT(const std::string& ip, int port) : ip(ip), port(port) {}
+    ClientSrcId(const std::string& ip, int port) : ip(ip), port(port) {}
 
-    bool operator<(const MapKeyT& that) const {
+    bool operator<(const ClientSrcId& that) const {
       return std::tie(ip, port) < std::tie(that.ip, that.port);
     }
   };
 
-  // if not exist, should create? TODO
-  PeerConnection& GetPeerConnection(const std::string& ip, int port,
-                                    const std::string& Ufrag) {
-    return mClientToPc[MapKeyT{ip, port}];
-  }
+  // if construct map's value is expensive
+  // https://stackoverflow.com/questions/97050/stdmap-insert-or-stdmap-find
+  // here we can also use insert and update, but lower_bound is more general
+  std::shared_ptr<PeerConnection> GetPeerConnection(const std::string& ip,
+                                                    int port,
+                                                    const std::string& ufrag) {
+    ClientSrcId clientSrcId{ip, port};
+    auto lb = client2PC_.lower_bound(clientSrcId);
 
-  std::map<MapKeyT, PeerConnection>
-      mClientToPc;  // don't use global variable STL
+    if (lb != client2PC_.end() &&
+        !(client2PC_.key_comp()(clientSrcId, lb->first))) {
+      assert(nullptr != lb->second);
+      return lb->second;
+    } else {
+      tylog("new pc, ip=%s, port=%d, ufrag=%s", ip.data(), port, ufrag.data());
+      // Use lb as a hint to insert, so it can avoid another lookup
+      // OPT: ICE未选上的地址也会为它生成PC，可优化为PC池
+      auto i = client2PC_.emplace_hint(
+          lb, std::make_pair(clientSrcId, std::make_shared<PeerConnection>()));
+      assert(nullptr != i->second);
+      return i->second;
+    }
+  }
 
  private:
   Singleton(const Singleton&) = delete;
   Singleton& operator=(const Singleton&) = delete;
 
   Singleton() {}
+
+  // don't use global variable STL
+  // taylor 定时清理超时会话（pc）
+  // std::map is not designed to work with objects which are not
+  // copy-constructible. But PeerConnection cannot be copy because its member
+  // has reference data member
+  // https://stackoverflow.com/questions/20972751/how-to-put-a-class-that-has-deleted-copy-ctor-and-assignment-operator-in-map
+  std::map<ClientSrcId, std::shared_ptr<PeerConnection>> client2PC_;
 };
 
 #if 0
@@ -156,11 +182,13 @@ int HandleRequest() {
   int ret = 0;
 
   socklen_t addr_size = sizeof(struct sockaddr_in);
-  // to use memory pool for so large buffer
-  std::vector<char> vBufReceive(8 * 1024);
+  // to use memory pool for so large buffer, UDP is enough, TCP?
+  // OPT: media packet should less copy as possible
+  const int kSendRecvUdpMaxLength = 4 * 1024;
+  std::vector<char> vBufReceive(kSendRecvUdpMaxLength);
 
   ssize_t iRecvLen =
-      recvfrom(g_sock_fd, &vBufReceive[0], vBufReceive.size(), 0,
+      recvfrom(g_sock_fd, vBufReceive.data(), vBufReceive.size(), 0,
                (struct sockaddr*)&g_stConnAddr, (socklen_t*)&addr_size);
   tylog("recv len=%ld", iRecvLen);
   if (iRecvLen < -1) {
@@ -176,7 +204,7 @@ int HandleRequest() {
     tylog("peer shutdown (not error)");
 
     return 1;
-  } else if (iRecvLen > vBufReceive.size()) {
+  } else if (iRecvLen > static_cast<int>(vBufReceive.size())) {
     tylog("recv buffer overflow len=%ld", iRecvLen);
 
     return -3;
@@ -191,14 +219,15 @@ int HandleRequest() {
   tylib::GetIpPort(g_stConnAddr, ip, port);
   tylog("src ip=%s, port=%d", ip.data(), port);
   // get some pc according to clientip, port or ICE username (taylor FIX)
-  PeerConnection& pc = Singleton::Instance().GetPeerConnection(
-      ip, port, "");               // have bug, ufrag is ""
-  pc.StoreClientIPPort(ip, port);  // should be in GetPeerConnection()
+  std::shared_ptr<PeerConnection> pc = Singleton::Instance().GetPeerConnection(
+      ip, port, "");  // have bug, ufrag is ""
+  tylog("get pc done");
+  pc->StoreClientIPPort(ip, port);  // should be in GetPeerConnection()
   // if (ret) {
   //   tylog("pc storeClientIPPort fail, ret=%d", ret);
   //   return ret;
   // }
-  ret = pc.HandlePacket(vBufReceive);
+  ret = pc->HandlePacket(vBufReceive);
   if (ret) {
     tylog("pc.HandlePacket fail, ret=%d", ret);
     return ret;
@@ -359,7 +388,6 @@ void CrossPlatformNetworkIO() {
 }
 #endif
 
-std::string g_localip = "127.0.0.1";
 int main(int argc, char* argv[]) {
   tylog("OPENSSL_VERSION_NUMBER=0x%x, < 0x10100000L is %d",
         OPENSSL_VERSION_NUMBER, OPENSSL_VERSION_NUMBER < 0x10100000L);

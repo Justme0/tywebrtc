@@ -1,0 +1,15 @@
+{
+	"files.associations": {
+		"string": "cpp",
+		"*.tcc": "cpp",
+		"deque": "cpp",
+		"list": "cpp",
+		"vector": "cpp",
+		"optional": "cpp",
+		"mutex": "cpp",
+		"array": "cpp",
+		"string_view": "cpp"
+	},
+	"editor.fontSize": 18,
+	"C_Cpp.clang_format_fallbackStyle": "Google"
+}

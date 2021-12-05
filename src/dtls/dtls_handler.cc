@@ -11,60 +11,16 @@
 // 16 ClientKeyExchange
 // 20 Finished
 
-#include "dtls_handler.h"
+#include "dtls/dtls_handler.h"
 
 #include <cassert>
 
-#include "bf_dwrap.h"
-#include "certificate_key.h"
+#include "tylib/codec/codec.h"
+
+#include "dtls/certificate_key.h"
 #include "log/log.h"
 #include "openssl/bio.h"
-#include "peer_connection.h"
-
-// To move to tylib
-// https://stackoverflow.com/questions/180947/base64-decode-snippet-in-c
-static std::string base64_encode(const std::string& in) {
-  std::string out;
-
-  int val = 0, valb = -6;
-  for (char c : in) {
-    val = (val << 8) + c;
-    valb += 8;
-    while (valb >= 0) {
-      out.push_back(
-          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-              [(val >> valb) & 0x3F]);
-      valb -= 6;
-    }
-  }
-  if (valb > -6)
-    out.push_back(
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-            [((val << 8) >> (valb + 8)) & 0x3F]);
-  while (out.size() % 4) out.push_back('=');
-  return out;
-}
-
-static std::string base64_decode(const std::string& in) {
-  std::string out;
-
-  std::vector<int> T(256, -1);
-  for (int i = 0; i < 64; i++)
-    T["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"[i]] =
-        i;
-
-  int val = 0, valb = -8;
-  for (char c : in) {
-    if (T[c] == -1) break;
-    val = (val << 6) + T[c];
-    valb += 6;
-    if (valb >= 0) {
-      out.push_back(char((val >> valb) & 0xFF));
-      valb -= 8;
-    }
-  }
-  return out;
-}
+#include "pc/peer_connection.h"
 
 // taylor to use c++20 std::format
 // https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf
@@ -108,9 +64,9 @@ const int SRTP_MASTER_KEY_KEY_LEN = 16;
 const int SRTP_MASTER_KEY_SALT_LEN = 14;
 const int DTLS_MTU = 1100;
 
-const char* DTLSHandler::DefaultSrtpProfile = "SRTP_AES128_CM_SHA1_80";
-X509* DTLSHandler::mCert = NULL;  //证书格式，包含公钥、加密算法、有效期等参数。
-EVP_PKEY* DTLSHandler::privkey = NULL;  // key 的EVP
+const char* DtlsHandler::DefaultSrtpProfile = "SRTP_AES128_CM_SHA1_80";
+X509* DtlsHandler::mCert = NULL;  //证书格式，包含公钥、加密算法、有效期等参数。
+EVP_PKEY* DtlsHandler::privkey = NULL;  // key 的EVP
                                         // 封装可封装rsa、dsa、ecc等key
 
 std::string WebRtcPrintTimeMs(unsigned long long TimeMs) {
@@ -120,41 +76,41 @@ std::string WebRtcPrintTimeMs(unsigned long long TimeMs) {
 
 int DummyCb(int preverify_ok, X509_STORE_CTX* x509_ctx) { return 1; }
 
-static bool DropUpPkgRand() {
-  int lossRate = 0;
-  std::ifstream f("testLost.txt");
-  if (f) {
-    f >> lossRate;  // up loss rate
-  }
+// static bool DropUpPkgRand() {
+//   int lossRate = 0;
+//   std::ifstream f("testLost.txt");
+//   if (f) {
+//     f >> lossRate;  // up loss rate
+//   }
+//
+//   int dopKey = rand() % 100;
+//
+//   if (dopKey < lossRate) {
+//     tylog("up lostrate=%d%%", lossRate);
+//     return true;
+//   }
+//
+//   return false;
+// }
 
-  int dopKey = rand() % 100;
-
-  if (dopKey < lossRate) {
-    tylog("up lostrate=%d%%", lossRate);
-    return true;
-  }
-
-  return false;
-}
-
-static bool DropDownPkgRand() {
-  int lossRate = 0;
-  std::ifstream f("testLost.txt");
-  if (f) {
-    int upLossRate;
-    f >> upLossRate;
-    f >> lossRate;  // down loss rate
-  }
-
-  int dopKey = rand() % 100;
-
-  if (dopKey < lossRate) {
-    tylog("down lostrate=%d%%", lossRate);
-    return true;
-  }
-
-  return false;
-}
+// static bool DropDownPkgRand() {
+//   int lossRate = 0;
+//   std::ifstream f("testLost.txt");
+//   if (f) {
+//     int upLossRate;
+//     f >> upLossRate;
+//     f >> lossRate;  // down loss rate
+//   }
+//
+//   int dopKey = rand() % 100;
+//
+//   if (dopKey < lossRate) {
+//     tylog("down lostrate=%d%%", lossRate);
+//     return true;
+//   }
+//
+//   return false;
+// }
 
 static inline const char* GetSslBuffStateString(int errCode) {
   switch (errCode) {
@@ -191,7 +147,7 @@ static inline std::string GetSslStateString(int stateCode) {
 #endif
 }
 
-static inline int dummy_cb(int d, X509_STORE_CTX* x) { return 1; }
+// static inline int dummy_cb(int d, X509_STORE_CTX* x) { return 1; }
 
 void SSLInfoCallback(const SSL* s, int where, int ret) {
   if (where & SSL_CB_HANDSHAKE_DONE) {
@@ -280,16 +236,40 @@ long DtlsOutBIOCallback(BIO* bio, int cmd, const char* argp, int argi,
   // bio->method->name);
 
   if (BIO_CB_WRITE == cmd) {
-    DTLSHandler* d = reinterpret_cast<DTLSHandler*>(BIO_get_callback_arg(bio));
+    DtlsHandler* d = reinterpret_cast<DtlsHandler*>(BIO_get_callback_arg(bio));
     if (argp && 0 < argi && d) {
-      d->writeDtlsPacket(argp, argi);
+      d->WriteDtlsPacket(argp, argi);
     }
   }
 
   return r;
 }
 
-DTLSHandler::DTLSHandler(PeerConnection& pc, bool isServer)
+void DtlsHandler::InitOpensslAndCert() {
+  tylog("shit ok");
+#if (OPENSSL_VERSION_NUMBER > 0x10100000L)
+  OPENSSL_init_ssl(0, NULL);
+  tylog("shit 2");
+  OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS, NULL);
+  tylog("shit ");
+  OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_DIGESTS, NULL);
+  tylog("shit ");
+#else
+  tylog("shit ok");
+  SSL_library_init();
+  tylog("shit ok");
+  SSL_load_error_strings();
+  tylog("shit ok");
+  ERR_load_crypto_strings();
+  tylog("shit ok");
+#endif
+  int ret = GetCertificateAndKey(DtlsHandler::mCert, DtlsHandler::privkey);
+  if (ret) {
+    tylog("getCertificateAndKey shit");
+  }
+}
+
+DtlsHandler::DtlsHandler(PeerConnection& pc, bool isServer)
     : belongingPeerConnection_(pc),
       m_isServer(isServer),
       mHandshakeCompleted(false),
@@ -309,9 +289,7 @@ DTLSHandler::DTLSHandler(PeerConnection& pc, bool isServer)
       m_LastSslState(TLS_ST_BEFORE),
 #endif
       m_startFlag(false) {
-  tylog("shit 1");
   InitOpensslAndCert();
-  tylog("shit 2");
 
   memset(m_SendBuff, 0, sizeof(m_SendBuff));
 
@@ -351,33 +329,7 @@ DTLSHandler::DTLSHandler(PeerConnection& pc, bool isServer)
   SSL_set_bio(mSsl, mInBio, mOutBio);
 }
 
-void DTLSHandler::InitOpensslAndCert() {
-  if (DTLSHandler::mCert == NULL) {
-    tylog("shit 1");
-#if (OPENSSL_VERSION_NUMBER > 0x10100000L)
-    OPENSSL_init_ssl(0, NULL);
-    tylog("shit 2");
-    OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS, NULL);
-    tylog("shit ");
-    OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_DIGESTS, NULL);
-    tylog("shit ");
-#else
-    tylog("shit ");
-    SSL_library_init();
-    tylog("shit ");
-    SSL_load_error_strings();
-    tylog("shit ");
-    ERR_load_crypto_strings();
-    tylog("shit ");
-#endif
-    int ret = GetCertificateAndKey(DTLSHandler::mCert, DTLSHandler::privkey);
-    if (ret) {
-      tylog("GetCertificateAndKey shit");
-    }
-  }
-}
-
-DTLSHandler::~DTLSHandler() {
+DtlsHandler::~DtlsHandler() {
   tylog("in destructor closing dtls, %s", ToString().data());
 
   if (mSsl != NULL) {
@@ -389,11 +341,151 @@ DTLSHandler::~DTLSHandler() {
   SSL_CTX_free(mContext);
 }
 
+void DtlsHandler::onHandshakeCompleted() {
+  tylog("isServer: %d clientKey: %s, serverKey: %s, swap keys if server",
+        m_isServer, sendingRtpKey.c_str(), receivingRtpKey.c_str());
+
+  if (m_isServer) {
+    // If we are server, we swap the keys
+    tylog("message: swapping keys, isServer: %d", m_isServer);
+    sendingRtpKey.swap(receivingRtpKey);
+  }
+
+  bool ok = belongingPeerConnection_.srtpHandler_.SetRtpParams(sendingRtpKey,
+                                                               receivingRtpKey);
+  if (!ok) {
+    tylog("NOTE!!! srtpHandler_.SetRtpParams fail, but return is void :(");
+  }
+
+  belongingPeerConnection_.stateMachine_ = EnumStateMachine::DTLS_DONE;
+  tylog("DTLS_DONE, message:HandShakeCompleted");
+}
+
+// 目前实参都是true，再次确认why？
+// should return err?
+void DtlsHandler::HandshakeCompleted(bool bSessionCompleted) {
+  if (mGetKeyFlag) {
+    // tylog("We get Key, no need to do it, bSessionCompleted=%d, %s",
+    // bSessionCompleted, ToString().data());
+    mHandshakeCompleted = bSessionCompleted;
+
+    return;
+  }
+
+  char fprint[MAX_FP_SIZE];
+  memset(fprint, '\0', MAX_FP_SIZE);
+
+  if (!getRemoteFingerprint(fprint)) {
+    tylog("Peer did not authenticate %s", ToString().data());
+    return;
+  }
+
+  bool checkOk = checkFingerprint(fprint, strlen(fprint));
+  if (!checkOk) {
+    // 两次获取对端指纹，应当相同
+    tylog("check fingerprint fail %s", ToString().data());
+    return;
+  }
+
+  // const int SRTP_MASTER_KEY_LEN = 30;
+  unsigned char material[SRTP_MASTER_KEY_LEN << 1];
+
+  // SSL_export_keying_material() returns 0 or -1 on failure or 1 on success.
+  int ret = SSL_export_keying_material(mSsl, material, sizeof(material),
+                                       "EXTRACTOR-dtls_srtp", 19, NULL, 0, 0);
+  if (1 != ret) {
+    tylog("SSL_export_keying_material err, ret=%d %s", ret, ToString().data());
+    return;
+  }
+
+  int offset = 0;
+
+  char cKey[SRTP_MASTER_KEY_KEY_LEN + SRTP_MASTER_KEY_SALT_LEN];
+  char sKey[SRTP_MASTER_KEY_KEY_LEN + SRTP_MASTER_KEY_SALT_LEN];
+
+  memcpy(cKey, &material[offset], SRTP_MASTER_KEY_KEY_LEN);
+  offset += SRTP_MASTER_KEY_KEY_LEN;
+
+  memcpy(sKey, &material[offset], SRTP_MASTER_KEY_KEY_LEN);
+  offset += SRTP_MASTER_KEY_KEY_LEN;
+
+  memcpy(cKey + SRTP_MASTER_KEY_KEY_LEN, &material[offset],
+         SRTP_MASTER_KEY_SALT_LEN);
+  offset += SRTP_MASTER_KEY_SALT_LEN;
+
+  memcpy(sKey + SRTP_MASTER_KEY_KEY_LEN, &material[offset],
+         SRTP_MASTER_KEY_SALT_LEN);
+  offset += SRTP_MASTER_KEY_SALT_LEN;
+
+  // check len with MAX_SRTP_KEY_LEN
+  // taylor to escape copy string
+  sendingRtpKey = tylib::Base64Encode(
+      std::string(cKey, SRTP_MASTER_KEY_KEY_LEN + SRTP_MASTER_KEY_SALT_LEN));
+  receivingRtpKey = tylib::Base64Encode(
+      std::string(sKey, SRTP_MASTER_KEY_KEY_LEN + SRTP_MASTER_KEY_SALT_LEN));
+
+  tylog("ClientKey: %s", sendingRtpKey.c_str());
+  tylog("ServerKey: %s", receivingRtpKey.c_str());
+
+  SRTP_PROTECTION_PROFILE* srtp_profile = SSL_get_selected_srtp_profile(mSsl);
+  if (srtp_profile) {
+    tylog("SRTP Extension negotiated profile=%s", srtp_profile->name);
+  }
+
+  mGetKeyFlag = true;  // 本变量只在此处修改
+
+  if (bSessionCompleted) {
+    mHandshakeCompleted = true;
+  }
+
+  tylog("bSessionCompleted=%d %s", bSessionCompleted, ToString().data());
+
+  onHandshakeCompleted();
+}
+
+// 只在处理DTLS包结尾处调用
+void DtlsHandler::CheckHandshakeComplete() {
+  if (mHandshakeCompleted) {
+    tylog("handshake completed, no need check %s", ToString().data());
+    return;
+  }
+
+  int r = SSL_do_handshake(mSsl);
+  m_SSl_BuffState = SSL_get_error(mSsl, r);
+  tylog("handshake not complete, after SSL_do_handshake(): %s",
+        ToString().data());
+
+  if (m_SSl_BuffState == SSL_ERROR_NONE) {
+    tylog("Do handshakeCompleted ssl_buff ok");
+    HandshakeCompleted(true /* session complete */);
+  }
+
+  if (m_isServer) {
+    return;
+  }
+
+  if (!m_IsHandshakeCanComplete) {
+#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+    m_IsHandshakeCanComplete =
+        (SSL3_ST_CR_SESSION_TICKET_A == SSL_get_state(mSsl) ||
+         SSL3_ST_CR_FINISHED_A == SSL_get_state(mSsl));
+#else
+    m_IsHandshakeCanComplete = (TLS_ST_CW_FINISHED == SSL_get_state(mSsl));
+#endif
+  }
+
+  tylog("as client, %s", ToString().data());
+  if (m_IsHandshakeCanComplete) {
+    tylog("Do handshakeCompleted CW_FINISHED");
+    HandshakeCompleted(true);  // should verify?
+  }
+}
+
 // @brief 收到DTLS包处理
 // @param [in] vBufReceive DTLS包
 // @return 获取到秘钥返true，否则返false
 // 是否合理，错误是否要表示出来返回？taylor
-bool DTLSHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
+bool DtlsHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
   tylog("read Dtls message len:%zu %s", vBufReceive.size(), ToString().data());
 
   if (!m_startFlag && m_isServer) {
@@ -451,12 +543,12 @@ bool DTLSHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
   r = BIO_reset(mInBio);  // todo handle return value
   r = BIO_reset(mOutBio);
   r = BIO_write(mInBio, vBufReceive.data(), vBufReceive.size());
-  if (r != vBufReceive.size()) {
+  if (r != static_cast<int>(vBufReceive.size())) {
     tylog("error BIO_write() r=%d, len=%zu, should be equal, %s", r,
           vBufReceive.size(), ToString().data());
     // taylor error handle ?
   }
-  assert(r == vBufReceive.size());  // 是否返回
+  assert(r == static_cast<int>(vBufReceive.size()));  // 是否返回
   CheckHandshakeComplete();
 
   return mGetKeyFlag;
@@ -467,7 +559,7 @@ bool DTLSHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
 // @param [out] fingerprint 指纹
 //
 // optimize: check buffer size, return std::string
-void DTLSHandler::computeFingerprint(X509* cert, char* fingerprint) const {
+void DtlsHandler::computeFingerprint(X509* cert, char* fingerprint) const {
   unsigned char md[EVP_MAX_MD_SIZE];
   unsigned int n = 0;
 
@@ -489,7 +581,7 @@ void DTLSHandler::computeFingerprint(X509* cert, char* fingerprint) const {
 // @brief 获取对端指纹
 // @param [out] fprint 指纹
 // @return 是否成功获取指纹
-bool DTLSHandler::getRemoteFingerprint(char* fprint) const {
+bool DtlsHandler::getRemoteFingerprint(char* fprint) const {
   X509* x = SSL_get_peer_certificate(mSsl);
   if (NULL == x) {
     tylog("SSL_get_peer_certificate NULL %s", ToString().data());
@@ -504,7 +596,7 @@ bool DTLSHandler::getRemoteFingerprint(char* fprint) const {
 
 // @brief 比较对端指纹和入参
 // @return 是否一致
-bool DTLSHandler::checkFingerprint(const char* fingerprint,
+bool DtlsHandler::checkFingerprint(const char* fingerprint,
                                    unsigned int len) const {
   char fprint[MAX_FP_SIZE];
 
@@ -522,108 +614,8 @@ bool DTLSHandler::checkFingerprint(const char* fingerprint,
   return true;
 }
 
-void DTLSHandler::onHandshakeCompleted() {
-  tylog(
-      "message: isServer: %d clientKey: %s, serverKey: %s, if server, will "
-      "swap keys",
-      m_isServer, sendingRtpKey.c_str(), receivingRtpKey.c_str());
-
-  if (m_isServer) {
-    // If we are server, we swap the keys
-    tylog("message: swapping keys, isServer: %d", m_isServer);
-    sendingRtpKey.swap(receivingRtpKey);
-  }
-
-  belongingPeerConnection_.srtpHandler_.encryptKey_ = sendingRtpKey;
-  belongingPeerConnection_.srtpHandler_.decryptKey_ = receivingRtpKey;
-
-  belongingPeerConnection_.stateMachine_ = EnumStateMachine::DTLS_DONE;
-
-  tylog("message:HandShakeCompleted");
-}
-
-void DTLSHandler::handshakeCompleted(bool bSessionCompleted) {
-  if (mGetKeyFlag) {
-    tylog("We get Key, no need to do it, bSessionCompleted=%d, %s",
-          bSessionCompleted, ToString().data());
-    mHandshakeCompleted = bSessionCompleted;
-
-    return;
-  }
-
-  char fprint[MAX_FP_SIZE];
-  memset(fprint, '\0', MAX_FP_SIZE);
-
-  if (!getRemoteFingerprint(fprint)) {
-    tylog("Peer did not authenticate %s", ToString().data());
-    return;
-  }
-
-  bool checkOk = checkFingerprint(fprint, strlen(fprint));
-  if (!checkOk) {
-    // 两次获取对端指纹，应当相同
-    tylog("check fingerprint fail %s", ToString().data());
-    return;
-  }
-
-  const int SRTP_MASTER_KEY_LEN = 30;
-  unsigned char material[SRTP_MASTER_KEY_LEN << 1];
-
-  // SSL_export_keying_material() returns 0 or -1 on failure or 1 on success.
-  int ret = SSL_export_keying_material(mSsl, material, sizeof(material),
-                                       "EXTRACTOR-dtls_srtp", 19, NULL, 0, 0);
-  if (1 != ret) {
-    tylog("SSL_export_keying_material err, ret=%d %s", ret, ToString().data());
-    return;
-  }
-
-  int offset = 0;
-
-  char cKey[SRTP_MASTER_KEY_KEY_LEN + SRTP_MASTER_KEY_SALT_LEN];
-  char sKey[SRTP_MASTER_KEY_KEY_LEN + SRTP_MASTER_KEY_SALT_LEN];
-
-  memcpy(cKey, &material[offset], SRTP_MASTER_KEY_KEY_LEN);
-  offset += SRTP_MASTER_KEY_KEY_LEN;
-
-  memcpy(sKey, &material[offset], SRTP_MASTER_KEY_KEY_LEN);
-  offset += SRTP_MASTER_KEY_KEY_LEN;
-
-  memcpy(cKey + SRTP_MASTER_KEY_KEY_LEN, &material[offset],
-         SRTP_MASTER_KEY_SALT_LEN);
-  offset += SRTP_MASTER_KEY_SALT_LEN;
-
-  memcpy(sKey + SRTP_MASTER_KEY_KEY_LEN, &material[offset],
-         SRTP_MASTER_KEY_SALT_LEN);
-  offset += SRTP_MASTER_KEY_SALT_LEN;
-
-  // check len witch MAX_SRTP_KEY_LEN
-  sendingRtpKey = base64_encode(std::string(
-      cKey, SRTP_MASTER_KEY_KEY_LEN +
-                SRTP_MASTER_KEY_SALT_LEN));  // taylor to escape copy string
-  receivingRtpKey = base64_encode(
-      std::string(sKey, SRTP_MASTER_KEY_KEY_LEN + SRTP_MASTER_KEY_SALT_LEN));
-
-  tylog("ClientKey: %s", sendingRtpKey.c_str());
-  tylog("ServerKey: %s", receivingRtpKey.c_str());
-
-  SRTP_PROTECTION_PROFILE* srtp_profile = SSL_get_selected_srtp_profile(mSsl);
-  if (srtp_profile) {
-    tylog("SRTP Extension negotiated profile=%s", srtp_profile->name);
-  }
-
-  mGetKeyFlag = true;
-
-  if (bSessionCompleted) {
-    mHandshakeCompleted = true;
-  }
-
-  tylog("bSessionCompleted=%d %s", bSessionCompleted, ToString().data());
-
-  onHandshakeCompleted();
-}
-
 // should return int?
-void DTLSHandler::StartDTLS() {
+void DtlsHandler::StartDTLS() {
   if (m_startFlag) {
     tylog("already start DTLSRTP %s", ToString().data());
 
@@ -662,16 +654,16 @@ void DTLSHandler::StartDTLS() {
         ret, ToString().data());
 }
 
-void DTLSHandler::SetStreamDirect(StreamDirection direct) {
+void DtlsHandler::SetStreamDirect(StreamDirection direct) {
   m_StmDirect = direct;
 }
 
-bool DTLSHandler::GetHandshakeCompleted() const { return mHandshakeCompleted; }
+bool DtlsHandler::GetHandshakeCompleted() const { return mHandshakeCompleted; }
 
 extern int g_sock_fd;
 extern struct sockaddr_in g_stConnAddr;  // to use data member
 
-void DTLSHandler::writeDtlsPacket(const void* data, size_t len) {
+void DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
   m_CheckTime = g_GetNowMs();
 
   if (m_ResetFlag) {
@@ -712,7 +704,7 @@ void DTLSHandler::writeDtlsPacket(const void* data, size_t len) {
   tylog("sendto succ buf size=%ld", sendtoLen);
 }
 
-void DTLSHandler::rewriteDtlsPacket(const void* data, size_t len) {
+void DtlsHandler::rewriteDtlsPacket(const void* data, size_t len) {
   m_CheckTime = g_GetNowMs();
 
   if (NULL != mSsl) {
@@ -740,43 +732,9 @@ void DTLSHandler::rewriteDtlsPacket(const void* data, size_t len) {
   tylog("sendto succ buf size=%ld", sendtoLen);
 }
 
-void DTLSHandler::CheckHandshakeComplete() {
-  if (!mHandshakeCompleted) {
-    int r = SSL_do_handshake(mSsl);
-    m_SSl_BuffState = SSL_get_error(mSsl, r);
-    tylog("handshake not complete, after SSL_do_handshake(): %s",
-          ToString().data());
-
-    if (m_SSl_BuffState == SSL_ERROR_NONE) {
-      tylog("Do HandshakeCompleted ssl_buff ok");
-      handshakeCompleted(true /* session complete */);
-    }
-
-    if (!m_isServer) {
-#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
-      if (!m_IsHandshakeCanComplete)
-        m_IsHandshakeCanComplete =
-            (SSL3_ST_CR_SESSION_TICKET_A == SSL_get_state(mSsl) ||
-             SSL3_ST_CR_FINISHED_A == SSL_get_state(mSsl));
-#else
-      m_IsHandshakeCanComplete = (TLS_ST_CW_FINISHED == SSL_get_state(mSsl));
-#endif
-      tylog("as client, %s", ToString().data());
-      if (m_IsHandshakeCanComplete) {
-        // if (kRecvOnly == m_StmDirect)
-        {
-          tylog("Do HandshakeCompleted CW_FINISHED");
-          handshakeCompleted(true /* session complete */);
-        }
-      }
-    }
-  } else {
-    tylog("handshake complete %s", ToString().data());
-  }
-}
-
-std::string DTLSHandler::getMyFingerprint() {
-  InitOpensslAndCert();
+// 在我方SDP中提供
+std::string DtlsHandler::GetMyFingerprint() {
+  assert(mCert != nullptr);  // init in constructor
   char fprint[MAX_FP_SIZE];
   memset(fprint, '\0', MAX_FP_SIZE);
   computeFingerprint(mCert, fprint);
@@ -790,12 +748,12 @@ static inline T Clamp(const T& v, const T& lo, const T& hi) {
   return (v < lo) ? lo : (hi < v) ? hi : v;
 }
 
-int64_t DTLSHandler::GetCheckIntervalMs() const {
+int64_t DtlsHandler::GetCheckIntervalMs() const {
   return Clamp<int64_t>((MIN_RESEND_RTT * (m_ReSendTime + 1)),
                         MIN_RESEND_INTERVAL, MAX_RESEND_INTERVAL);
 }
 
-void DTLSHandler::OnTime() {
+void DtlsHandler::OnTime() {
   if (mHandshakeCompleted || mHandshakeFail) {
     return;
   }
@@ -838,13 +796,13 @@ void DTLSHandler::OnTime() {
 
   if (m_IsHandshakeCanComplete &&
       (MAX_CLIENT_KEY_RESEND_TIME <= m_ClientKeySendTime)) {
-    tylog("Do HandshakeCompleted time out %s", ToString().data());
+    tylog("Do handshakeCompleted time out %s", ToString().data());
 
-    handshakeCompleted(true);
+    HandshakeCompleted(true);
   }
 }
 
-std::string DTLSHandler::ToString() const {
+std::string DtlsHandler::ToString() const {
   return format_string(
       "{mSsl state=%d [%s], as %s, mHandshakeCompleted=%d, "
       "mGetKeyFlag=%d, m_SendBuffNum=%d, "

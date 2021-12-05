@@ -7,17 +7,18 @@
 #include "openssl/err.h"
 #include "openssl/pem.h"
 
+// OPT: 单例模式，服务器不用每次建PC都读文件
 int GetCertificateAndKey(X509*& outCert, EVP_PKEY*& pkey) {
   int ret = 0;
   FILE* fp;
-  static char certfile[] = "test.crt";
-  static char keyfile[] = "test.pem";
+  static char certfile[] = "dtls/test.crt";  // change path to ENV var
+  static char keyfile[] = "dtls/test.pem";
 
   /* Read private key */
 
   fp = fopen(keyfile, "r");
   if (fp == NULL) {
-    tylog("shit");
+    tylog("shit no keyfile");
     exit(1);
   }
   pkey = PEM_read_PrivateKey(fp, NULL, NULL, NULL);
@@ -31,7 +32,7 @@ int GetCertificateAndKey(X509*& outCert, EVP_PKEY*& pkey) {
 
   fp = fopen(certfile, "r");
   if (fp == NULL) {
-    tylog("shit");
+    tylog("shit no certfile");
     exit(1);
   }
   outCert = PEM_read_X509(fp, NULL, NULL, NULL);

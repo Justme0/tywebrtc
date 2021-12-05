@@ -1,4 +1,5 @@
-#pragma once
+#ifndef LOG_LOG_H_
+#define LOG_LOG_H_
 
 #include <cstdarg>
 #include <cstdio>
@@ -46,7 +47,7 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
   outfile << ":" << lineNumber << "L";
 
   // * function name
-  outfile << "," << functionName << "()";
+  outfile << " " << functionName << "()";
 
   // * user's content
   const int kUserContentMaxLengthByte = 8 * 1024;
@@ -69,3 +70,5 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
 void tylog(const char *format, ...) __attribute__((format(printf, 1, 2)));
 #define tylog(format, arg...) \
   tylogWithMoreInfo(__FILE__, __LINE__, __func__, format, ##arg);
+
+#endif  // LOG_LOG_H_

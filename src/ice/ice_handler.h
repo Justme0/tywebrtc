@@ -1,4 +1,5 @@
-#pragma once
+#ifndef ICE_ICE_HANDLER_H_
+#define ICE_ICE_HANDLER_H_
 
 #include <string>
 #include <vector>
@@ -114,9 +115,9 @@ struct ICEInfo {
 
 class PeerConnection;
 
-class ICEHandler {
+class IceHandler {
  public:
-  explicit ICEHandler(PeerConnection &pc);
+  explicit IceHandler(PeerConnection &pc);
   int HandleIcePacket(const std::vector<char> &vBufReceive);
 
  private:
@@ -140,3 +141,5 @@ class ICEHandler {
 
   ICEInfo iceInfo_;
 };
+
+#endif  // ICE_ICE_HANDLER_H_

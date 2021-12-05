@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DTLS_DTLS_HANDLER_H_
+#define DTLS_DTLS_HANDLER_H_
 
 #include <string>
 #include <vector>
@@ -72,31 +73,31 @@ inline const char* GetStreamDirectionString(StreamDirection streamDirection) {
 
 class PeerConnection;
 
-class DTLSHandler {
+class DtlsHandler {
  public:
-  explicit DTLSHandler(PeerConnection& pc, bool isServer);
-  ~DTLSHandler();
+  explicit DtlsHandler(PeerConnection& pc, bool isServer);
+  ~DtlsHandler();
 
   void StartDTLS();
   bool HandleDtlsPacket(const std::vector<char>& vBufReceive);
 
   void SetStreamDirect(StreamDirection direct);
   void OnTime();
-  std::string getMyFingerprint();  // the fingerprint of the user cert
-  void writeDtlsPacket(const void* data, size_t len);
+  std::string GetMyFingerprint();  // the fingerprint of the user cert
+  void WriteDtlsPacket(const void* data, size_t len);
   bool GetHandshakeCompleted() const;
   std::string ToString() const;
-  void handshakeCompleted(bool bSessionComplete);
+  void HandshakeCompleted(bool bSessionComplete);
 
  private:
   void onHandshakeCompleted();
-  void onHandshakeFailed(const std::string error);
+  // void onHandshakeFailed(const std::string error);
   bool checkFingerprint(const char* fingerprint, unsigned int len) const;
   bool getRemoteFingerprint(char* fprint) const;
   void computeFingerprint(X509* cert, char* fingerprint) const;
   void InitOpensslAndCert();
   void rewriteDtlsPacket(const void* data, size_t len);
-  void onHandshakeFail();
+  // void onHandshakeFail();
   void CheckHandshakeComplete();
   int64_t GetCheckIntervalMs() const;
 
@@ -131,3 +132,5 @@ class DTLSHandler {
   int m_LastSslState;
   bool m_startFlag;
 };
+
+#endif  // DTLS_DTLS_HANDLER_H_
