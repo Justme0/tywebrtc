@@ -29,7 +29,7 @@ runSvr()
     echo
     top -n 1 -b | grep $kServerName || true # mac os ps have no -b option
     echo
-    ss -anp | grep $kServerName || true # WSL execute ss fail
+    ss -anp | grep $kServerName || true # WSL executes `ss` may fail
     echo ====================
 
     tail -f log.txt # log file name is same as in code; some system have no tailf

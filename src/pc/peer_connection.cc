@@ -15,7 +15,8 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
 
   uint8_t cSubCmd = vBufReceive.front();
   PacketType packType = getPacketType(cSubCmd);
-  tylog("subcmd=%hhu, packType=%d", cSubCmd, packType);
+  tylog("subcmd=%hhu, packType=%s", cSubCmd,
+        PacketTypeToString(packType).data());
   tylog("stateMachine=%s", StateMachineToString(stateMachine_).data());
 
   // packType number is little, so we don't use map-callback style, just
@@ -49,7 +50,7 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
     }
 
     default:
-      tylog("unknown packet type %d", packType);
+      tylog("unknown packet type %s", PacketTypeToString(packType).data());
       break;
   }
 

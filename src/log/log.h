@@ -4,6 +4,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <fstream>
+#include <iostream>
 #include <string>
 
 // A simple and bad log util :)
@@ -68,7 +69,16 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
 }
 
 void tylog(const char *format, ...) __attribute__((format(printf, 1, 2)));
+
 #define tylog(format, arg...) \
   tylogWithMoreInfo(__FILE__, __LINE__, __func__, format, ##arg);
+
+void tylogAndPrintfln(const char *format, ...)
+    __attribute__((format(printf, 1, 2)));
+
+#define tylogAndPrintfln(format, arg...)                          \
+  tylogWithMoreInfo(__FILE__, __LINE__, __func__, format, ##arg); \
+  printf(format, ##arg);                                          \
+  std::cout << std::endl;
 
 #endif  // LOG_LOG_H_

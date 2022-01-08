@@ -138,7 +138,7 @@ int IceHandler::DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
         // important!
         // m_pStunUseCandidate = pMsgComm;
         *o_bUseCandidate = true;
-        tylog("recv candiate");
+        tylog("recv candidate");
         break;
       } /*unsigned int*/
 
@@ -262,9 +262,8 @@ int IceHandler::EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
   HMAC_CTX_init(&ctx);  // old api
   tylog("taylor iceInfo_.LocalPassWord=%s, strlen=%zu", iceInfo_.LocalPassWord,
         strlen(iceInfo_.LocalPassWord));
-  HMAC_Init_ex(&ctx, (unsigned char *)iceInfo_.LocalPassWord,
-               strlen(iceInfo_.LocalPassWord), EVP_sha1(),
-               NULL);  // should check EVP_sha1() return value
+  HMAC_Init_ex(&ctx, iceInfo_.LocalPassWord, strlen(iceInfo_.LocalPassWord),
+               EVP_sha1(), NULL);  // should check EVP_sha1() return value
   HMAC_Update(&ctx, (unsigned char *)pHeadBuf, Len);
   HMAC_Final(&ctx, (unsigned char *)(pMsgIntergrity->HmacSha1), &Outlen);
   HMAC_CTX_cleanup(&ctx);  // old api
@@ -411,10 +410,15 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
     // machine state before assigning
     belongingPeerConnection_.stateMachine_ =
         EnumStateMachine::GOT_USE_CANDIDATE_ICE;
-    tylog("use candiate, ice done, now start dtls ...");
+    tylog("GOT_USE_CANDIDATE_ICE, ice done, now start dtls ...");
 
     // 收到带UseCandidate属性的STUN包后启动DTLS
-    belongingPeerConnection_.dtlsHandler_.StartDTLS();
+    ret = belongingPeerConnection_.dtlsHandler_.StartDTLS();
+    if (ret) {
+      tylog("dtls start fail, ret=%d", ret);
+
+      return ret;
+    }
   } else if (EnumStateMachine::GOT_FIRST_ICE >
              belongingPeerConnection_.stateMachine_) {
     belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_FIRST_ICE;

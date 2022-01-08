@@ -19,21 +19,13 @@ class SrtpHandler {
   int ProtectRtcp(std::vector<char> *io_vBufForSrtp);
 
   /**
-   * Sets a key pair for the RTP channel
+   * Sets a key pair for the RTP and RTCP channel
    * @param sendingKey The key for protecting data
    * @param receivingKey The key for unprotecting data
    * @return true if everything is ok
    */
   bool SetRtpParams(const std::string &sending_key,
                     const std::string &receiving_key);
-  /**
-   * Sets a key pair for the RTCP channel
-   * @param sendingKey The key for protecting data
-   * @param receivingKey The key for unprotecting data
-   * @return true if everything is ok
-   */
-  bool SetRtcpParams(const std::string &sending_key,
-                     const std::string &receiving_key);
 
   // inline bool IsActive() { return active_; }
 
@@ -43,7 +35,18 @@ class SrtpHandler {
   enum TransmissionType { kSending, kReceiving };
 
   bool ConfigureSrtpSession(srtp_t *session, const std::string &key,
-                            enum TransmissionType type);
+                            TransmissionType type);
+
+  std::string TransmissionTypeToString(TransmissionType type) {
+    switch (type) {
+      case kSending:
+        return "kSending";
+      case kReceiving:
+        return "kReceiving";
+      default:
+        return "UnknownValue[" + std::to_string(static_cast<int>(type)) + "]";
+    }
+  }
 
  public:
   PeerConnection &belongingPeerConnection_;
@@ -51,6 +54,7 @@ class SrtpHandler {
  private:
   static bool isInitSrtp_;
 
+  // key可能要保存，避免重启服务丢失
   std::string sending_key_;    // when send rtp
   std::string receiving_key_;  // when recv srtp
   srtp_t send_session_ = nullptr;

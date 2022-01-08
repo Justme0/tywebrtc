@@ -29,17 +29,26 @@ SrtpHandler::SrtpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
 }
 
 SrtpHandler::~SrtpHandler() {
+  int ret = 0;
+
   if (send_session_ != NULL) {
-    srtp_dealloc(send_session_);
+    ret = srtp_dealloc(send_session_);
+    if (ret) {
+      tylog("srtp_dealloc send_session fail, ret=%d", ret);
+    }
     send_session_ = NULL;
   }
 
   if (receive_session_ != NULL) {
-    srtp_dealloc(receive_session_);
+    ret = srtp_dealloc(receive_session_);
+    if (ret) {
+      tylog("srtp_dealloc receive_session fail, ret=%d", ret);
+    }
     receive_session_ = NULL;
   }
 }
 
+// @return 是否成功
 bool SrtpHandler::ConfigureSrtpSession(srtp_t *session, const std::string &key,
                                        enum TransmissionType type) {
   srtp_policy_t policy;
@@ -58,33 +67,54 @@ bool SrtpHandler::ConfigureSrtpSession(srtp_t *session, const std::string &key,
   policy.allow_repeat_tx = 1;
   policy.next = NULL;
   std::string decodedKey = tylib::Base64Decode(key);
-  tylog("decode key=%s", decodedKey.data());
-  decodedKey.push_back('\0');  // NOTE?
+  tylog(
+      "transmit type=%s. input key len=%zu, data=%s, after base64 decode, "
+      "len=%zu, data=%s",
+      TransmissionTypeToString(type).data(), key.size(), key.data(),
+      decodedKey.size(), decodedKey.data());
 
+  // decodedKey.push_back('\0');                 // NOTE?
+
+  // srtp_create temp use policy? NOTE key is temp
   policy.key = reinterpret_cast<unsigned char *>(
       &decodedKey[0]);  // C++17 can use data()
-                        // srtp_create temp use policy? NOTE key is temp
   srtp_err_status_t ret = srtp_create(session, &policy);
   if (0 != ret) {
-    tylog("srtp_create ret=%d", ret) return false;
+    tylog("srtp_create fail ret=%d, key=%s, transmit type=%s", ret, key.data(),
+          TransmissionTypeToString(type).data());
+
+    return false;
   }
 
   return true;
 }
 
+// @brief 设置RTP加解密key，构造session
+// @return 是否成功
 bool SrtpHandler::SetRtpParams(const std::string &sending_key,
                                const std::string &receiving_key) {
-  if (ConfigureSrtpSession(&send_session_, sending_key, kSending) &&
-      ConfigureSrtpSession(&receive_session_, receiving_key, kReceiving)) {
-    sending_key_.assign(sending_key);
-    receiving_key_.assign(receiving_key);
+  bool ok = false;
+  active_ = false;
 
-    active_ = true;
-    return true;
-  } else {
-    active_ = false;
+  ok = ConfigureSrtpSession(&send_session_, sending_key, kSending);
+  if (!ok) {
+    tylog("configureSrtpSession send key fail");
+
     return false;
   }
+
+  ok = ConfigureSrtpSession(&receive_session_, receiving_key, kReceiving);
+  if (!ok) {
+    tylog("configureSrtpSession recv key fail");
+
+    return false;
+  }
+
+  sending_key_ = sending_key;  // OPT: use move
+  receiving_key_ = receiving_key;
+
+  active_ = true;
+  return true;
 }
 
 int SrtpHandler::ProtectRtp(std::vector<char> *io_vBufForSrtp) {
@@ -165,6 +195,7 @@ int SrtpHandler::ProtectRtcp(std::vector<char> *io_vBufForSrtp) {
   return 0;
 }
 
+// taylor may error
 int SrtpHandler::UnprotectRtcp(std::vector<char> *io_vBufForSrtp) {
   if (!active_) {
     tylog("error active=%d", active_);

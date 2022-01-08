@@ -52,10 +52,12 @@ class Singleton {
                                                     const std::string& ufrag) {
     ClientSrcId clientSrcId{ip, port};
     auto lb = client2PC_.lower_bound(clientSrcId);
+    tylog("client2PC_ size=%zu", client2PC_.size());
 
     if (lb != client2PC_.end() &&
         !(client2PC_.key_comp()(clientSrcId, lb->first))) {
       assert(nullptr != lb->second);
+      assert(lb->second->clientIP_ == ip && lb->second->clientPort_ == port);
       return lb->second;
     } else {
       tylog("new pc, ip=%s, port=%d, ufrag=%s", ip.data(), port, ufrag.data());
@@ -64,6 +66,7 @@ class Singleton {
       auto i = client2PC_.emplace_hint(
           lb, std::make_pair(clientSrcId, std::make_shared<PeerConnection>()));
       assert(nullptr != i->second);
+      i->second->StoreClientIPPort(ip, port);
       return i->second;
     }
   }
@@ -222,7 +225,7 @@ int HandleRequest() {
   std::shared_ptr<PeerConnection> pc = Singleton::Instance().GetPeerConnection(
       ip, port, "");  // have bug, ufrag is ""
   tylog("get pc done");
-  pc->StoreClientIPPort(ip, port);  // should be in GetPeerConnection()
+  // pc->StoreClientIPPort(ip, port);  // should be in GetPeerConnection()
   // if (ret) {
   //   tylog("pc storeClientIPPort fail, ret=%d", ret);
   //   return ret;
@@ -244,7 +247,7 @@ const int kMultiplexIOMaxEventNum = 1024;
 #if _WIN32
 // _WIN32 is also defined for _WIN64
 
-void CrossPlatformNetworkIO() { tylog("in Windows"); }
+void CrossPlatformNetworkIO() { tylogAndPrintfln("in Windows"); }
 
 #elif __APPLE__ || __FreeBSD__
 #include <sys/event.h>
@@ -252,7 +255,7 @@ void CrossPlatformNetworkIO() { tylog("in Windows"); }
 void CrossPlatformNetworkIO() {
   int ret = 0;
 
-  tylog("in BSD series OS (e.g. mac, freeBSD)");
+  tylogAndPrintfln("in BSD series OS (e.g. mac, freeBSD)");
   int kq = kqueue();
 
   struct kevent evSet;
@@ -260,7 +263,7 @@ void CrossPlatformNetworkIO() {
   assert(-1 != kevent(kq, &evSet, 1, NULL, 0, NULL));
 
   struct kevent evList[kMultiplexIOMaxEventNum];
-  tylog("to loop");
+  tylogAndPrintfln("to loop");
   while (1) {
     // returns number of events
     int eventNumber =
@@ -326,28 +329,29 @@ void CrossPlatformNetworkIO() {
 #include <sys/epoll.h>
 
 void CrossPlatformNetworkIO() {
-  tylog("in Linux");
+  tylogAndPrintfln("in Linux");
   int efd = epoll_create(
       kMultiplexIOMaxEventNum);  // if media data IO frequently, use select(2)
   if (efd == -1) {
-    tylog("epoll_create return -1, errno=%d[%s]", errno, strerror(errno));
+    tylogAndPrintfln("epoll_create return -1, errno=%d[%s]", errno,
+                     strerror(errno));
 
     return;
   }
 
-  struct epoll_event event = {0};
+  struct epoll_event event;
   event.data.fd = g_sock_fd;
   event.events = EPOLLIN | EPOLLHUP | EPOLLERR | EPOLLRDHUP;
   if (epoll_ctl(efd, EPOLL_CTL_ADD, g_sock_fd, &event) == -1) {
-    tylog("epoll_ctl return -1, add g_sockfd=%d failed errno=%d[%s]", g_sock_fd,
-          errno, strerror(errno));
+    tylogAndPrintfln("epoll_ctl return -1, add g_sockfd=%d failed errno=%d[%s]",
+                     g_sock_fd, errno, strerror(errno));
 
     return;
   }
 
   struct epoll_event events[kMultiplexIOMaxEventNum];
 
-  tylog("to loop");
+  tylogAndPrintfln("to loop");
   while (1) {
     int timeout_ms = 20;
     int nfds = epoll_wait(efd, &events[0], kMultiplexIOMaxEventNum, timeout_ms);
@@ -389,15 +393,17 @@ void CrossPlatformNetworkIO() {
 #endif
 
 int main(int argc, char* argv[]) {
-  tylog("OPENSSL_VERSION_NUMBER=0x%x, < 0x10100000L is %d",
-        OPENSSL_VERSION_NUMBER, OPENSSL_VERSION_NUMBER < 0x10100000L);
+  // before server launch, print log to standard out and file
+  tylogAndPrintfln("OPENSSL_VERSION_NUMBER=0x%lx, < 0x10100000L is %d",
+                   OPENSSL_VERSION_NUMBER,
+                   OPENSSL_VERSION_NUMBER < 0x10100000L);
   // TODO
   //  CONFIG stConfig = {0};
   //  g_config = &stConfig;
   //
   //  int ret = InitWorker(argc, argv);
   //  if (ret != 0) {
-  //    tylog("Initialize failed, ret %d", ret);
+  //    tylogAndPrintfln("Initialize failed, ret %d", ret);
   //    exit(1);
   //  }
 
@@ -405,14 +411,14 @@ int main(int argc, char* argv[]) {
 
   // ret = GetLanIp(&localip);
   // if (ret) {
-  //   tylog("get lan ip fail, ret=%d", ret);
+  //   tylogAndPrintfln("get lan ip fail, ret=%d", ret);
   //   return ret;
   // }
 
   // step 1 create socket
   g_sock_fd = socket(PF_INET, SOCK_DGRAM, 0);
   if (ret < 0) {
-    tylog("create listen socket failed, ret %d", ret);
+    tylogAndPrintfln("create listen socket failed, ret %d", ret);
     return __LINE__;
   }
   // TODO set nonblock
@@ -423,24 +429,24 @@ int main(int argc, char* argv[]) {
   address.sin_family = AF_INET;
   inet_pton(AF_INET, g_localip.data(),
             &address.sin_addr);  // taylor to change addr
-  const int kListenPort = 8000;
+  const int kListenPort = 8007;
   address.sin_port = htons(kListenPort);
-  tylog("to bind to %s:%d", g_localip.data(), kListenPort);
+  tylogAndPrintfln("to bind to %s:%d", g_localip.data(), kListenPort);
 
   ret = bind(g_sock_fd, reinterpret_cast<const sockaddr*>(&address),
              sizeof(address));
   if (ret == -1) {
-    tylog("bind return -1, errno=%d[%s]", errno, strerror(errno));
+    tylogAndPrintfln("bind return -1, errno=%d[%s]", errno, strerror(errno));
     // before run success, should also printf to show problem directly
     return 0;
   }
-  tylog("bind succ");
+  tylogAndPrintfln("bind succ");
 
   // udp no listen
   // ret = listen(g_sock_fd, 5);
   // if (-1 == ret) {
-  //     tylog("listen return -1, errno=%d[%s]", errno, strerror(errno));
-  //     return 0;
+  //     tylogAndPrintfln("listen return -1, errno=%d[%s]", errno,
+  //     strerror(errno)); return 0;
   // }
 
   // step 3

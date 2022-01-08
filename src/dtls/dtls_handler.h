@@ -78,8 +78,8 @@ class DtlsHandler {
   explicit DtlsHandler(PeerConnection& pc, bool isServer);
   ~DtlsHandler();
 
-  void StartDTLS();
-  bool HandleDtlsPacket(const std::vector<char>& vBufReceive);
+  int StartDTLS();
+  int HandleDtlsPacket(const std::vector<char>& vBufReceive);
 
   void SetStreamDirect(StreamDirection direct);
   void OnTime();
@@ -87,17 +87,15 @@ class DtlsHandler {
   void WriteDtlsPacket(const void* data, size_t len);
   bool GetHandshakeCompleted() const;
   std::string ToString() const;
-  void HandshakeCompleted(bool bSessionComplete);
+  int HandshakeCompleted(bool bSessionComplete);
 
  private:
-  void onHandshakeCompleted();
-  // void onHandshakeFailed(const std::string error);
+  int OnHandshakeCompleted();
   bool checkFingerprint(const char* fingerprint, unsigned int len) const;
   bool getRemoteFingerprint(char* fprint) const;
-  void computeFingerprint(X509* cert, char* fingerprint) const;
+  void computeFingerprint(const X509* cert, char* fingerprint) const;
   void InitOpensslAndCert();
   void rewriteDtlsPacket(const void* data, size_t len);
-  // void onHandshakeFail();
   void CheckHandshakeComplete();
   int64_t GetCheckIntervalMs() const;
 
@@ -115,8 +113,8 @@ class DtlsHandler {
   BIO* mOutBio;
   bool mHandshakeCompleted;
   bool mGetKeyFlag;
-  std::string sendingRtpKey;
-  std::string receivingRtpKey;
+  std::string sendingRtpKey_;
+  std::string receivingRtpKey_;
 
   DtlsBuff m_SendBuff[MAX_BUFF_NUM];  // 备份发送的数据包
   int m_SendBuffNum;

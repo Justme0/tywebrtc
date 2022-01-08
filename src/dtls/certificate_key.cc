@@ -11,8 +11,8 @@
 int GetCertificateAndKey(X509*& outCert, EVP_PKEY*& pkey) {
   int ret = 0;
   FILE* fp;
-  static char certfile[] = "dtls/test.crt";  // change path to ENV var
-  static char keyfile[] = "dtls/test.pem";
+  static char certfile[] = "dtls/webrtc.cert";  // change path to ENV var
+  static char keyfile[] = "dtls/webrtc.key";
 
   /* Read private key */
 
