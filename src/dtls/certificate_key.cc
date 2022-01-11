@@ -40,7 +40,7 @@ int GetCertificateAndKey(X509*& outCert, EVP_PKEY*& pkey) {
 
   if (outCert == NULL) {
     ERR_print_errors_fp(stderr);
-    tylog("outCert err %s", stderr);
+    tylog("outCert err addr %p, cannot print msg?", stderr);
     tylog("shit");
     exit(1);
   }

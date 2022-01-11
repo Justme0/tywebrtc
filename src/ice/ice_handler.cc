@@ -222,7 +222,7 @@ int IceHandler::EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
   pMsgIntergrity->AttributeType = htons(ATTRIBUTE_MESSGAE_INTEGRITY);
   pMsgIntergrity->Len = htons(STUN_MESSGAE_INTEGRITY_LEN);
 
-  tylog("taylor OPENSSL_VERSION_NUMBER=%d=0x%x", OPENSSL_VERSION_NUMBER,
+  tylog("taylor OPENSSL_VERSION_NUMBER=%ld=0x%lx", OPENSSL_VERSION_NUMBER,
         OPENSSL_VERSION_NUMBER);
 
   //做HMAC-SHA1加密，生成加密串
@@ -497,11 +497,11 @@ int IceHandler::CheckIcePacket(const std::vector<char> &vBufReceive) {
   const StunMsgHead *pHead = reinterpret_cast<const StunMsgHead *>(buff);
   int MsgLen = ntohs(pHead->MsgLen);
   // todo len var use signed int
-  WEB_ERROR_CHECK((MsgLen + static_cast<int32_t>(sizeof(StunMsgHead)) != len),
-                  -4,
-                  "MsgLen:%d(head stuct size)+%d(means body len) must equal to "
-                  "%d(recv buf len)",
-                  MsgLen, sizeof(StunMsgHead), len);
+  WEB_ERROR_CHECK(
+      (MsgLen + static_cast<int32_t>(sizeof(StunMsgHead)) != len), -4,
+      "MsgLen:%d(head stuct size)+%zu(means body len) must equal to "
+      "%d(recv buf len)",
+      MsgLen, sizeof(StunMsgHead), len);
   WEB_ERROR_CHECK(((MsgLen & 0x03) != 0), -5,
                   "body len(%d) should be times of 4", MsgLen);
 

@@ -583,7 +583,8 @@ int DtlsHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
 // @param [out] fingerprint 指纹
 //
 // optimize: check buffer size, return std::string
-void DtlsHandler::computeFingerprint(const X509* cert, char* fingerprint) const {
+void DtlsHandler::computeFingerprint(const X509* cert,
+                                     char* fingerprint) const {
   unsigned char md[EVP_MAX_MD_SIZE];
   unsigned int n = 0;
 
@@ -830,7 +831,7 @@ void DtlsHandler::OnTime() {
       rewriteDtlsPacket(m_SendBuff[i].buff, m_SendBuff[i].len);
     }
 
-    tylog("after onTime rewrite, Now:%llu %s passMs:%ld %s", g_GetNowMs(),
+    tylog("after onTime rewrite, Now:%ld %s passMs:%ld %s", g_GetNowMs(),
           WebRtcPrintTimeMs(g_GetNowMs()).data(), TimePassMs,
           ToString().data());
   }

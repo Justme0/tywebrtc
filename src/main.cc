@@ -1,5 +1,7 @@
 #include <arpa/inet.h>
+#include <net/if.h>
 #include <strings.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -17,7 +19,7 @@
 
 int g_sock_fd;
 
-std::string g_localip = "192.168.124.13";
+std::string g_localip;
 struct sockaddr_in g_stConnAddr;  // ipv4, must reflector taylor
 
 // TODO: should save to remote DB ? must refactor! Now we use singleton
@@ -86,7 +88,7 @@ class Singleton {
   std::map<ClientSrcId, std::shared_ptr<PeerConnection>> client2PC_;
 };
 
-#if 0
+// @brief return get local ip number, maybe <= 0
 int GetEthAddrs(char* ips[], int num) {
   struct ifconf ifc;
   struct ifreq ifr[64];
@@ -115,22 +117,7 @@ int GetEthAddrs(char* ips[], int num) {
   return (sock >= 0 && cnt > 0) ? cnt : -1;
 }
 
-using IPIntegerType = uint32_t;
-// 3, return 0 if s is invalid, don't return error :)
-inline IPIntegerType stringToNetOrder(const std::string& s) {
-  struct in_addr inaddr = 0;
-
-  inet_pton(AF_INET, s.data(), &inaddr);  // return 1 on success
-
-  return inaddr;
-}
-
-// 4
-inline IPIntegerType stringToHostOrder(const std::string& s) {
-  return ntohl(stringToNetOrder(s));
-}
-
-int IsLanAddr(const std::string& ip) {
+bool IsLanAddr(const std::string& ip) {
   /*
    * A类  10.0.0.0    - 10.255.255.255
           11.0.0.0/8
@@ -141,45 +128,53 @@ int IsLanAddr(const std::string& ip) {
    * 其他：9.0.0.0/8   9.0.0.1 - 9.255.255.255
    * 环回 127.0.0.1
    */
-  uint32_t uiHostIP = stringToHostOrder(ip);
+  uint32_t uiHostIP = tylib::stringToHostOrder(ip);
 
-  if ((uiHostIP >= 0x0A000000 && uiHostIP <= 0x0AFFFFFF) ||
-      (uiHostIP >= 0x0B000000 && uiHostIP <= 0x0BFFFFFF) ||
-      (uiHostIP >= 0x1E000000 && uiHostIP <= 0x1EFFFFFF) ||
-      (uiHostIP >= 0xAC100000 && uiHostIP <= 0xAC1FFFFF) ||
-      (uiHostIP >= 0xC0A80000 && uiHostIP <= 0xC0A8FFFF) ||
-      (uiHostIP >= 0x64400000 && uiHostIP <= 0x647FFFFF) ||
-      (uiHostIP >= 0x09000000 && uiHostIP <= 0x09FFFFFF) ||
-      (uiHostIP == 0x7f000001)) {
-    return 1;
-  }
-
-  return 0;
+  return (uiHostIP >= 0x0A000000 && uiHostIP <= 0x0AFFFFFF) ||
+         (uiHostIP >= 0x0B000000 && uiHostIP <= 0x0BFFFFFF) ||
+         (uiHostIP >= 0x1E000000 && uiHostIP <= 0x1EFFFFFF) ||
+         (uiHostIP >= 0xAC100000 && uiHostIP <= 0xAC1FFFFF) ||
+         (uiHostIP >= 0xC0A80000 && uiHostIP <= 0xC0A8FFFF) ||
+         (uiHostIP >= 0x64400000 && uiHostIP <= 0x647FFFFF) ||
+         (uiHostIP >= 0x09000000 && uiHostIP <= 0x09FFFFFF) ||
+         (uiHostIP == 0x7f000001);
 }
 
+// to move to tylib
 int GetLanIp(std::string* o_ip) {
   const int kIpNumber = 20;
   char aip[kIpNumber][20];
   char* ips[kIpNumber];
-  int i, num;
 
-  for (i = 0; i < kIpNumber; i++) {
+  for (int i = 0; i < kIpNumber; i++) {
     ips[i] = aip[i];
   }
-  if ((num = GetEthAddrs(ips, kIpNumber)) > 0) {
-    for (i = 0; i < num; i++) {
-      if (strcmp(ips[i], "127.0.0.1") == 0) continue;
-      if (IsLanAddr(ips[i])) {
-        *o_ip = ips[i];
-        return 0;
-      }
+
+  int num = GetEthAddrs(ips, kIpNumber);
+  if (num <= 0) {
+    tylogAndPrintfln("get eth addrs fail, num=%d", num);
+    return -1;
+  }
+
+  for (int i = 0; i < num; ++i) {
+    if (strcmp(ips[i], "127.0.0.1") == 0) {
+      tylogAndPrintfln("i=%d get local addresses 127.0.0.1, ignore", i);
+
+      continue;
+    }
+    tylogAndPrintfln("i=%d get local addresses %s", i, ips[i]);
+
+    if (IsLanAddr(ips[i])) {
+      *o_ip = ips[i];
+
+      return 0;
     }
   }
 
-  return -1;
-}
+  tylogAndPrintfln("not found eth addr, get ip num=%d", num);
 
-#endif
+  return -2;
+}
 
 int HandleRequest() {
   int ret = 0;
@@ -193,7 +188,7 @@ int HandleRequest() {
   ssize_t iRecvLen =
       recvfrom(g_sock_fd, vBufReceive.data(), vBufReceive.size(), 0,
                (struct sockaddr*)&g_stConnAddr, (socklen_t*)&addr_size);
-  tylog("recv len=%ld", iRecvLen);
+  tylog("=============== recv len=%ld (app layer)", iRecvLen);
   if (iRecvLen < -1) {
     // should not appear
     tylog("unknown errno %d[%s]", errno, strerror(errno));
@@ -394,7 +389,7 @@ void CrossPlatformNetworkIO() {
 
 int main(int argc, char* argv[]) {
   // before server launch, print log to standard out and file
-  tylogAndPrintfln("OPENSSL_VERSION_NUMBER=0x%lx, < 0x10100000L is %d",
+  tylogAndPrintfln("OPENSSL_VERSION_NUMBER=%#lx < 0x10100000 is %d",
                    OPENSSL_VERSION_NUMBER,
                    OPENSSL_VERSION_NUMBER < 0x10100000L);
   // TODO
@@ -409,11 +404,13 @@ int main(int argc, char* argv[]) {
 
   int ret = 0;
 
-  // ret = GetLanIp(&localip);
-  // if (ret) {
-  //   tylogAndPrintfln("get lan ip fail, ret=%d", ret);
-  //   return ret;
-  // }
+  ret = GetLanIp(&g_localip);
+  if (ret) {
+    tylogAndPrintfln("get lan ip fail, ret=%d", ret);
+
+    return ret;
+  }
+  tylogAndPrintfln("important: get local ip=%s", g_localip.data());
 
   // step 1 create socket
   g_sock_fd = socket(PF_INET, SOCK_DGRAM, 0);

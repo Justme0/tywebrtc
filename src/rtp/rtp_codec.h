@@ -5,6 +5,7 @@
 
 #include <netinet/in.h>
 
+#include "log/log.h"
 #include "tylib/string/format_string.h"
 
 // The Internet Protocol defines big-endian as the standard network byte order
@@ -74,9 +75,7 @@ class RtpHeader {
         timestamp(0),
         ssrc(0),
         extensionpayload(0),
-        extensionlength(0) {
-    // No implementation required
-  }
+        extensionlength(0) {}
 
   // to remove inline
   inline uint8_t hasPadding() const { return padding; }
@@ -125,7 +124,7 @@ class RtpHeader {
   }
 
  private:
-  // the following is all netorder
+  // the following is all netorder for RAW RTP format
   uint32_t cc : 4;
   uint32_t hasextension : 1;
   uint32_t padding : 1;
@@ -140,6 +139,11 @@ class RtpHeader {
 
   // uint32_t extensions;
 };
+
+// string enum, for print convenience
+const std::string& kMediaTypeRtcp = "rtcp";
+const std::string& kMediaTypeVideo = "video";
+const std::string& kMediaTypeAudio = "audio";
 
 class RtpRtcpStrategy {
  public:
@@ -156,21 +160,54 @@ class RtpRtcpStrategy {
     uint16_t length;
   };
 
-  static uint8_t getSubType(const void* packet, size_t bytes) {
-    bool isRTCP = RtpRtcpStrategy::isRTCP(packet, bytes);
-    if (isRTCP) {
-      return 9;
+  // taylor RTP should check according to SSRC
+  static int GetMediaType(const std::vector<char>& vBufReceive,
+                          std::string* o_mediaType) {
+    int ret = 0;
+
+    uint8_t payloadTypeChar = 0;
+    ret = RtpRtcpStrategy::GetPayloadType(vBufReceive, &payloadTypeChar);
+    if (ret) {
+      tylog("get payload fail, ret=%d", ret);
+      return ret;
     }
 
-    uint8_t pt = RtpRtcpStrategy::getPT(packet, bytes) & 0x7F;
-    if (pt == 100 || pt == 101 || pt == 107 || pt == 116 || pt == 117 ||
-        pt == 96 || pt == 97 || pt == 99 || pt == 98 || pt == 127) {
-      return 2;
-    } else if (pt == 111 || pt == 103 || pt == 104) {
-      return 1;
+    bool bRtcp = RtpRtcpStrategy::isRTCP(payloadTypeChar);
+    if (bRtcp) {
+      tylog("recv pt=%u, is rtcp", payloadTypeChar);
+      *o_mediaType = kMediaTypeRtcp;
+      return 0;
     }
 
-    return 0;
+    // remove first MARK bit
+    const uint8_t kRtpPayloadType = payloadTypeChar & 0x7F;
+    switch (kRtpPayloadType) {
+      case 96:
+      case 97:
+      case 98:
+      case 99:
+      case 100:
+      case 101:
+      case 107:
+      case 116:
+      case 117:
+      case 125:
+      case 127:
+        tylog("recv pt=%d, is video", kRtpPayloadType);
+        *o_mediaType = kMediaTypeVideo;
+        return 0;
+
+      case 103:
+      case 104:
+      case 111:
+        tylog("recv pt=%d, is audio", kRtpPayloadType);
+        *o_mediaType = kMediaTypeAudio;
+        return 0;
+    }
+
+    tylog("recv pt(char)=%#x, unknown char", payloadTypeChar);
+
+    return -1;
   }
 
   static uint16_t getSeqNum(const void* packet, size_t bytes) {
@@ -207,48 +244,87 @@ class RtpRtcpStrategy {
     return timestamp;
   }
 
-  static bool isRTCP(const std::vector<char> &vBufReceive) {
-    uint8_t pt = RtpRtcpStrategy::getPT(vBufReceive);
-    // 72 to 76 is reserved for RTP
-    // 77 to 79 is not reserver but  they are not assigned we will block them
-    // for RTCP 200 SR  == marker bit + 72
-    // for RTCP 204 APP == marker bit + 76
-    /*
-     *       RTCP
-     *
-     * FIR      full INTRA-frame request             192     [RFC2032] supported
-     * NACK     negative acknowledgement             193     [RFC2032]
-     * IJ       Extended inter-arrival jitter report 195 [RFC-ietf-avt-rtp-toff
-     * set-07.txt] http://tools.ietf.org/html/draft-ietf-avt-rtp-toffset-07
-     * SR       sender report                        200     [RFC3551] supported
-     * RR       receiver report                      201     [RFC3551] supported
-     * SDES     source description                   202     [RFC3551] supported
-     * BYE      goodbye                              203     [RFC3551] supported
-     * APP      application-defined                  204     [RFC3551]   ignored
-     * RTPFB    Transport layer FB message           205     [RFC4585] supported
-     * PSFB     Payload-specific FB message          206     [RFC4585] supported
-     * XR       extended report                      207     [RFC3611] supported
-     */
+  // @brief get payload type
+  // @param vBufReceive [in]
+  // @param o_payloadTypeChar [out] if RTCP, it's real payload type; if RTP,
+  // it's a char (payload type + mark bit)
+  // @return 0 succ, otherwise not 0
+  static int GetPayloadType(const std::vector<char>& vBufReceive,
+                            uint8_t* o_payloadTypeChar) {
+    if (vBufReceive.size() < 4) {
+      tylog("recv buf size=%zu < 4, error?", vBufReceive.size());
+      return -1;
+    }
 
-    /* 205       RFC 5104
-     * FMT 1      NACK       supported
-     * FMT 2      reserved
-     * FMT 3      TMMBR      supported
-     * FMT 4      TMMBN      supported
-     */
+    // bit right shift, should be unsigned, so should be vector<uint8_t>
+    const uint8_t version = uint8_t(vBufReceive[0]) >> 6;
+    if (version != 2) {
+      tylog("recv version(2 bit)=%#x, should be 2", version);
 
-    /* 206      RFC 5104
-     * FMT 1:     Picture Loss Indication (PLI)                      supported
-     * FMT 2:     Slice Lost Indication (SLI)
-     * FMT 3:     Reference Picture Selection Indication (RPSI)
-     * FMT 4:     Full Intra Request (FIR) Command                   supported
-     * FMT 5:     Temporal-Spatial Trade-off Request (TSTR)
-     * FMT 6:     Temporal-Spatial Trade-off Notification (TSTN)
-     * FMT 7:     Video Back Channel Message (VBCM)
-     * FMT 15:    Application layer FB message
-     */
+      return -2;
+    }
 
-    switch (pt) {
+    *o_payloadTypeChar = vBufReceive[1];
+
+    return 0;
+  }
+
+ public:
+  // taylor remove the following SSRC code?
+  inline void setLocalSSRC(unsigned int localAudioSsrc,
+                           unsigned int localVideoSsrc,
+                           unsigned int localRtxSsrc) {
+    uiLocalAudioSsrc = localAudioSsrc;
+    uiLocalVideoSsrc = localVideoSsrc;
+    uiLocalRtxSsrc = localRtxSsrc;
+  }
+
+  inline void setRemoteSSRC(unsigned int remoteAudioSsrc,
+                            unsigned int remoteVideoSsrc,
+                            unsigned int remoteRtxSsrc) {
+    uiRemoteAudioSsrc = remoteAudioSsrc;
+    uiRemoteVideoSsrc = remoteVideoSsrc;
+    uiRemoteRtxSsrc = remoteRtxSsrc;
+  }
+
+ private:
+  // @brief check if RTCP
+  // 72 to 76 is reserved for RTP
+  // 77 to 79 is not reserver but they are not assigned we will block them
+  // for RTCP 200 SR  == marker bit + 72
+  // for RTCP 204 APP == marker bit + 76
+  //
+  //       RTCP
+  //
+  // FIR      full INTRA-frame request             192     [RFC2032] supported
+  // NACK     negative acknowledgement             193     [RFC2032]
+  // IJ       Extended inter-arrival jitter report 195
+  // [RFC-ietf-avt-rtp-toffset-07.txt]
+  // http://tools.ietf.org/html/draft-ietf-avt-rtp-toffset-07 SR       sender
+  // report                        200     [RFC3551] supported RR receiver
+  // report                      201     [RFC3551] supported SDES     source
+  // description                   202     [RFC3551] supported BYE goodbye 203
+  // [RFC3551] supported APP      application-defined                  204
+  // [RFC3551] ignored RTPFB    Transport layer FB message           205
+  // [RFC4585] supported PSFB     Payload-specific FB message          206
+  // [RFC4585] supported XR       extended report                      207
+  // [RFC3611] supported
+  // 205       RFC 5104
+  // FMT 1      NACK       supported
+  // FMT 2      reserved
+  // FMT 3      TMMBR      supported
+  // FMT 4      TMMBN      supported
+  // 206      RFC 5104
+  // FMT 1:     Picture Loss Indication (PLI)                      supported
+  // FMT 2:     Slice Lost Indication (SLI)
+  // FMT 3:     Reference Picture Selection Indication (RPSI)
+  // FMT 4:     Full Intra Request (FIR) Command                   supported
+  // FMT 5:     Temporal-Spatial Trade-off Request (TSTR)
+  // FMT 6:     Temporal-Spatial Trade-off Notification (TSTN)
+  // FMT 7:     Video Back Channel Message (VBCM)
+  // FMT 15:    Application layer FB message
+  static bool isRTCP(uint8_t payloadType) {
+    switch (payloadType) {
       case 192:
       case 193:
       case 195:
@@ -264,39 +340,6 @@ class RtpRtcpStrategy {
       default:
         return false;
     }
-  }
-
-  static uint8_t getPT(const std::vector<char> &vBufReceive) {
-    if (vBufReceive.size() < 4) {
-      return -1;
-    }
-
-    const uint8_t V = vBufReceive[0] >> 6;
-    if (V != 2) {
-      return -1;
-    }
-
-    const uint8_t payloadType = vBufReceive[1]; // if RTP, should remove first bit (Mark bit)?
-
-    return payloadType;
-  }
-
- public:
- // taylor remove the following code?
-  inline void setLocalSSRC(unsigned int localAudioSsrc,
-                           unsigned int localVideoSsrc,
-                           unsigned int localRtxSsrc) {
-    uiLocalAudioSsrc = localAudioSsrc;
-    uiLocalVideoSsrc = localVideoSsrc;
-    uiLocalRtxSsrc = localRtxSsrc;
-  }
-
-  inline void setRemoteSSRC(unsigned int remoteAudioSsrc,
-                            unsigned int remoteVideoSsrc,
-                            unsigned int remoteRtxSsrc) {
-    uiRemoteAudioSsrc = remoteAudioSsrc;
-    uiRemoteVideoSsrc = remoteVideoSsrc;
-    uiRemoteRtxSsrc = remoteRtxSsrc;
   }
 
  protected:

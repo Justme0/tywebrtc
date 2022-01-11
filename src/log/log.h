@@ -3,23 +3,59 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <string>
+
+// to move to tylib
+// C++17 can use `std::filesystem::file_size`
+inline std::ifstream::pos_type filesize(const std::string &filename) {
+  std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
+  return in.tellg();
+}
+
+// to optimize performance
+inline void HandleFileSize() {
+  // should in config file
+  const std::string &g_kLogFile = "./log.txt";
+  int64_t size = filesize(g_kLogFile);
+  const int64_t g_kMaxSingleFileByte = 100 * 1024 * 1024;
+  if (size >= g_kMaxSingleFileByte) {
+    system("mv ./log.txt ./log.txt.1");  // to use config and cross platform
+  }
+}
+
+// get last file name, not path
+inline const char *CleanFileName(const char *fileName) {
+  const char *pos = strrchr(fileName, '/');
+  if (pos != nullptr) {
+    return pos + 1;
+  } else {
+    return fileName;
+  }
+}
 
 // A simple and bad log util :)
 // TODO: add log level
 // why don't use glog: C++ style output is not friendly for reading.
 // The best style is interpolation string style in many dynamic languages.
 // In C++ the suboptimal style is C format string style.
+void tylogWithMoreInfo(const char *fileName, int lineNumber,
+                       const char *functionName, const char *format, ...)
+    __attribute__((format(printf, 4, 5)));
+
 inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
                               const char *functionName, const char *format,
                               ...) {
+  HandleFileSize();
+
   std::ofstream outfile;
-  outfile.open("./log.txt",
-               std::ios_base::app);  // append instead of overwrite,
-                                     // maybe fail? TODO: roll log
-                                     // and reserve recent N files
+  // append instead of overwrite, maybe fail?
+  // TODO: roll log and reserve recent N files
+  // why append mode not work?
+  const std::string &g_kLogFile = "./log.txt";
+  outfile.open(g_kLogFile, std::ios_base::app);
 
   // taylor : move get now time util to tylib
   // * time
@@ -42,10 +78,10 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
   outfile << timeBuffer;
 
   // * filename
-  outfile << " " << fileName;  // use space for `gf` to jump to file in Vim
+  outfile << " " << CleanFileName(fileName);
 
   // * line number
-  outfile << ":" << lineNumber << "L";
+  outfile << ":" << lineNumber;
 
   // * function name
   outfile << " " << functionName << "()";
@@ -68,13 +104,8 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
                                           // style to escape string copy
 }
 
-void tylog(const char *format, ...) __attribute__((format(printf, 1, 2)));
-
 #define tylog(format, arg...) \
   tylogWithMoreInfo(__FILE__, __LINE__, __func__, format, ##arg);
-
-void tylogAndPrintfln(const char *format, ...)
-    __attribute__((format(printf, 1, 2)));
 
 #define tylogAndPrintfln(format, arg...)                          \
   tylogWithMoreInfo(__FILE__, __LINE__, __func__, format, ##arg); \

@@ -2,6 +2,7 @@
 
 #include <arpa/inet.h>
 
+#include <cassert>
 #include <cstring>
 #include <string>
 
@@ -11,7 +12,6 @@
 
 RtpHandler::RtpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {}
 
-std::string g_anotherServerIp = "192.168.124.13";
 extern int g_sock_fd;
 extern struct sockaddr_in g_stConnAddr;  // to use data member
 
@@ -21,6 +21,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   // if we recv web's data, dtls should complete in Chrome
   // OPT: no need call hand shake complete function each time recv rtp
   const bool kSessionCompleted = true;
+  // taylor no need call every time?
   ret = belongingPeerConnection_.dtlsHandler_.HandshakeCompleted(
       kSessionCompleted);
   if (ret) {
@@ -31,15 +32,23 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   }
 
   belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_RTP;
+  std::string mediaType;
+  ret = RtpRtcpStrategy::GetMediaType(vBufReceive, &mediaType);
+  if (ret) {
+    tylog("get media type fail, ret=%d", ret);
+    return ret;
+  }
 
-  if (RtpRtcpStrategy::isRTCP(vBufReceive)) {
+  tylog("receive %s", mediaType.data());
+
+  if (mediaType == kMediaTypeRtcp) {
     ret = belongingPeerConnection_.srtpHandler_.UnprotectRtcp(
         const_cast<std::vector<char> *>(&vBufReceive));
     if (ret) {
       tylog("unprotect RTCP fail, ret=%d", ret);
       return ret;
     }
-  } else {
+  } else if (mediaType == kMediaTypeAudio || mediaType == kMediaTypeVideo) {
     // reuse original buffer
     // taylor think restart svr
     ret = belongingPeerConnection_.srtpHandler_.UnprotectRtp(
@@ -48,11 +57,16 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       tylog("unprotect RTP (not RTCP) fail, ret=%d", ret);
       return ret;
     }
-  }
 
-  const RtpHeader &rtpHeader =
-      *reinterpret_cast<const RtpHeader *>(vBufReceive.data());
-  tylog("recv rtp=%s", rtpHeader.ToString().data());
+    const RtpHeader &rtpHeader =
+        *reinterpret_cast<const RtpHeader *>(vBufReceive.data());
+    tylog("recv rtp=%s", rtpHeader.ToString().data());
+  } else {
+    tylog("receive unknown type of data=%s, return", mediaType.data());
+    assert(!"receive unknown media type, should already filter and return");
+
+    return -1;
+  }
 
   // ssize_t sendtoLen =
   //     sendto(g_sock_fd, vBufReceive.data(), vBufReceive.size(), 0,
