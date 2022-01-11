@@ -31,5 +31,5 @@
 *.out
 *.app
 
-log.txt
+log.txt*
 server_tywebrtc

@@ -8,8 +8,11 @@
 		"optional": "cpp",
 		"mutex": "cpp",
 		"array": "cpp",
-		"string_view": "cpp"
+		"string_view": "cpp",
+		"iostream": "cpp",
+		"iosfwd": "cpp",
+		"fstream": "cpp"
 	},
-	"editor.fontSize": 18,
+	"editor.fontSize": 22,
 	"C_Cpp.clang_format_fallbackStyle": "Google"
 }
