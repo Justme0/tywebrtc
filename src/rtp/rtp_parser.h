@@ -77,38 +77,33 @@ class RtpHeader {
         extensionpayload(0),
         extensionlength(0) {}
 
-  // to remove inline
-  inline uint8_t hasPadding() const { return padding; }
+  uint8_t hasPadding() const { return padding; }
 
-  inline void setPadding(uint8_t has_padding) { padding = has_padding; }
+  void setPadding(uint8_t has_padding) { padding = has_padding; }
 
-  inline uint8_t getVersion() const { return version; }
-  inline void setVersion(uint8_t aVersion) { version = aVersion; }
-  inline uint8_t getMarker() const { return marker; }
-  inline void setMarker(uint8_t aMarker) { marker = aMarker; }
-  inline uint8_t getExtension() const { return hasextension; }
-  inline void setExtension(uint8_t ext) { hasextension = ext; }
-  inline uint8_t getCc() const { return cc; }
-  inline void setCc(uint8_t theCc) { cc = theCc; }
-  inline uint8_t getPayloadType() const { return payloadtype; }
-  inline void setPayloadType(uint8_t aType) { payloadtype = aType; }
-  inline uint16_t getSeqNumber() const { return ntohs(seqnum); }
-  inline void setSeqNumber(uint16_t aSeqNumber) { seqnum = htons(aSeqNumber); }
-  inline uint32_t getTimestamp() const { return ntohl(timestamp); }
-  inline void setTimestamp(uint32_t aTimestamp) {
-    timestamp = htonl(aTimestamp);
-  }
-  inline uint32_t getSSRC() const { return ntohl(ssrc); }
-  inline void setSSRC(uint32_t aSSRC) { ssrc = htonl(aSSRC); }
-  inline uint16_t getExtId() const { return ntohs(extensionpayload); }
-  inline void setExtId(uint16_t extensionId) {
-    extensionpayload = htons(extensionId);
-  }
-  inline uint16_t getExtLength() const { return ntohs(extensionlength); }
-  inline void setExtLength(uint16_t extensionLength) {
+  uint8_t getVersion() const { return version; }
+  void setVersion(uint8_t aVersion) { version = aVersion; }
+  uint8_t getMarker() const { return marker; }
+  void setMarker(uint8_t aMarker) { marker = aMarker; }
+  uint8_t getExtension() const { return hasextension; }
+  void setExtension(uint8_t ext) { hasextension = ext; }
+  uint8_t getCc() const { return cc; }
+  void setCc(uint8_t theCc) { cc = theCc; }
+  uint8_t getPayloadType() const { return payloadtype; }
+  void setPayloadType(uint8_t aType) { payloadtype = aType; }
+  uint16_t getSeqNumber() const { return ntohs(seqnum); }
+  void setSeqNumber(uint16_t aSeqNumber) { seqnum = htons(aSeqNumber); }
+  uint32_t getTimestamp() const { return ntohl(timestamp); }
+  void setTimestamp(uint32_t aTimestamp) { timestamp = htonl(aTimestamp); }
+  uint32_t getSSRC() const { return ntohl(ssrc); }
+  void setSSRC(uint32_t aSSRC) { ssrc = htonl(aSSRC); }
+  uint16_t getExtId() const { return ntohs(extensionpayload); }
+  void setExtId(uint16_t extensionId) { extensionpayload = htons(extensionId); }
+  uint16_t getExtLength() const { return ntohs(extensionlength); }
+  void setExtLength(uint16_t extensionLength) {
     extensionlength = htons(extensionLength);
   }
-  inline int getHeaderLength() const {
+  int getHeaderLength() const {
     static const int MIN_SIZE = 12;
     return MIN_SIZE + cc * 4 + hasextension * (4 + ntohs(extensionlength) * 4);
   }
@@ -271,17 +266,15 @@ class RtpRtcpStrategy {
 
  public:
   // taylor remove the following SSRC code?
-  inline void setLocalSSRC(unsigned int localAudioSsrc,
-                           unsigned int localVideoSsrc,
-                           unsigned int localRtxSsrc) {
+  void setLocalSSRC(unsigned int localAudioSsrc, unsigned int localVideoSsrc,
+                    unsigned int localRtxSsrc) {
     uiLocalAudioSsrc = localAudioSsrc;
     uiLocalVideoSsrc = localVideoSsrc;
     uiLocalRtxSsrc = localRtxSsrc;
   }
 
-  inline void setRemoteSSRC(unsigned int remoteAudioSsrc,
-                            unsigned int remoteVideoSsrc,
-                            unsigned int remoteRtxSsrc) {
+  void setRemoteSSRC(unsigned int remoteAudioSsrc, unsigned int remoteVideoSsrc,
+                     unsigned int remoteRtxSsrc) {
     uiRemoteAudioSsrc = remoteAudioSsrc;
     uiRemoteVideoSsrc = remoteVideoSsrc;
     uiRemoteRtxSsrc = remoteRtxSsrc;
