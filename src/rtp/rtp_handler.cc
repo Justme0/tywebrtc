@@ -8,6 +8,7 @@
 
 #include "log/log.h"
 #include "pc/peer_connection.h"
+#include "rtp/rtcp_parser.h"
 #include "rtp/rtp_parser.h"
 
 RtpHandler::RtpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {}
@@ -25,6 +26,54 @@ extern struct sockaddr_in g_stConnAddr;  // to use data member
 //   }
 //   tylog("%s", arr);
 // }
+
+// use OO?
+int RtpHandler::HandleRtcpPacket_(const std::vector<char> &vBufReceive) {
+  int ret = 0;
+
+  const RtcpHeader &rtcpHeader =
+      *reinterpret_cast<const RtcpHeader *>(vBufReceive.data());
+  tylog("recv rtcp=%s", rtcpHeader.ToString().data());
+
+  // downlink
+
+  RtcpHeader &downlinkRtcpHeader = const_cast<RtcpHeader &>(rtcpHeader);
+
+  /*
+    if (mediaType == kMediaTypeAudio) {
+      const int kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
+      downlinkRtpHeader.setSSRC(kDownlinkAudioSsrc);
+
+      const int kDownlinkAudioPayloadType = 111;
+      downlinkRtpHeader.setPayloadType(kDownlinkAudioPayloadType);
+    } else {
+      const int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
+      downlinkRtpHeader.setSSRC(kDownlinkVideoSsrc);
+
+      const int kDownlinkVideoPayloadType = 125;  // H.264
+      downlinkRtpHeader.setPayloadType(kDownlinkVideoPayloadType);
+    }
+    */
+
+  ret = this->belongingPeerConnection_.srtpHandler_.ProtectRtcp(
+      const_cast<std::vector<char> *>(&vBufReceive));
+  if (ret) {
+    tylog("downlink protect rtcp ret=%d", ret);
+    return ret;
+  }
+
+  ssize_t sendtoLen =
+      sendto(g_sock_fd, vBufReceive.data(), vBufReceive.size(), 0,
+             reinterpret_cast<struct sockaddr *>(&g_stConnAddr),
+             sizeof(struct sockaddr_in));
+  if (-1 == sendtoLen) {
+    tylog("sendto errorno=%d[%s]", errno, strerror(errno));
+    return -1;
+  }
+  tylog("sendto reply buf size=%ld", sendtoLen);
+
+  return 0;
+}
 
 int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   int ret = 0;
@@ -59,28 +108,20 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       tylog("unprotect RTCP fail, ret=%d", ret);
       return ret;
     }
+
+    ret = HandleRtcpPacket_(vBufReceive);
+    if (ret) {
+      tylog("HandleRtcpPacket fail, ret=%d", ret);
+      return ret;
+    }
   } else if (mediaType == kMediaTypeAudio || mediaType == kMediaTypeVideo) {
     // reuse original buffer
-    // taylor think restart svr
-
-    std::string test;
-    std::string test2;
-    test.append(vBufReceive.begin(), vBufReceive.end());
-
+    // taylor consider restart svr
     ret = belongingPeerConnection_.srtpHandler_.UnprotectRtp(
         const_cast<std::vector<char> *>(&vBufReceive));
     if (ret) {
       tylog("unprotect RTP (not RTCP) fail, ret=%d", ret);
       return ret;
-    }
-
-    test2.append(vBufReceive.begin(), vBufReceive.end());
-    // printAscii(test);
-    // printAscii(test2);
-    if (test != test2) {
-      // tylog("is not same");
-    } else {
-      // tylog("is same");
     }
 
     const RtpHeader &rtpHeader =

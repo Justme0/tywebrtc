@@ -49,9 +49,6 @@ struct DtlsBuff {
   int32_t len;
 };
 
-/**
- * Stream directions
- */
 enum StreamDirection {
   kSendRecv,
   kSendOnly,

@@ -11,7 +11,10 @@ class RtpHandler {
 
   int HandleRtpPacket(const std::vector<char> &vBufReceive);
 
-  // private:
+ private:
+  int HandleRtcpPacket_(const std::vector<char> &vBufReceive);
+
+ private:
   PeerConnection &belongingPeerConnection_;
 };
 
