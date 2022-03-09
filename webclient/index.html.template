@@ -85,7 +85,7 @@
             console.log(offer.sdp);
 
             let answerSDP = `v=0
-o=- 7595655801978680453 2 IN IP4 192.168.255.10
+o=- 7595655801978680453 2 IN IP4 CANDIDATE_PLACEHOLDER
 s=-
 t=0 0
 a=ice-lite
@@ -94,7 +94,7 @@ a=msid-semantic: WMS 5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV
 m=audio 9 UDP/TLS/RTP/SAVPF 111 103 104 9 0 8 126
 c=IN IP4 0.0.0.0
 a=rtcp:9 IN IP4 0.0.0.0
-a=candidate:1 1 udp 1686052607 192.168.255.10 8007 typ srflx raddr 192.168.255.10 rport 8007 generation 0
+a=candidate:1 1 udp 1686052607 CANDIDATE_PLACEHOLDER 8007 typ srflx raddr CANDIDATE_PLACEHOLDER rport 8007 generation 0
 a=ice-ufrag:144115262675375852
 a=ice-pwd:728c90257276ed9e48aac959
 a=fingerprint:sha-256 55:9B:3E:43:91:2D:66:79:0F:B6:84:45:B3:47:3F:56:D4:4C:9E:10:EA:B4:66:C6:64:42:42:4B:5C:CD:FF:2F
@@ -110,14 +110,13 @@ a=rtpmap:126 telephone-event/8000
 m=video 9 UDP/TLS/RTP/SAVPF 125 107
 c=IN IP4 0.0.0.0
 a=rtcp:9 IN IP4 0.0.0.0
-a=candidate:1 1 udp 1686052607 192.168.255.10 8007 typ srflx raddr 192.168.255.10 rport 8007 generation 0
+a=candidate:1 1 udp 1686052607 CANDIDATE_PLACEHOLDER 8007 typ srflx raddr CANDIDATE_PLACEHOLDER rport 8007 generation 0
 a=ice-ufrag:144115262675375852
 a=ice-pwd:728c90257276ed9e48aac959
 a=fingerprint:sha-256 55:9B:3E:43:91:2D:66:79:0F:B6:84:45:B3:47:3F:56:D4:4C:9E:10:EA:B4:66:C6:64:42:42:4B:5C:CD:FF:2F
 a=setup:active
 a=mid:1
 a=extmap:2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
-a=extmap:12 http://www.webrtc.org/experiments/rtp-hdrext/playout-delay
 a=extmap:14 urn:ietf:params:rtp-hdrext:toffset
 a=sendrecv
 a=rtcp-mux
@@ -134,7 +133,7 @@ a=fmtp:107 apt=125
 m=audio 9 UDP/TLS/RTP/SAVPF 111 103 104 9 0 8 126
 c=IN IP4 0.0.0.0
 a=rtcp:9 IN IP4 0.0.0.0
-a=candidate:1 1 udp 1686052607 192.168.255.10 8007 typ srflx raddr 192.168.255.10 rport 8007 generation 0
+a=candidate:1 1 udp 1686052607 CANDIDATE_PLACEHOLDER 8007 typ srflx raddr CANDIDATE_PLACEHOLDER rport 8007 generation 0
 a=ice-ufrag:144115262675375852
 a=ice-pwd:728c90257276ed9e48aac959
 a=fingerprint:sha-256 55:9B:3E:43:91:2D:66:79:0F:B6:84:45:B3:47:3F:56:D4:4C:9E:10:EA:B4:66:C6:64:42:42:4B:5C:CD:FF:2F
@@ -154,7 +153,7 @@ a=ssrc:16854838 label:128f4fa0-81dd-4c3a-bbcd-22e71e29d178
 m=video 9 UDP/TLS/RTP/SAVPF 125 96
 c=IN IP4 0.0.0.0
 a=rtcp:9 IN IP4 0.0.0.0
-a=candidate:1 1 udp 1686052607 192.168.255.10 8007 typ srflx raddr 192.168.255.10 rport 8007 generation 0
+a=candidate:1 1 udp 1686052607 CANDIDATE_PLACEHOLDER 8007 typ srflx raddr CANDIDATE_PLACEHOLDER rport 8007 generation 0
 a=ice-ufrag:144115262675375852
 a=ice-pwd:728c90257276ed9e48aac959
 a=fingerprint:sha-256 55:9B:3E:43:91:2D:66:79:0F:B6:84:45:B3:47:3F:56:D4:4C:9E:10:EA:B4:66:C6:64:42:42:4B:5C:CD:FF:2F
@@ -188,7 +187,6 @@ a=ssrc:50472669 msid:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV 1d7fc300-9889-4f94-9f3
 a=ssrc:50472669 mslabel:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV
 a=ssrc:50472669 label:1d7fc300-9889-4f94-9f35-c0bcc77a260d
 `
-            // a=extmap:12 http://www.webrtc.org/experiments/rtp-hdrext/playout-delay
             console.log("=============== answer sdp:");
             console.log(answerSDP)
 
