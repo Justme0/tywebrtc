@@ -14,6 +14,7 @@
 #include "dtls/dtls_handler.h"
 
 #include <cassert>
+#include <cinttypes>
 
 #include "tylib/codec/codec.h"
 #include "tylib/string/format_string.h"
@@ -816,8 +817,8 @@ void DtlsHandler::OnTime() {
   if ((CheckIntervalMs <= TimePassMs) && (0 != m_CheckTime) &&
       (!mHandshakeCompleted) && (SSL_ERROR_WANT_READ == m_SSl_BuffState) &&
       (0 != m_SendBuffNum)) {
-    tylog("CheckIntervalMs=%ld, TimePassMs=%ld %s", CheckIntervalMs, TimePassMs,
-          ToString().data());
+    tylog("CheckIntervalMs=%" PRId64 ", TimePassMs=%" PRId64 " %s",
+          CheckIntervalMs, TimePassMs, ToString().data());
 
     if (m_IsHandshakeCanComplete) {
       ++m_ClientKeySendTime;
@@ -831,8 +832,8 @@ void DtlsHandler::OnTime() {
       rewriteDtlsPacket(m_SendBuff[i].buff, m_SendBuff[i].len);
     }
 
-    tylog("after onTime rewrite, Now:%ld %s passMs:%ld %s", g_GetNowMs(),
-          WebRtcPrintTimeMs(g_GetNowMs()).data(), TimePassMs,
+    tylog("after onTime rewrite, Now:%" PRId64 " %s passMs:%" PRId64 " %s",
+          g_GetNowMs(), WebRtcPrintTimeMs(g_GetNowMs()).data(), TimePassMs,
           ToString().data());
   }
 
