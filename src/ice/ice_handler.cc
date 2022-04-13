@@ -539,8 +539,10 @@ int IceHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
       break;
     }
 
-      // case rsp to handle
-    default: {}
+    case CMD_STUN_BINGING_RES: {
+      break;
+    }
+    default: { break; }
   }
 
   return 0;

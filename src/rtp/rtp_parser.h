@@ -112,8 +112,7 @@ class RtpHeader {
         "timestamp=%u, ssrc=%u, payload_offset=%u, payload_size=%u, "
         "total_size=%u}",
         getPayloadType(), getMarker(), getSeqNumber(), 22222, getTimestamp(),
-        getSSRC(), 22222, 22222,
-        2222);  // taylor to fix
+        getSSRC(), 22222, 22222, 2222);  // taylor to fix
   }
 
  private:

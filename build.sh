@@ -17,8 +17,9 @@ cd $g_dst_dir
 cd webclient
 
 # only for my laptop :)
-g_localip=`ifconfig  | grep wifi0 -A 1 | tail -n 1 | awk '{print $2}'`
+g_localip=`ifconfig | egrep -w "en0|wifi0" -A5 | grep -w inet | head -n 1 | awk '{print $2}'`
 sed "s/CANDIDATE_PLACEHOLDER/${g_localip}/g" index.html.template > index.html
+
 # first kill, ignore error if not exist
 ps aux | grep "node index.js" | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 # https://stackoverflow.com/questions/10408816/how-do-i-use-the-nohup-command-without-getting-nohup-out
@@ -32,7 +33,7 @@ kServerName="server_tywebrtc" # svr name is same in Makefile
 # force format code :)
 # not emit failure if no clang-format
 # mac (FreeBSD style) find cmd must specify directory
-find . | egrep ".+\.(c|cc|h)$" | xargs clang-format -i --style Google || true
+find . | egrep ".+\.(c|cc|h)$" | xargs clang-format -i || true
 
 # compile
 make V=1
