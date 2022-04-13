@@ -15,7 +15,7 @@ cd $g_dst_dir
 
 # 1, run nodejs for web client demo
 cd webclient
-g_localip=`ifconfig  | head -n 2 | tail -n 1 | awk '{print $2}'`
+g_localip=`ifconfig | egrep -w "en0|wifi0" -A5 | grep -w inet | head -n 1 | awk '{print $2}'`
 sed "s/CANDIDATE_PLACEHOLDER/${g_localip}/g" index.html.template > index.html
 # first kill, ignore error if not exist
 ps aux | grep "node index.js" | grep -v grep | awk '{print $2}' | xargs kill -9 || true
