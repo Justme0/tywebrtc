@@ -15,12 +15,14 @@ cd $g_dst_dir
 
 # 1, run nodejs for web client demo
 cd webclient
-g_localip=`ifconfig  | head -n 2 | tail -n 1 | awk '{print $2}'`
+
+# only for my laptop :)
+g_localip=`ifconfig  | grep wifi0 -A 1 | tail -n 1 | awk '{print $2}'`
 sed "s/CANDIDATE_PLACEHOLDER/${g_localip}/g" index.html.template > index.html
 # first kill, ignore error if not exist
 ps aux | grep "node index.js" | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 # https://stackoverflow.com/questions/10408816/how-do-i-use-the-nohup-command-without-getting-nohup-out
-nohup bash -c "node index.js" </dev/null >/dev/null 2>&1 &
+node index.js &
 cd $g_dst_dir
 
 # 2, compile server
