@@ -101,6 +101,8 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
 
   tylog("receive %s", mediaType.data());
 
+  // should refactor if else for media type
+
   if (mediaType == kMediaTypeRtcp) {
     ret = belongingPeerConnection_.srtpHandler_.UnprotectRtcp(
         const_cast<std::vector<char> *>(&vBufReceive));
