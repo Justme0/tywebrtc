@@ -188,7 +188,7 @@ int HandleRequest() {
   ssize_t iRecvLen =
       recvfrom(g_sock_fd, vBufReceive.data(), vBufReceive.size(), 0,
                (struct sockaddr*)&g_stConnAddr, (socklen_t*)&addr_size);
-  tylog("=============== recv len=%ld (app layer)", iRecvLen);
+  tylog("=============== recv len=%ld (application layer)", iRecvLen);
   if (iRecvLen < -1) {
     // should not appear
     tylog("unknown errno %d[%s]", errno, strerror(errno));
