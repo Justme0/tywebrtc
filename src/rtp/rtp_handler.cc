@@ -35,6 +35,159 @@ int RtpHandler::HandleRtcpPacket_(const std::vector<char> &vBufReceive) {
       *reinterpret_cast<const RtcpHeader *>(vBufReceive.data());
   tylog("recv rtcp=%s", rtcpHeader.ToString().data());
 
+  /*
+    RtcpHeader *chead = reinterpret_cast<RtcpHeader *>(pPackage);
+    if (!chead->isRtcp()) {
+      tylog("pkg is not rtcp, pt=%d", chead->packettype);
+      return -1;
+    }
+
+    unsigned int subType = 0;
+    STVideoUserInfo *pWatcherUser = NULL;
+
+    // 行使用远端ssrc判断
+    if (m_pTWebRTCUserInfo->ullTinyId == m_pc->ullTinyId) {
+      if (chead->getSSRC() == m_pc->tVideoUserInfo[0].uiRemoteSsrc)  //视频SR包
+      {
+        pWatcherUser = &m_pc->tVideoUserInfo[0];
+        subType = DT_BIGVIDIO;
+      } else if (chead->getSSRC() == m_pc->tVideoUserInfo[1].uiRemoteSsrc) {
+        pWatcherUser = &m_pc->tVideoUserInfo[1];
+      } else if (chead->getSSRC() == m_pc->tAudioInfo.uiRemoteSsrc)  //音频SR包
+      {
+        subType = DT_AUDIO;
+      }
+    } else {
+      if (chead->getSourceSSRC() == m_pc->tVideoUserInfo[0].uiLocalSsrc) {
+        subType = DT_BIGVIDIO;
+        pWatcherUser = &m_pc->tVideoUserInfo[0];
+      } else if (chead->getSourceSSRC() == m_pc->tVideoUserInfo[1].uiLocalSsrc)
+    { pWatcherUser = &m_pc->tVideoUserInfo[1]; } else if (chead->getSourceSSRC()
+    == m_pc->tAudioInfo.uiLocalSsrc) { subType = DT_AUDIO;
+      }
+    }
+
+    if (0 == subType) {
+      tylor(
+          "Rtcp packettype:%u BlockCount:%u subType:%u\r\n Rtcp[SSrc:%u "
+          "SrcSSRC:%u] \r\nVid[RemSsrc:%u LocSsrc:%u] \r\nAud[RemSsrc:%u "
+          "LocSsrc:%u]",
+          chead->packettype, chead->getBlockCount(), subType, chead->getSSRC(),
+          chead->getSourceSSRC(), m_pc->tVideoUserInfo[0].uiRemoteSsrc,
+          m_pc->tVideoUserInfo[0].uiLocalSsrc, m_pc->tAudioInfo.uiRemoteSsrc,
+          m_pc->tAudioInfo.uiLocalSsrc);
+    }
+
+    char *movingBuf = pPackage;
+    int rtcpLen = 0;
+    int totalLen = 0;
+    while (true)  //可能是rtcp组合包
+    {
+      if (totalLen >= iLen) break;
+
+      movingBuf += rtcpLen;
+      chead = reinterpret_cast<RtcpHeader *>(movingBuf);
+      rtcpLen = (chead->getLength() + 1) * 4;
+      totalLen += rtcpLen;
+
+      tylor("rtcpLen[%u], totalLen[%u], iLen[%u]", rtcpLen, totalLen,
+                         iLen);
+
+      if (totalLen > iLen) break;
+
+      if (chead->packettype == RTCP_RTP_Feedback_PT)  // NACK  RFC3550
+      {
+        if (chead->getBlockCount() == 1) {
+          HandleNack(chead);
+        } else if (chead->getBlockCount() == RTCP_AFB) {
+          // REMB只会有在房间只有两个web的时候透传
+          if (IsByPassMod()) {
+            RelayRtcpReq(movingBuf, rtcpLen, subType);
+          }
+
+          tylor(
+              "REMB[Recv]:  BitRate[%lu] packettype:%u BlockCount:%u "
+              "subType:%u\r\n Rtcp[SSrc:%u SrcSSRC:%u] \r\nVid[RemSsrc:%u "
+              "LocSsrc:%u] \r\nAud[RemSsrc:%u LocSsrc:%u]",
+              chead->getREMBBitRate(), chead->packettype,
+    chead->getBlockCount(), subType, chead->getSSRC(), chead->getSourceSSRC(),
+              m_pc->tVideoUserInfo[0].uiRemoteSsrc,
+              m_pc->tVideoUserInfo[0].uiLocalSsrc,
+    m_pc->tAudioInfo.uiRemoteSsrc, m_pc->tAudioInfo.uiLocalSsrc);
+        }
+
+      } else if (chead->packettype == RTCP_PS_Feedback_PT) {
+        // I帧申请透传
+        if ((RTCP_PLI_FMT == chead->getBlockCount()) ||
+            (RTCP_SLI_FMT == chead->getBlockCount()) ||
+            (RTCP_FIR_FMT == chead->getBlockCount())) {
+          if (m_pTWebRTCUserInfo->ullTinyId == m_pc->ullTinyId) {
+            continue;
+          }
+
+          tylor(
+              "PLI: MediaMode:%u ClientType:%u Rtcp packettype:%u BlockCount:%u
+    " "subType:%u\r\n Rtcp[SSrc:%u SrcSSRC:%u] \r\nVid[RemSsrc:%u " "LocSsrc:%u]
+    \r\nAud[RemSsrc:%u LocSsrc:%u]", m_pTWebRTCUserInfo->MediaMode,
+    m_pc->ClientType, chead->packettype, chead->getBlockCount(), subType,
+    chead->getSSRC(), chead->getSourceSSRC(),
+    m_pc->tVideoUserInfo[0].uiRemoteSsrc, m_pc->tVideoUserInfo[0].uiLocalSsrc,
+    m_pc->tAudioInfo.uiRemoteSsrc, m_pc->tAudioInfo.uiLocalSsrc);
+
+          if (!pWatcherUser) {
+            continue;
+          }
+
+          // TODO 位置修改
+          pWatcherUser->PLICnt++;
+          if (m_pc->ClientType != USER_TYPE_WEBRTC) {
+            // TODO 位置修改 急速模式下sdk
+            tylor("rtcp from web call RequestPeerIDRFrame");
+            pWatcherUser->ReqSdkIFrFlag++;
+            if (pWatcherUser->ReqSdkIFrFlag == 0) {
+              pWatcherUser->ReqSdkIFrFlag = 1;
+            }
+            m_pTWebRTCUserInfo->RequestPeerIDRFrame(m_pc, pWatcherUser);
+          } else if (m_pc->ClientType == USER_TYPE_WEBRTC) {
+            // TODO 位置修改 急速模式下的web，非急速模式下的web
+            pWatcherUser->ReqICnt++;
+            // RelayRtcpReq(movingBuf,rtcpLen, subType);
+            tylor("rtcp from web call RequestPeerIDRFrame");
+            m_pTWebRTCUserInfo->RequestPeerIDRFrame(m_pc, pWatcherUser, true);
+          }
+        }
+      } else if (chead->packettype == RTCP_Sender_PT)  // SR
+      {
+        //广播发送报告广播
+        if (IsByPassMod()) {
+          BroadcastRtcpReq(movingBuf, rtcpLen, subType);
+        }
+
+        tylor("[RTCP_Sender_PT]");
+        HandleSR(chead);
+      } else if (chead->packettype == RTCP_Receiver_PT)  // RR
+      {
+        //接收报告只会有在房间只有两个web的时候透传
+        if (IsByPassMod()) {
+          RelayRtcpReq(movingBuf, rtcpLen, subType);
+        }
+
+        tylor("[RTCP_Receiver_PT]");
+        HandleRR(chead);
+      } else if (chead->packettype == RTCP_XR_PT)  // XR  rfc3611
+      {
+        tylor("[ExtendedReport]");
+        //广播发送报告广播
+        if (IsByPassMod()) {
+          BroadcastRtcpReq(movingBuf, rtcpLen, subType);
+        }
+        HandleXR(chead);
+      }
+    }
+    */
+
+  // taylor origin:
+
   // downlink
 
   // RtcpHeader &downlinkRtcpHeader = const_cast<RtcpHeader &>(rtcpHeader);

@@ -12,12 +12,14 @@ trap 'cd $g_pwd' EXIT
 g_dst_dir=$(cd $(dirname ${BASH_SOURCE[0]}); pwd )
 # like golang defer
 cd $g_dst_dir
+mkdir -p conf
 
 # 1, run nodejs for web client demo
 cd webclient
 
 # only for my laptop :)
 g_localip=`ifconfig | egrep -w "en0|wifi0" -A5 | grep -w inet | head -n 1 | awk '{print $2}'`
+echo $g_localip > $g_dst_dir/conf/LOCAL_IP.txt
 sed "s/CANDIDATE_PLACEHOLDER/${g_localip}/g" index.html.template > index.html
 
 # first kill, ignore error if not exist

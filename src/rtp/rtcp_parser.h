@@ -8,18 +8,19 @@
 #include "log/log.h"
 #include "tylib/string/format_string.h"
 
-#define RTCP_MIN_PT 194  // per https://tools.ietf.org/html/rfc5761
-#define RTCP_MAX_PT 223
-
 // RTCP Payload types
-#define RTCP_Sender_PT 200    // RTCP Sender Report
-#define RTCP_Receiver_PT 201  // RTCP Receiver Report
-#define RTCP_SDES_PT 202
-#define RTCP_BYE 203
-#define RTCP_APP 204
-#define RTCP_RTP_Feedback_PT 205  // RTCP Transport Layer Feedback Packet
-#define RTCP_PS_Feedback_PT 206   // RTCP Payload Specific Feedback Packet
-#define RTCP_XR_PT 207            // rfc3611
+enum {
+  RTCP_MIN_PT = 194,       // per https://tools.ietf.org/html/rfc5761
+  RTCP_Sender_PT = 200,    // RTCP Sender Report
+  RTCP_Receiver_PT = 201,  // RTCP Receiver Report
+  RTCP_SDES_PT = 202,
+  RTCP_BYE = 203,
+  RTCP_APP = 204,
+  RTCP_RTP_Feedback_PT = 205,  // RTCP Transport Layer Feedback Packet
+  RTCP_PS_Feedback_PT = 206,   // RTCP Payload Specific Feedback Packet
+  RTCP_XR_PT = 207,            // rfc3611
+  RTCP_MAX_PT = 223,
+};
 
 #define RRTR_BT 4
 #define DLRR_BT 5

@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <string>
@@ -157,6 +158,23 @@ bool IsLanAddr(const std::string& ip) {
 
 // to move to tylib
 int GetLanIp(std::string* o_ip) {
+  // should also provided by env var or cmd option
+  const std::string& kIpFile = "../conf/LOCAL_IP.txt";
+  std::ifstream infile(kIpFile);
+  if (!(infile >> *o_ip)) {
+    tylog("open %s fail", kIpFile.data());
+    return -1;
+  }
+
+  if (o_ip->empty()) {
+    // should check ip valid
+    tylog("empty ip in file %s", kIpFile.data());
+    return -2;
+  }
+
+  return 0;
+
+  /*
   const int kIpNumber = 20;
   char aip[kIpNumber][20];
   char* ips[kIpNumber];
@@ -189,6 +207,7 @@ int GetLanIp(std::string* o_ip) {
   tylogAndPrintfln("not found eth addr, get ip num=%d", num);
 
   return -2;
+  */
 }
 
 int HandleRequest() {
