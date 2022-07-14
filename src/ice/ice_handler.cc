@@ -128,7 +128,7 @@ int IceHandler::DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
       }
 
       case ATTRIBUTE_CONTROLLING: {
-        char Controlling[32] = {'\0'};
+        // char Controlling[32] = {'\0'};
         // m_pStunIceControlling = pMsgComm;
         std::string controlling(pData, 8);
         break;
