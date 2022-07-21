@@ -26,9 +26,7 @@ ps aux | grep "node index.js" | grep -v grep | awk '{print $2}' | xargs kill -9 
 node index.js &
 cd $g_dst_dir
 
-# 2, compile server
-cd src
-kServerName="server_tywebrtc" # svr name is same in Makefile
+# 2, format and compile server
 
 # force format code :)
 # not emit failure if no clang-format
@@ -36,7 +34,10 @@ kServerName="server_tywebrtc" # svr name is same in Makefile
 find . | egrep ".+\.(c|cc|h)$" | xargs clang-format -i || true
 
 # compile
-make V=1
+# make V=1
+bazel build --sandbox_debug  --verbose_failures  //src:server_tywebrtc
+kServerName="server_tywebrtc" # svr name is same in Makefile
+cp bazel-bin/src/server_tywebrtc .
 
 # deploy
 # rsync --port=22222 -vzrtp --progress --password-file=/data/home/taylorjiang/rsync/rsync.pass $kServerName devsync@9.218.129.75::workspace || true

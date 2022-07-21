@@ -20,7 +20,7 @@ inline void HandleFileSize() {
   // should in config file
   const std::string &g_kLogFile = "./log.txt";
   int64_t size = filesize(g_kLogFile);
-  const int64_t g_kMaxSingleFileByte = 100 * 1024 * 1024;
+  const int64_t g_kMaxSingleFileByte = 500 * 1024 * 1024;
   if (size >= g_kMaxSingleFileByte) {
     system("mv ./log.txt ./log.txt.1");  // to use config and cross platform
   }

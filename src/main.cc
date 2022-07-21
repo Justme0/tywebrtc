@@ -19,6 +19,21 @@
 
 int g_sock_fd;
 
+// Execute `system` and get output, OPT: move to lib
+// https://stackoverflow.com/questions/478898/how-do-i-execute-a-command-and-get-the-output-of-the-command-within-c-using-po
+std::string execCmd(const char* cmd) {
+  std::array<char, 128> buffer;
+  std::string result;
+  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+  if (!pipe) {
+    throw std::runtime_error("popen() failed!");
+  }
+  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+    result += buffer.data();
+  }
+  return result;
+}
+
 std::string g_localip;
 struct sockaddr_in g_stConnAddr;  // ipv4, must reflector taylor
 
@@ -404,12 +419,16 @@ int main(int argc, char* argv[]) {
 
   int ret = 0;
 
-  ret = GetLanIp(&g_localip);
-  if (ret) {
-    tylogAndPrintfln("get lan ip fail, ret=%d", ret);
+  g_localip = execCmd(
+      "ifconfig | egrep -w 'en0|wifi0' -A5 | grep -w inet | head -n 1 | awk "
+      "'{print $2}'");
 
-    return ret;
-  }
+  // ret = GetLanIp(&g_localip);
+  // if (ret) {
+  //   tylogAndPrintfln("get lan ip fail, ret=%d", ret);
+
+  //   return ret;
+  // }
   tylogAndPrintfln("important: get local ip=%s", g_localip.data());
 
   // step 1 create socket

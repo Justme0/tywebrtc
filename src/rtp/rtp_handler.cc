@@ -37,7 +37,7 @@ int RtpHandler::HandleRtcpPacket_(const std::vector<char> &vBufReceive) {
 
   // downlink
 
-  RtcpHeader &downlinkRtcpHeader = const_cast<RtcpHeader &>(rtcpHeader);
+  // RtcpHeader &downlinkRtcpHeader = const_cast<RtcpHeader &>(rtcpHeader);
 
   /*
     if (mediaType == kMediaTypeAudio) {
