@@ -5,10 +5,299 @@
 
 #include <netinet/in.h>
 
+#include <limits>
+
 #include "log/log.h"
 #include "tylib/string/format_string.h"
 
+// to move to tylib
+inline void WriteBigEndian(uint8_t* data, uint32_t val, int max_byte) {
+  int i;
+  for (i = 0; i < max_byte; ++i) {
+    data[i] = val >> ((max_byte - 1 - i) * 8);
+  }
+}
+
+inline uint32_t ReadBigEndian(const uint8_t* data, int max_byte) {
+  uint32_t val = 0;
+  int i;
+  for (i = 0; i < max_byte; ++i) {
+    val |= (uint32_t)(data[i]) << ((max_byte - 1 - i) * 8);
+  }
+  return val;
+}
+
+// Clockwise rotation
+enum VideoRotation {
+  kVideoRotation0 = 0,
+  kVideoRotation90 = 1,
+  kVideoRotation180 = 2,
+  kVideoRotation270 = 3,
+  kVideoRotationButt
+};
+
 // The Internet Protocol defines big-endian as the standard network byte order
+
+enum enRtpExtType {
+  kRtpExtNone = 0,
+  // urn:ietf:params:rtp-hdrext:ssrc-audio-level
+  kRtpExtAudioLevel = 1,
+  // urn:ietf:params:rtp-hdrext:toffset
+  kRtpExtTransmissionTimeOffset = 2,
+  // http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+  kRtpExtAbsoluteSendTime = 3,
+  // urn:3gpp:video-orientation
+  kRtpExtVideoRotation = 4,
+  // http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01
+  kRtpExtTransportSeq = 5,
+  // http://www.webrtc.org/experiments/rtp-hdrext/playout-delay
+  kRtpExtPlayoutDelay = 6,
+  // http://www.webrtc.org/experiments/rtp-hdrext/video-content-type
+  kRtpExtContentType = 7,
+  // urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id
+  kRtpExtRtpStreamId = 8,
+  // http://www.webrtc.org/experiments/rtp-hdrext/video-timing
+  kRtpExtVideoTiming = 9,
+  // http://tools.ietf.org/html/draft-ietf-avtext-framemarking-07
+  kRtpExtFramemarking = 10,
+  // http://www.webrtc.org/experiments/rtp-hdrext/color-space
+  kRtpExtColorPpace = 11,
+  // urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id
+  kRtpExtRepairedRtpStreamId,
+  // urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id
+  kRtpExtMediaStreamId,
+  // uri:webrtc:rtc:rtp-hdrext:video:CompositionTime
+  kRtpExtCompositionTime = 58,
+  kRtpExtNumberOfExtensions,  // Must be the last entity in the enum. max value
+                              // 16
+  // kMaxRtpExtNumber = 16
+  kMaxRtpExtNumber =
+      256  // 256 appbits https://datatracker.ietf.org/doc/html/rfc5285
+};
+
+// base class
+struct Extension {
+  enRtpExtType extension_type;
+};
+
+class AudioLevelExt : public Extension {
+ public:
+  bool voice_activity;
+  uint8_t audio_level;
+};
+
+class TransmissionTimeOffsetExt : public Extension {
+ public:
+  int32_t transmission_time_offset;
+};
+
+class AbsoluteSendTimeExt : public Extension {
+ public:
+  uint32_t absolute_send_time;
+};
+
+class VideoRotationExt : public Extension {
+ public:
+  VideoRotation video_rotation;
+};
+
+class TransportSequenceNumberExt : public Extension {
+ public:
+  uint16_t transport_sequence_number;
+};
+
+class VideoContentTypeExt : public Extension {
+ public:
+  uint8_t video_content_type;
+};
+
+class FrameMarkingExt : public Extension {
+ public:
+  struct FrameMarks {
+    bool start_frame = false;
+    bool end_frame = false;
+    bool independent = false;
+    bool discardable = false;
+    bool base_layer_sync = false;
+    uint8_t temporal_layer_id = 0;
+    uint8_t layer_id = 0;
+    uint8_t tl0_pic_idx = 0;
+  };
+  FrameMarks frame_marks_;
+};
+
+class RtpStreamIdExt : public Extension {
+ public:
+  std::string rid;
+};
+
+class RepairedRtpStreamIdExt : public Extension {
+ public:
+  std::string repaired_rid;
+};
+
+class MediaStreamIdExt : public Extension {
+ public:
+  std::string mid;
+};
+
+class CompositionTimeIdExt : public Extension {
+ public:
+  int cts = 0;
+};
+
+// Video timing timestamps in ms counted from capture_time_ms of a frame.
+// This structure represents data sent in video-timing RTP header extension.
+class VideoTimingIdExt : public Extension {
+ public:
+  enum TimingFrameFlags : uint8_t {
+    kNotTriggered = 0,  // Timing info valid, but not to be transmitted.
+                        // Used on send-side only.
+    kTriggeredByTimer = 1 << 0,  // Frame marked for tracing by periodic timer.
+    kTriggeredBySize = 1 << 1,   // Frame marked for tracing due to size.
+    kInvalid = std::numeric_limits<uint8_t>::max()  // Invalid, ignore!
+  };
+
+  static constexpr uint8_t kValueSizeBytes = 13;
+  static constexpr uint8_t kFlagsOffset = 0;
+  static constexpr uint8_t kEncodeStartDeltaOffset = 1;
+  static constexpr uint8_t kEncodeFinishDeltaOffset = 3;
+  static constexpr uint8_t kPacketizationFinishDeltaOffset = 5;
+  static constexpr uint8_t kPacerExitDeltaOffset = 7;
+  static constexpr uint8_t kNetworkTimestampDeltaOffset = 9;
+  static constexpr uint8_t kNetwork2TimestampDeltaOffset = 11;
+
+  uint16_t encode_start_delta_ms;
+  uint16_t encode_finish_delta_ms;
+  uint16_t packetization_finish_delta_ms;
+  uint16_t pacer_exit_delta_ms;
+  uint16_t network_timestamp_delta_ms;
+  uint16_t network2_timestamp_delta_ms;
+  uint8_t flags = TimingFrameFlags::kInvalid;
+};
+
+// Video Timing.
+// 6 timestamps in milliseconds counted from capture time stored in rtp header:
+// encode start/finish, packetization complete, pacer exit and reserved for
+// modification by the network modification. |flags| is a bitmask and has the
+// following allowed values:
+// 0 = Valid data, but no flags available (backwards compatibility)
+// 1 = Frame marked as timing frame due to cyclic timer.
+// 2 = Frame marked as timing frame due to size being outside limit.
+// 255 = Invalid. The whole timing frame extension should be ignored.
+//
+//    0                   1                   2                   3
+//    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//   |  ID   | len=12|     flags     |     encode start ms delta     |
+//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//   |    encode finish ms delta     |  packetizer finish ms delta   |
+//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//   |     pacer exit ms delta       |  network timestamp ms delta   |
+//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//   |  network2 timestamp ms delta  |
+//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+class VideoSendTiming : public Extension {
+  // Returns |time_ms - base_ms| capped at max 16-bit value.
+  // Used to fill this data structure as per
+  // https://webrtc.org/experiments/rtp-hdrext/video-timing/ extension stores
+  // 16-bit deltas of timestamps from packet capture time.
+ public:
+  const uint8_t kValueSizeBytes = 13;
+  // Offsets of the fields in the RTP header extension, counting from the first
+  // byte after the one-byte header.
+  const uint8_t kFlagsOffset = 0;
+  const uint8_t kEncodeStartDeltaOffset = 1;
+  const uint8_t kEncodeFinishDeltaOffset = 3;
+  const uint8_t kPacketizationFinishDeltaOffset = 5;
+  const uint8_t kPacerExitDeltaOffset = 7;
+  const uint8_t kNetworkTimestampDeltaOffset = 9;
+  const uint8_t kNetwork2TimestampDeltaOffset = 11;
+
+  bool Parse(const uint8_t* data, size_t size) {
+    int64_t off = 0;
+    if (static_cast<uint8_t>(size) == kValueSizeBytes - 1) {
+      flags = 0;
+      off = 1;  // Old wire format without the flags field.
+    } else if (size == kValueSizeBytes) {
+      flags = ReadBigEndian(data, 1);
+    } else {
+      return false;
+    }
+
+    encode_start_delta_ms =
+        ReadBigEndian(data + kEncodeStartDeltaOffset - off, 2);
+    encode_finish_delta_ms =
+        ReadBigEndian(data + kEncodeFinishDeltaOffset - off, 2);
+    packetization_finish_delta_ms =
+        ReadBigEndian(data + kPacketizationFinishDeltaOffset - off, 2);
+    pacer_exit_delta_ms = ReadBigEndian(data + kPacerExitDeltaOffset - off, 2);
+    network_timestamp_delta_ms =
+        ReadBigEndian(data + kNetworkTimestampDeltaOffset - off, 2);
+    network2_timestamp_delta_ms =
+        ReadBigEndian(data + kNetwork2TimestampDeltaOffset - off, 2);
+    // WEBRTC_LOG_ERROR("123456","videoTiming parse: flags
+    // %d,encode_start_delta_ms %d,encode_finish_delta_ms
+    // %d,packetization_finish_delta_ms %d,pacer_exit_delta_ms
+    // %d,network_timestamp_delta_ms %d,network2_timestamp_delta_ms %d",
+    // flags,encode_start_delta_ms,encode_finish_delta_ms,packetization_finish_delta_ms,pacer_exit_delta_ms,network_timestamp_delta_ms,network2_timestamp_delta_ms);
+    return true;
+  }
+  bool Write(uint8_t* data, size_t size) {
+    if (size != kValueSizeBytes) {
+      return false;
+    }
+    WriteBigEndian(data + kFlagsOffset, flags, 1);
+    WriteBigEndian(data + kEncodeStartDeltaOffset, encode_start_delta_ms, 2);
+    WriteBigEndian(data + kEncodeFinishDeltaOffset, encode_finish_delta_ms, 2);
+    WriteBigEndian(data + kPacketizationFinishDeltaOffset,
+                   packetization_finish_delta_ms, 2);
+    WriteBigEndian(data + kPacerExitDeltaOffset, pacer_exit_delta_ms, 2);
+    WriteBigEndian(data + kNetworkTimestampDeltaOffset,
+                   network_timestamp_delta_ms, 2);
+    WriteBigEndian(data + kNetwork2TimestampDeltaOffset,
+                   network2_timestamp_delta_ms, 2);
+    // WEBRTC_LOG_ERROR("123456","videoTiming write: flags
+    // %d,encode_start_delta_ms %d,encode_finish_delta_ms
+    // %d,packetization_finish_delta_ms %d,pacer_exit_delta_ms
+    // %d,network_timestamp_delta_ms %d,network2_timestamp_delta_ms %d",
+    // flags,encode_start_delta_ms,encode_finish_delta_ms,packetization_finish_delta_ms,pacer_exit_delta_ms,network_timestamp_delta_ms,network2_timestamp_delta_ms);
+    return true;
+  }
+
+ private:
+  uint16_t encode_start_delta_ms;
+  uint16_t encode_finish_delta_ms;
+  uint16_t packetization_finish_delta_ms;
+  uint16_t pacer_exit_delta_ms;
+  uint16_t network_timestamp_delta_ms;
+  uint16_t network2_timestamp_delta_ms;
+  uint8_t flags;
+};
+
+struct VideoUnPackParam {
+  uint32_t pre_fu_valid;
+  uint32_t cur_rtp_seq_no;
+  uint32_t pre_seq_num;
+  uint8_t* raw_stm_buff;
+  int32_t raw_stm_size;
+  uint32_t cur_frame_ts;
+  VideoRotation rotate_angle;
+  uint8_t cam_type;
+  uint8_t content_type;
+  uint16_t max_play_out_delay_ms;
+  uint16_t min_play_out_delay_ms;
+  uint8_t* pps;
+  uint8_t* sps;
+  uint8_t pps_pkt_len;
+  uint8_t sps_pkt_len;
+  uint8_t wait_i_frame_flag;
+  uint32_t ssrc;
+  uint32_t payload_type;
+  uint8_t drop_flag;
+};
+
+enum MediaType { kMediaVideo, kMediaAudio, kMediaData, kMediaMax };
 
 static inline uint16_t rtp_read_uint16(const uint8_t* ptr) {
   return (((uint16_t)ptr[0]) << 8) | ptr[1];
@@ -115,6 +404,8 @@ class RtpHeader {
         getSSRC(), 22222, 22222, 2222);  // taylor to fix
   }
 
+  std::vector<std::shared_ptr<Extension>> extensions;
+
  private:
   // the following is all netorder for RAW RTP format
   uint32_t cc : 4;
@@ -126,6 +417,7 @@ class RtpHeader {
   uint32_t seqnum : 16;
   uint32_t timestamp;
   uint32_t ssrc;
+
   uint32_t extensionpayload : 16;
   uint32_t extensionlength : 16;
 

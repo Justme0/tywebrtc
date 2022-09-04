@@ -8,8 +8,6 @@
 #include "openssl/err.h"
 #include "openssl/ssl.h"
 
-enum MediaType { VIDEO_TYPE, AUDIO_TYPE, OTHER };
-
 #pragma pack(1)
 
 typedef struct TagDtlsRecordLayer {

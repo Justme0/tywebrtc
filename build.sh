@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 
+
 set -ex
 ifconfig
 date
 whoami
 w
+
+# for bazel
+export CC=clang
 
 g_pwd=`pwd`
 trap 'cd $g_pwd' EXIT
@@ -37,6 +41,7 @@ find . | egrep ".+\.(c|cc|h)$" | xargs clang-format -i || true
 # make V=1
 bazel build --sandbox_debug  --verbose_failures  //src:server_tywebrtc
 kServerName="server_tywebrtc" # svr name is same in Makefile
+rm -rf server_tywebrtc
 cp bazel-bin/src/server_tywebrtc .
 
 # deploy
@@ -62,7 +67,7 @@ runSvr()
     ss -anp | grep $kServerName || true # WSL executes `ss` may fail
     echo ====================
 
-    tail -f log.txt # log file name is same as in code; some system have no tailf
+    # tail -f log.txt # log file name is same as in code; some system have no tailf
 }
 
 # process cmd line argument
