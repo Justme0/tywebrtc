@@ -7,10 +7,10 @@ whoami
 w
 
 g_pwd=`pwd`
+# like golang defer
 trap 'cd $g_pwd' EXIT
 
 g_dst_dir=$(cd $(dirname ${BASH_SOURCE[0]}); pwd )
-# like golang defer
 cd $g_dst_dir
 mkdir -p conf
 
@@ -19,6 +19,7 @@ cd webclient
 
 # only for my laptop :)
 g_localip=`ifconfig | egrep -w "en0|wifi0" -A5 | grep -w inet | head -n 1 | awk '{print $2}'`
+
 echo $g_localip > $g_dst_dir/conf/LOCAL_IP.txt
 sed "s/CANDIDATE_PLACEHOLDER/${g_localip}/g" index.html.template > index.html
 
@@ -37,8 +38,9 @@ find . | egrep ".+\.(c|cc|h)$" | xargs clang-format -i || true
 
 # compile
 # make V=1
-bazel build --sandbox_debug  --verbose_failures  //src:server_tywebrtc
+bazel build --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --verbose_failures //src:server_tywebrtc
 kServerName="server_tywebrtc" # svr name is same in Makefile
+rm -rf server_tywebrtc
 cp bazel-bin/src/server_tywebrtc .
 
 # deploy

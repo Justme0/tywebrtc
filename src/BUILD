@@ -6,22 +6,24 @@ cc_library(
     name = "tywebrtclib",
     srcs = glob(["**/*.cc"]),
 	hdrs = glob(["**/*.h"]),
-    # includes = ['.'],
+    includes = ['.'],
 	copts = ["-I src"],
 
     deps = [
         "@tylib//:tylib",
+        "@openssl//:openssl_package",
+        "@srtp//:srtp_package",
     ],
 )
 
 cc_binary(
     name = "server_tywebrtc",
     srcs = ["main.cc"],
-    linkopts = [
-        "-l ssl",
-        "-l crypto",
-        "-l srtp2",
-    ],
+    # linkopts = [
+    #     "-l ssl",
+    #     "-l crypto",
+    #     "-l srtp2",
+    # ],
 	copts = ["-I src"],
     deps = [
         ":tywebrtclib",

@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <array>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -426,28 +427,13 @@ int main(int argc, char* argv[]) {
   tylogAndPrintfln("OPENSSL_VERSION_NUMBER=%#lx < 0x10100000 is %d",
                    OPENSSL_VERSION_NUMBER,
                    OPENSSL_VERSION_NUMBER < 0x10100000L);
-  // TODO
-  //  CONFIG stConfig = {0};
-  //  g_config = &stConfig;
-  //
-  //  int ret = InitWorker(argc, argv);
-  //  if (ret != 0) {
-  //    tylogAndPrintfln("Initialize failed, ret %d", ret);
-  //    exit(1);
-  //  }
 
-  int ret = 0;
+  int ret = GetLanIp(&g_localip);
+  if (ret) {
+    tylogAndPrintfln("get lan ip fail, ret=%d", ret);
 
-  g_localip = execCmd(
-      "ifconfig | egrep -w 'en0|wifi0' -A5 | grep -w inet | head -n 1 | awk "
-      "'{print $2}'");
-
-  // ret = GetLanIp(&g_localip);
-  // if (ret) {
-  //   tylogAndPrintfln("get lan ip fail, ret=%d", ret);
-
-  //   return ret;
-  // }
+    return ret;
+  }
   tylogAndPrintfln("important: get local ip=%s", g_localip.data());
 
   // step 1 create socket
