@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 
+
 set -ex
 ifconfig
 date
 whoami
 w
+
+# for bazel
+export CC=clang
 
 g_pwd=`pwd`
 # like golang defer
@@ -66,7 +70,7 @@ runSvr()
     ss -anp | grep $kServerName || true # WSL executes `ss` may fail
     echo ====================
 
-    tail -f log.txt # log file name is same as in code; some system have no tailf
+    # tail -f log.txt # log file name is same as in code; some system have no tailf
 }
 
 # process cmd line argument

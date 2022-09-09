@@ -8,6 +8,7 @@
 
 #include "log/log.h"
 #include "pc/peer_connection.h"
+#include "rtp/codec_parser/rtp2h264.h"
 #include "rtp/rtcp_parser.h"
 #include "rtp/rtp_parser.h"
 
@@ -228,6 +229,8 @@ int RtpHandler::HandleRtcpPacket_(const std::vector<char> &vBufReceive) {
   return 0;
 }
 
+FILE *rtp_2_h264_file_;  // to move
+
 int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   int ret = 0;
 
@@ -283,6 +286,22 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         *reinterpret_cast<const RtpHeader *>(vBufReceive.data());
     tylog("recv rtp=%s", rtpHeader.ToString().data());
 
+    if (mediaType == kMediaTypeVideo) {
+      H264Unpacketizer h(rtpHeader.getSSRC());  // must be member function
+      auto media = h.Unpacketize(vBufReceive);
+      for (auto &it : media) {
+        // dump H.264
+        if (rtp_2_h264_file_ == nullptr) {
+          std::string f("./test_");
+          f += "uplink";
+          f += ".h264";
+          rtp_2_h264_file_ = fopen(f.c_str(), "wb+");
+        }
+
+        fwrite(it->data_, it->len_, 1, rtp_2_h264_file_);
+      }
+    }
+
     // downlink
 
     RtpHeader &downlinkRtpHeader = const_cast<RtpHeader &>(rtpHeader);
@@ -317,7 +336,6 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       return -1;
     }
     tylog("sendto reply buf size=%ld", sendtoLen);
-
   } else {
     tylog("receive unknown type of data=%s, return", mediaType.data());
     assert(!"receive unknown media type, should already filter and return");
