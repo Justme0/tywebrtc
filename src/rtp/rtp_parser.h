@@ -10,6 +10,14 @@
 #include "log/log.h"
 #include "tylib/string/format_string.h"
 
+#define VIDEO_RTP_EXTERN_NAME_LEN (2)   // 扩展位名字
+#define VIDEO_RTP_EXTERN_VALUE_LEN (4)  // 扩展数据长度单位为4个字节
+#define VIDEO_RTP_EXTERN_LEN_VALUE_LEN (2)  // 扩展数据长度占据2字节
+
+extern const std::string kMediaTypeRtcp;
+extern const std::string kMediaTypeVideo;
+extern const std::string kMediaTypeAudio;
+
 // to move to tylib
 inline void WriteBigEndian(uint8_t* data, uint32_t val, int max_byte) {
   int i;
@@ -279,12 +287,11 @@ struct VideoUnPackParam {
   uint32_t pre_fu_valid;
   uint32_t cur_rtp_seq_no;
   uint32_t pre_seq_num;
-  uint8_t* raw_stm_buff;
+  uint8_t* raw_stm_buff;  // taylor to refactor
   int32_t raw_stm_size;
   uint32_t cur_frame_ts;
   VideoRotation rotate_angle;
   uint8_t cam_type;
-  uint8_t content_type;
   uint16_t max_play_out_delay_ms;
   uint16_t min_play_out_delay_ms;
   uint8_t* pps;
@@ -335,6 +342,186 @@ static inline void rtp_write_uint32(uint8_t* ptr, uint32_t val) {
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |                        header extension                       |
 // |                             ....                              |
+class RtpFixedHeaderExt {
+ public:
+  RtpFixedHeaderExt() : extensionpayload(0), extensionlength(0) {}
+
+  uint16_t getExtId() const { return ntohs(extensionpayload); }
+  void setExtId(uint16_t extensionId) { extensionpayload = htons(extensionId); }
+
+  // indicates the length of the extension in 32-bit units, excluding the 32
+  // bits of the extension header
+  // https://en.wikipedia.org/wiki/Real-time_Transport_Protocol
+  uint16_t getExtLength() const { return ntohs(extensionlength); }
+  void setExtLength(uint16_t extensionlength) {
+    extensionlength = htons(extensionlength);
+  }
+
+  int getExtWholeLength() const {
+    const int kSelfHeadExtLen = 4;
+
+    // 4 * this->getExtLength() should check:
+    // profile == 0xBEDE || (profile & 0xFFF0) == 0x1000
+    // ref: https://www.rfc-editor.org/rfc/rfc5285#section-4
+    return kSelfHeadExtLen + 4 * this->getExtLength();
+  }
+
+ private:
+  // all are net order
+  uint16_t extensionpayload;
+  uint16_t extensionlength;
+
+  // uint32_t extensions;
+};
+
+const int kRtpHeaderLenByte = 12;
+
+class RtpHeader {
+ public:
+  RtpHeader()
+      : cc(0),
+        hasextension(0),
+        padding(0),
+        version(2),
+        payloadtype(0),
+        marker(0),
+        seqnum(0),
+        timestamp(0),
+        ssrc(0) {}
+
+  uint8_t getCc() const { return cc; }
+  void setCc(uint8_t theCc) { cc = theCc; }
+
+  uint8_t getExtension() const { return hasextension; }
+  void setExtension(uint8_t ext) { hasextension = ext; }
+
+  uint8_t hasPadding() const { return padding; }
+  void setPadding(uint8_t has_padding) { padding = has_padding; }
+
+  uint8_t getVersion() const { return version; }
+  void setVersion(uint8_t aVersion) { version = aVersion; }
+
+  uint8_t getPayloadType() const { return payloadtype; }
+  void setPayloadType(uint8_t aType) { payloadtype = aType; }
+
+  uint8_t getMarker() const { return marker; }
+  void setMarker(uint8_t aMarker) { marker = aMarker; }
+
+  uint16_t getSeqNumber() const { return ntohs(seqnum); }
+  void setSeqNumber(uint16_t aSeqNumber) { seqnum = htons(aSeqNumber); }
+
+  uint32_t getTimestamp() const { return ntohl(timestamp); }
+  void setTimestamp(uint32_t aTimestamp) { timestamp = htonl(aTimestamp); }
+
+  uint32_t getSSRC() const { return ntohl(ssrc); }
+  void setSSRC(uint32_t aSSRC) { ssrc = htonl(aSSRC); }
+
+  /*
+    // get extension msg need check csrc
+    uint16_t getExtId() const {
+      RtpFixedHeaderExt* rtpext = getHeaderExt();
+      if (rtpext) {
+        return ntohs(rtpext->extensionpayload);
+      }
+      return ntohs(extensionpayload);
+    }
+
+    uint16_t getExtLength() const {
+      RtpFixedHeaderExt* rtpext = getHeaderExt();
+      if (rtpext) {
+        return ntohs(rtpext->length);
+      }
+      return ntohs(extensionlength);
+    }
+    */
+
+  // return RTP head length.
+  // include 3 parts: Fix Header; CSRC; extension
+  int getHeaderLength() const {
+    const int csrcLen = cc * 4;
+    const int extensionLen =
+        hasextension ? this->getHeaderExt()->getExtWholeLength() : 0;
+    return kRtpHeaderLenByte + csrcLen + extensionLen;
+  }
+
+  // taylor FIX must parse
+  std::vector<std::shared_ptr<Extension>> getParsedExtensions() const {
+    std::vector<std::shared_ptr<Extension>> ret;
+    return ret;
+  }
+
+  /*
+    inline int GetRtpExtOffset(char* pRtpData, int RtpLen) {
+      int CSRCOffset = getCc() << 2;
+
+      // 如果x=1则包含 4个字节类型 2个字节扩展长度(4个字节作为单位)
+      int ExternOffset = 0;
+      int ExternLen = 0;
+
+      if (this->getMarker()) {
+          const char* pBuff = this + kRtpHeaderLenByte +  CSRCOffset;
+          const RtpFixedHeaderExt* pRtpExtHeader = reinterpret_cast<const
+  RtpFixedHeaderExt*>(pBuff);
+
+          ExternLen = pRtpExtHeader->getExtLength() << 2;
+          ExternOffset = VIDEO_RTP_EXTERN_NAME_LEN +
+  VIDEO_RTP_EXTERN_LEN_VALUE_LEN + ExternLen;
+      }
+
+      int RealOffset = ExternOffset + CSRCOffset;
+
+      return RealOffset;
+  }
+  */
+
+  std::string ToString() const {
+    return tylib::format_string(
+        "{CSRC count=%d, has ext=%d, has padding=%d, version=%d, "
+        "payload_type=%u, marker=%u, sequence_number=%u, timestamp=%u, "
+        "ssrc=%u, head size=%d}",
+        getCc(), getExtension(), hasPadding(), getVersion(), getPayloadType(),
+        getMarker(), getSeqNumber(), getTimestamp(), getSSRC(),
+        getHeaderLength());
+  }
+
+ private:
+  // if header ext exists, return value is the address of header ext struct.
+  // Otherwise undefined behavior
+  const RtpFixedHeaderExt* getHeaderExt() const {
+    return (RtpFixedHeaderExt*)((uint8_t*)this + kRtpHeaderLenByte + cc * 4);
+  }
+
+ private:
+  // the following is all netorder for RAW RTP format
+  uint32_t cc : 4;
+  uint32_t hasextension : 1;
+  uint32_t padding : 1;
+  uint32_t version : 2;
+  uint32_t payloadtype : 7;
+  uint32_t marker : 1;
+
+  // all are net order
+  uint32_t seqnum : 16;
+  uint32_t timestamp;
+  uint32_t ssrc;
+  // ... csrc
+};
+
+// padding (P): 1 bit
+//       If the padding bit is set, the packet contains one or more
+//       additional padding octets at the end which are not part of the
+//       payload.  The last octet of the padding contains a count of how
+//       many padding octets should be ignored, including itself.  Padding
+//       may be needed by some encryption algorithms with fixed block sizes
+//       or for carrying several RTP packets in a lower-layer protocol data
+//       unit.
+// OPT: define RTPPacket, as member function
+inline int getRtpPaddingLength(const std::vector<char>& vBufReceive) {
+  const RtpHeader& rtpHeader =
+      *reinterpret_cast<const RtpHeader*>(vBufReceive.data());
+
+  return rtpHeader.hasPadding() ? vBufReceive.back() : 0;
+}
 
 //  RFC 5285
 //  0                   1                   2                   3
@@ -348,86 +535,6 @@ static inline void rtp_write_uint32(uint8_t* ptr, uint32_t val) {
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |                          data                                 |
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
-class RtpHeader {
- public:
-  RtpHeader()
-      : cc(0),
-        hasextension(0),
-        padding(0),
-        version(2),
-        payloadtype(0),
-        marker(0),
-        seqnum(0),
-        timestamp(0),
-        ssrc(0),
-        extensionpayload(0),
-        extensionlength(0) {}
-
-  uint8_t hasPadding() const { return padding; }
-
-  void setPadding(uint8_t has_padding) { padding = has_padding; }
-
-  uint8_t getVersion() const { return version; }
-  void setVersion(uint8_t aVersion) { version = aVersion; }
-  uint8_t getMarker() const { return marker; }
-  void setMarker(uint8_t aMarker) { marker = aMarker; }
-  uint8_t getExtension() const { return hasextension; }
-  void setExtension(uint8_t ext) { hasextension = ext; }
-  uint8_t getCc() const { return cc; }
-  void setCc(uint8_t theCc) { cc = theCc; }
-  uint8_t getPayloadType() const { return payloadtype; }
-  void setPayloadType(uint8_t aType) { payloadtype = aType; }
-  uint16_t getSeqNumber() const { return ntohs(seqnum); }
-  void setSeqNumber(uint16_t aSeqNumber) { seqnum = htons(aSeqNumber); }
-  uint32_t getTimestamp() const { return ntohl(timestamp); }
-  void setTimestamp(uint32_t aTimestamp) { timestamp = htonl(aTimestamp); }
-  uint32_t getSSRC() const { return ntohl(ssrc); }
-  void setSSRC(uint32_t aSSRC) { ssrc = htonl(aSSRC); }
-  uint16_t getExtId() const { return ntohs(extensionpayload); }
-  void setExtId(uint16_t extensionId) { extensionpayload = htons(extensionId); }
-  uint16_t getExtLength() const { return ntohs(extensionlength); }
-  void setExtLength(uint16_t extensionLength) {
-    extensionlength = htons(extensionLength);
-  }
-  int getHeaderLength() const {
-    static const int MIN_SIZE = 12;
-    return MIN_SIZE + cc * 4 + hasextension * (4 + ntohs(extensionlength) * 4);
-  }
-
-  std::string ToString() const {
-    return tylib::format_string(
-        "{payload_type=%u, marker=%u, sequence_number=%u, padding_size=%u, "
-        "timestamp=%u, ssrc=%u, payload_offset=%u, payload_size=%u, "
-        "total_size=%u}",
-        getPayloadType(), getMarker(), getSeqNumber(), 22222, getTimestamp(),
-        getSSRC(), 22222, 22222, 2222);  // taylor to fix
-  }
-
-  std::vector<std::shared_ptr<Extension>> extensions;
-
- private:
-  // the following is all netorder for RAW RTP format
-  uint32_t cc : 4;
-  uint32_t hasextension : 1;
-  uint32_t padding : 1;
-  uint32_t version : 2;
-  uint32_t payloadtype : 7;
-  uint32_t marker : 1;
-  uint32_t seqnum : 16;
-  uint32_t timestamp;
-  uint32_t ssrc;
-
-  uint32_t extensionpayload : 16;
-  uint32_t extensionlength : 16;
-
-  // uint32_t extensions;
-};
-
-// string enum, for print convenience
-const std::string& kMediaTypeRtcp = "rtcp";
-const std::string& kMediaTypeVideo = "video";
-const std::string& kMediaTypeAudio = "audio";
 
 class RtpRtcpStrategy {
  public:
@@ -494,39 +601,43 @@ class RtpRtcpStrategy {
     return -1;
   }
 
-  static uint16_t getSeqNum(const void* packet, size_t bytes) {
-    const uint8_t* p = (const uint8_t*)packet;
-    const size_t len = bytes;
+  /*
+    static uint16_t getSeqNumShit(const void* packet, size_t bytes) {
+      const uint8_t* p = (const uint8_t*)packet;
+      const size_t len = bytes;
 
-    if (len < 4) {
-      return 0;
+      if (len < 4) {
+        return 0;
+      }
+
+      const uint8_t V = p[0] >> 6;
+      if (V != 2) {
+        return -1;
+      }
+
+      uint16_t seqnum = rtp_read_uint16(p + 2);
+      return seqnum;
     }
+    */
 
-    const uint8_t V = p[0] >> 6;
-    if (V != 2) {
-      return -1;
+  /*
+    static uint32_t getTimeStampShit(const void* packet, size_t bytes) {
+      const uint8_t* p = (const uint8_t*)packet;
+      const size_t len = bytes;
+
+      if (len < 8) {
+        return 0;
+      }
+
+      const uint8_t V = p[0] >> 6;
+      if (V != 2) {
+        return -1;
+      }
+
+      uint32_t timestamp = rtp_read_uint32(p + 4);
+      return timestamp;
     }
-
-    uint16_t seqnum = rtp_read_uint16(p + 2);
-    return seqnum;
-  }
-
-  static uint32_t getTimeStamp(const void* packet, size_t bytes) {
-    const uint8_t* p = (const uint8_t*)packet;
-    const size_t len = bytes;
-
-    if (len < 8) {
-      return 0;
-    }
-
-    const uint8_t V = p[0] >> 6;
-    if (V != 2) {
-      return -1;
-    }
-
-    uint32_t timestamp = rtp_read_uint32(p + 4);
-    return timestamp;
-  }
+    */
 
   // @brief get payload type
   // @param vBufReceive [in]

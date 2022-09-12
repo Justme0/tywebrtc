@@ -41,8 +41,8 @@ find . | egrep ".+\.(c|cc|h)$" | xargs clang-format -i || true
 # make V=1
 bazel build --sandbox_debug  --verbose_failures  //src:server_tywebrtc
 kServerName="server_tywebrtc" # svr name is same in Makefile
-rm -rf server_tywebrtc
-cp bazel-bin/src/server_tywebrtc .
+rm -rf src/server_tywebrtc
+cp bazel-bin/src/server_tywebrtc src
 
 # deploy
 # rsync --port=22222 -vzrtp --progress --password-file=/data/home/taylorjiang/rsync/rsync.pass $kServerName devsync@9.218.129.75::workspace || true
