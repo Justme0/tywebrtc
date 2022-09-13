@@ -12,6 +12,11 @@
 #include "rtp/rtcp_parser.h"
 #include "rtp/rtp_parser.h"
 
+// string enum, for print convenience
+const std::string kMediaTypeRtcp = "rtcp";
+const std::string kMediaTypeVideo = "video";
+const std::string kMediaTypeAudio = "audio";
+
 RtpHandler::RtpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {}
 
 extern int g_sock_fd;
@@ -229,7 +234,7 @@ int RtpHandler::HandleRtcpPacket_(const std::vector<char> &vBufReceive) {
   return 0;
 }
 
-FILE *rtp_2_h264_file_;  // to move
+FILE *rtp_2_h264_file_;  // to move to 264 unpack class
 
 int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   int ret = 0;
@@ -278,7 +283,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     ret = belongingPeerConnection_.srtpHandler_.UnprotectRtp(
         const_cast<std::vector<char> *>(&vBufReceive));
     if (ret) {
-      tylog("unprotect RTP (not RTCP) fail, ret=%d", ret);
+      tylog("unprotect RTP (not RTCP) fail ret=%d", ret);
       return ret;
     }
 
@@ -286,9 +291,12 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         *reinterpret_cast<const RtpHeader *>(vBufReceive.data());
     tylog("recv rtp=%s", rtpHeader.ToString().data());
 
+    tylog("mediaType=%s, kMediaTypeVideo=%s", mediaType.data(),
+          kMediaTypeVideo.data());
     if (mediaType == kMediaTypeVideo) {
       H264Unpacketizer h(rtpHeader.getSSRC());  // must be member function
       auto media = h.Unpacketize(vBufReceive);
+      tylog("rtp frames=%s", h.frame_buffer_.ToString().data());
       for (auto &it : media) {
         // dump H.264
         if (rtp_2_h264_file_ == nullptr) {

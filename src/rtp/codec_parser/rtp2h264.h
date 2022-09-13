@@ -30,6 +30,7 @@ enum enVideoH264NaluType {
   kVideoNaluUnitSpsExtn
 };
 
+// OPT: can cancel the struct ?
 class MediaData {
  public:
   MediaData()
@@ -42,11 +43,23 @@ class MediaData {
         rotate_angle_(kVideoRotation0),
         payload_type_(0),
         rtp_timestamp_(0) {}
+
   MediaData(MediaType media_type, char *data, int32_t len, uint64_t timestamp,
             uint32_t ssrc, uint32_t payload_type, uint32_t audio_frame_len = 0,
             uint32_t rtp_timestamp = 0,
-            VideoRotation rotate_angle = kVideoRotation0);
-  virtual ~MediaData() = default;
+            VideoRotation rotate_angle = kVideoRotation0) {
+    media_type_ = media_type;
+    data_ = data;
+    len_ = len;
+    timestamp_ = timestamp;
+    ssrc_ = ssrc;
+    rotate_angle_ = rotate_angle;
+    payload_type_ = payload_type;
+    audio_frame_len_ = audio_frame_len;
+    rtp_timestamp_ = rtp_timestamp;
+  }
+
+  // should be private
   MediaType media_type_;
   char *data_;
   int32_t len_;
@@ -62,22 +75,24 @@ class MediaData {
 class H264Unpacketizer {
  public:
   explicit H264Unpacketizer(uint32_t ssrc);
+  ~H264Unpacketizer();  // must refactor! remove it
 
   std::vector<std::unique_ptr<MediaData>> Unpacketize(
       const std::vector<char> &vBufReceive);
 
  private:
   void Init();
-  void UpdataSps(const uint8_t *data, size_t len);
-  void UpdataPps(const uint8_t *data, size_t len);
 
-  bool ParseStapAStartOffsets(const uint8_t *nalu_ptr, size_t length_remaining,
-                              std::vector<size_t> *offsets);
+  void UpdataSps(const char *data, size_t len);
+  void UpdataPps(const char *data, size_t len);
+
+  int ParseStapAStartOffsets(const char *nalu_ptr, size_t length_remaining,
+                             std::vector<size_t> *offsets);
   int ParseStapAOrSingleNalu(const std::vector<char> &vBufReceive);
   int ParseFuaNalu(const std::vector<char> &vBufReceive);
 
  private:
-  typedef struct FrameBuffer {
+  struct FrameBuffer {
     struct SliceInfo {
       size_t length;
       uint32_t ssrc;
@@ -89,15 +104,20 @@ class H264Unpacketizer {
     // element is heap pointer, TODO: use smart pointer
     std::vector<char *> frames;
     std::vector<SliceInfo> slice_info;
+
     int NewFrame(const RtpHeader &h);
     int PopSlices(std::vector<std::unique_ptr<MediaData>> &slices);
-  } FrameBuffer;
+
+    std::string ToString() const {
+      assert(frames.size() == slice_info.size());
+      return tylib::format_string("frame num=%zu", frames.size());
+    }
+  };
+
+ public:  // should private, now for debug
   FrameBuffer frame_buffer_;
 
-#if _DUMP_RTP_
-  FILE *rtp_file_ = nullptr;
-#endif
-
+ private:
   VideoUnPackParam unpack_params_;
   bool started_ = false;
   uint16_t last_seq_num_ = 0;
