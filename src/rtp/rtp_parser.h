@@ -478,9 +478,9 @@ class RtpHeader {
     return tylib::format_string(
         "{CSRC count=%d, has ext=%d, has padding=%d, version=%d, "
         "payload_type=%u, marker=%u, sequence_number=%u, timestamp=%u, "
-        "ssrc=%u, head size=%d}",
+        "ssrc=%u(0x%X), head size=%d}",
         getCc(), getExtension(), hasPadding(), getVersion(), getPayloadType(),
-        getMarker(), getSeqNumber(), getTimestamp(), getSSRC(),
+        getMarker(), getSeqNumber(), getTimestamp(), getSSRC(), getSSRC(),
         getHeaderLength());
   }
 
@@ -520,7 +520,7 @@ inline int getRtpPaddingLength(const std::vector<char>& vBufReceive) {
   const RtpHeader& rtpHeader =
       *reinterpret_cast<const RtpHeader*>(vBufReceive.data());
 
-  return rtpHeader.hasPadding() ? vBufReceive.back() : 0;
+  return rtpHeader.hasPadding() ? static_cast<uint8_t>(vBufReceive.back()) : 0;
 }
 
 //  RFC 5285

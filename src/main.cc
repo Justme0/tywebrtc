@@ -66,6 +66,7 @@ class Singleton {
   // if construct map's value is expensive
   // https://stackoverflow.com/questions/97050/stdmap-insert-or-stdmap-find
   // here we can also use insert and update, but lower_bound is more general
+  // OPT: add ufrag logic
   std::shared_ptr<PeerConnection> GetPeerConnection(const std::string& ip,
                                                     int port,
                                                     const std::string& ufrag) {
@@ -262,7 +263,7 @@ int HandleRequest() {
   // }
   ret = pc->HandlePacket(vBufReceive);
   if (ret) {
-    tylog("pc.HandlePacket fail, ret=%d", ret);
+    tylog("pc handlePacket fail, ret=%d", ret);
     return ret;
   }
 

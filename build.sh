@@ -42,10 +42,10 @@ find . | egrep ".+\.(c|cc|h)$" | xargs clang-format -i || true
 
 # compile
 # make V=1
-bazel build --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --verbose_failures //src:server_tywebrtc
 kServerName="server_tywebrtc" # svr name is same in Makefile
-rm -rf src/server_tywebrtc
-cp bazel-bin/src/server_tywebrtc src
+bazel build --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --verbose_failures //src:$kServerName
+rm -rf src/$kServerName
+cp bazel-bin/src/$kServerName src
 
 # deploy
 # rsync --port=22222 -vzrtp --progress --password-file=/data/home/taylorjiang/rsync/rsync.pass $kServerName devsync@9.218.129.75::workspace || true
@@ -64,8 +64,6 @@ runSvr()
     echo ====================
     # ps -eTo tid,pid,ppid,lstart,cmd | grep -v grep | grep $kServerName # ps option not support in mac os
     ps aux | grep -v grep | grep $kServerName
-    echo
-    top -n 1 -b | grep $kServerName || true # mac os ps have no -b option
     echo
     ss -anp | grep $kServerName || true # WSL executes `ss` may fail
     echo ====================

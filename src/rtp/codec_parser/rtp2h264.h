@@ -13,21 +13,81 @@
 
 #define _DUMP_RTP_ 1
 
-/* Nalu type定义，根据H264协议标准定义 */
+// Nalu type定义，根据H264协议标准定义
+// https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-h264.c#L302
 enum enVideoH264NaluType {
   kVideoNakuUnspecific = 0,
-  kVideoNaluSlice,
-  kVideoNaluDpa,
-  kVideoNaluDpb,
-  kVideoNaluDpc,
-  kVideoNaluIdr,
-  kVideoNaluSei,
-  kVideoNaluSps,
-  kVideoNaluPps,
-  kVideoNaluUnitDelimiterRbsp,
-  kVideoNaluUnitEoseq,
-  kVideoNaluUnitEostm,
-  kVideoNaluUnitSpsExtn
+  kVideoNaluSlice = 1,
+  kVideoNaluDpa = 2,
+  kVideoNaluDpb = 3,
+  kVideoNaluDpc = 4,
+  kVideoNaluIdr = 5,
+  kVideoNaluSei = 6,
+  kVideoNaluSps = 7,
+  kVideoNaluPps = 8,
+  kVideoNaluUnitDelimiterRbsp = 9,
+  kVideoNaluUnitEoseq = 10,
+  kVideoNaluUnitEostm = 11,
+  kVideoNaluUnitFilter = 12,
+  kVideoNaluUnitSpsExtn = 13,
+  kH264StapA = 24,
+  kH264FuA = 28,
+};
+
+inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
+  switch (v) {
+    case kVideoNakuUnspecific:
+      return "Undefined";
+    case kVideoNaluSlice:
+      return "NAL unit - Coded slice of a non-IDR picture";
+    case kVideoNaluDpa:
+      return "NAL unit - Coded slice data partition A";
+    case kVideoNaluDpb:
+      return "NAL unit - Coded slice data partition B";
+    case kVideoNaluDpc:
+      return "NAL unit - Coded slice data partition C";
+    case kVideoNaluIdr:
+      return "NAL unit - Coded slice of an IDR picture";
+    case kVideoNaluSei:
+      return "NAL unit - Supplemental enhancement information (SEI)";
+    case kVideoNaluSps:
+      return "NAL unit - Sequence parameter set";
+    case kVideoNaluPps:
+      return "NAL unit - Picture parameter set";
+    case kVideoNaluUnitDelimiterRbsp:
+      return "NAL unit - Access unit delimiter";
+    case kVideoNaluUnitEoseq:
+      return "NAL unit - End of sequence";
+    case kVideoNaluUnitEostm:
+      return "NAL unit - End of stream";
+    case kVideoNaluUnitFilter:
+      return "NAL unit - Filler data";
+    case kVideoNaluUnitSpsExtn:
+      return "NAL unit - Sequence parameter set extension";
+      // "NAL unit - Prefix" // 14
+      // "NAL unit - Subset sequence parameter set" // 15
+      // "NAL unit - Reserved" // 16
+      // "NAL unit - Reserved" // 17
+      // "NAL unit - Reserved" // 18
+      // "NAL unit - Coded slice of an auxiliary coded picture without
+      // partitioning" // 19
+      // "NAL unit - Coded slice extension" // 20
+      // "NAL unit - Coded slice extension for depth view components" // 21
+      // "NAL unit - Reserved" // 22
+      // "NAL unit - Reserved" // 23
+    case kH264StapA:
+      return "Single-time aggregation packet A (STAP-A)";
+      //  "Single-time aggregation packet B (STAP-B)" // 25
+      // "Multi-time aggregation packet 16 (MTAP16)" // 26
+      // "Multi-time aggregation packet 24 (MTAP24)" // 27
+    case kH264FuA:
+      return "Fragmentation unit A (FU-A)";
+    // "Fragmentation unit B (FU-B)" // 29
+    // "NAL unit - Payload Content Scalability Information (PACSI)" // 30
+    // "NAL unit - Extended NAL Header" // 31
+    default:
+      return tylib::format_string("Unknown[%d]", v);
+  }
 };
 
 // OPT: can cancel the struct ?
@@ -38,21 +98,19 @@ class MediaData {
         data_(NULL),
         len_(0),
         timestamp_(0),
-        ssrc_(0),
         audio_frame_len_(0),
         rotate_angle_(kVideoRotation0),
         payload_type_(0),
         rtp_timestamp_(0) {}
 
   MediaData(MediaType media_type, char *data, int32_t len, uint64_t timestamp,
-            uint32_t ssrc, uint32_t payload_type, uint32_t audio_frame_len = 0,
+            uint32_t payload_type, uint32_t audio_frame_len = 0,
             uint32_t rtp_timestamp = 0,
             VideoRotation rotate_angle = kVideoRotation0) {
     media_type_ = media_type;
     data_ = data;
     len_ = len;
     timestamp_ = timestamp;
-    ssrc_ = ssrc;
     rotate_angle_ = rotate_angle;
     payload_type_ = payload_type;
     audio_frame_len_ = audio_frame_len;
@@ -64,7 +122,6 @@ class MediaData {
   char *data_;
   int32_t len_;
   uint64_t timestamp_;
-  uint32_t ssrc_;
   uint32_t audio_frame_len_;
   VideoRotation rotate_angle_;
   uint32_t payload_type_;
@@ -74,7 +131,7 @@ class MediaData {
 
 class H264Unpacketizer {
  public:
-  explicit H264Unpacketizer(uint32_t ssrc);
+  H264Unpacketizer();
   ~H264Unpacketizer();  // must refactor! remove it
 
   std::vector<std::unique_ptr<MediaData>> Unpacketize(
@@ -95,7 +152,6 @@ class H264Unpacketizer {
   struct FrameBuffer {
     struct SliceInfo {
       size_t length;
-      uint32_t ssrc;
       uint8_t payload_type;
       uint32_t timestamp;
       int cts;
@@ -121,8 +177,6 @@ class H264Unpacketizer {
   VideoUnPackParam unpack_params_;
   bool started_ = false;
   uint16_t last_seq_num_ = 0;
-  std::string stream_id_;
-  uint32_t ssrc_;
 };
 
 #endif  // RTP_CODEC_PARSER_RTP2H264_H_

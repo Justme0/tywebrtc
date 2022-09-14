@@ -406,8 +406,9 @@ class RtcpHeader {
 
   std::string ToString() const {
     return tylib::format_string(
-        "{blockCnt=%d, pad=%d, packetType=%d, size=%d, ssrc=%d}",
-        getBlockCount(), padding, getPacketType(), getLength(), getSSRC());
+        "{blockCnt=%d, pad=%d, packetType=%d, size=%d, ssrc=%d(0x%X)}",
+        getBlockCount(), padding, getPacketType(), getLength(), getSSRC(),
+        getSSRC());
   }
 };
 

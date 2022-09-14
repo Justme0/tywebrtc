@@ -278,6 +278,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       return ret;
     }
   } else if (mediaType == kMediaTypeAudio || mediaType == kMediaTypeVideo) {
+    tylog("before unprotect, paddinglen=%d", getRtpPaddingLength(vBufReceive));
     // reuse original buffer
     // taylor consider restart svr
     ret = belongingPeerConnection_.srtpHandler_.UnprotectRtp(
@@ -286,17 +287,16 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       tylog("unprotect RTP (not RTCP) fail ret=%d", ret);
       return ret;
     }
+    tylog("after unprotect, paddinglen=%d", getRtpPaddingLength(vBufReceive));
 
     const RtpHeader &rtpHeader =
         *reinterpret_cast<const RtpHeader *>(vBufReceive.data());
     tylog("recv rtp=%s", rtpHeader.ToString().data());
 
-    tylog("mediaType=%s, kMediaTypeVideo=%s", mediaType.data(),
-          kMediaTypeVideo.data());
     if (mediaType == kMediaTypeVideo) {
-      H264Unpacketizer h(rtpHeader.getSSRC());  // must be member function
-      auto media = h.Unpacketize(vBufReceive);
-      tylog("rtp frames=%s", h.frame_buffer_.ToString().data());
+      auto media =
+          this->ssrc2unpacker[rtpHeader.getSSRC()].Unpacketize(vBufReceive);
+      tylog("unpack media.size=%zu", media.size());
       for (auto &it : media) {
         // dump H.264
         if (rtp_2_h264_file_ == nullptr) {
@@ -346,6 +346,8 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     tylog("sendto reply buf size=%ld", sendtoLen);
   } else {
     tylog("receive unknown type of data=%s, return", mediaType.data());
+
+    // should not use assert
     assert(!"receive unknown media type, should already filter and return");
 
     return -2;

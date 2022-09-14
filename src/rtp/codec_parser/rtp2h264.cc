@@ -32,10 +32,6 @@ inline T ForwardDiff(T a, T b) {
 // move to head file
 const int kH264TypeMask = 0x1F;
 
-// @see: https://tools.ietf.org/html/rfc6184#section-5.2
-static const uint8_t kH264StapA = 24;
-static const uint8_t kH264FuA = 28;
-
 template <typename T, T M>
 inline typename std::enable_if<(M == 0), bool>::type AheadOrAt(T a, T b) {
   static_assert(std::is_unsigned<T>::value,
@@ -63,15 +59,20 @@ static const uint8_t kLengthFieldSize = 2;
 static const uint8_t kStapAHeaderSize = kNalHeaderSize + kLengthFieldSize;
 static const uint8_t kNaluTypeSize = 1;
 
-typedef struct NaluInfo {
-  uint8_t type;
+struct NaluInfo {
+  enVideoH264NaluType type;
   // Offset and size are only valid for non-FuA packets.
   uint32_t offset;
   uint32_t size;
-} NaluInfo;
+
+  std::string ToString() const {
+    return tylib::format_string("{type=%d[%s], offset=%d, size=%d}", type,
+                                enVideoH264NaluTypeToString(type).data(),
+                                offset, size);
+  }
+};
 
 int H264Unpacketizer::FrameBuffer::NewFrame(const RtpHeader &h) {
-  // 最大RTP包的长度，单位BYTE
 #define VIDEO_MAX_SLIC_BUFF_LEN (2048000)
   char *frame = new char[VIDEO_MAX_SLIC_BUFF_LEN];
   frames.emplace_back(frame);
@@ -98,8 +99,8 @@ int H264Unpacketizer::FrameBuffer::NewFrame(const RtpHeader &h) {
   }
 
   // what if cts = 0? that is not found composition time extension
-  slice_info.emplace_back(FrameBuffer::SliceInfo{
-      0, h.getSSRC(), h.getPayloadType(), h.getTimestamp(), cts});
+  slice_info.emplace_back(
+      FrameBuffer::SliceInfo{0, h.getPayloadType(), h.getTimestamp(), cts});
   return 0;
 }
 
@@ -109,7 +110,7 @@ int H264Unpacketizer::FrameBuffer::PopSlices(
     auto &info = slice_info[i];
     std::unique_ptr<MediaData> raw(new MediaData(kMediaVideo, frames[i],
                                                  info.length, info.timestamp,
-                                                 info.ssrc, info.payload_type));
+                                                 info.payload_type));
     // bad assignment, should be in constructor
     raw->rtp_timestamp_ = info.timestamp;
     raw->composition_timestamp_ = info.cts;
@@ -121,12 +122,13 @@ int H264Unpacketizer::FrameBuffer::PopSlices(
 }
 
 enum FuDefs { kSBit = 0x80, kEBit = 0x40, kRBit = 0x20 };
+
 #define VIDEO_MAX_SPP_PPS_LEN (100)
 
 int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
   const RtpHeader &rtpHeader =
       *reinterpret_cast<const RtpHeader *>(vBufReceive.data());
-  const auto &payload = vBufReceive.data() + rtpHeader.getHeaderLength();
+  char const *const payload = vBufReceive.data() + rtpHeader.getHeaderLength();
   auto length = vBufReceive.size() - rtpHeader.getHeaderLength();
   if (length < kFuAHeaderSize) {
     return -1;
@@ -135,8 +137,10 @@ int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
   const int kFBit = 0x80;
   const int kNriMask = 0x60;
   uint8_t fnri = payload[0] & (kFBit | kNriMask);
-  uint8_t original_nal_type = payload[1] & kH264TypeMask;
+  enVideoH264NaluType original_nal_type =
+      static_cast<enVideoH264NaluType>(payload[1] & kH264TypeMask);
   bool first_fragment = ((payload[1] & kSBit) != 0);
+  tylog("first_fragment=%d", first_fragment);
 
   auto WriteStartCode = [](char *dst) -> size_t {
     dst[0] = 0;
@@ -150,8 +154,10 @@ int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
     int idx = (int)frame_buffer_.frames.size() - 1;
     if (idx < 0 ||
         (frame_buffer_.slice_info[idx].timestamp != rtpHeader.getTimestamp())) {
+      // key: new frame
       frame_buffer_.NewFrame(rtpHeader);
       idx = (int)frame_buffer_.frames.size() - 1;
+      // should also check pps len?
       if (original_nal_type == kVideoNaluIdr &&
           unpack_params_.sps_pkt_len != 0) {
         auto dst = frame_buffer_.frames[idx];
@@ -163,6 +169,9 @@ int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
         memcpy(dst + len, unpack_params_.pps, unpack_params_.pps_pkt_len);
         len += unpack_params_.pps_pkt_len;
         info.length += len;
+
+        tylog("recv FU-A IDR frame, sps len=%d, pps len=%d",
+              unpack_params_.sps_pkt_len, unpack_params_.pps_pkt_len);
       }
     }
     auto &info = frame_buffer_.slice_info[idx];
@@ -191,7 +200,7 @@ int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
   }
 
   length -= kFuAHeaderSize;
-  auto dst = frame_buffer_.frames[idx] + info.length;
+  char *dst = frame_buffer_.frames[idx] + info.length;
   info.length += length;
   memcpy(dst, payload + kFuAHeaderSize, length);
 
@@ -226,12 +235,13 @@ int H264Unpacketizer::ParseStapAOrSingleNalu(
     const std::vector<char> &vBufReceive) {
   const RtpHeader &rtpHeader =
       *reinterpret_cast<const RtpHeader *>(vBufReceive.data());
-  const char *payload = vBufReceive.data() + rtpHeader.getHeaderLength();
+  char const *const payload = vBufReceive.data() + rtpHeader.getHeaderLength();
   int length = vBufReceive.size() - rtpHeader.getHeaderLength();
 
   const char *nalu_start = payload + kNalHeaderSize;
   const size_t nalu_length = length - kNalHeaderSize;
-  uint8_t nal_type = payload[0] & kH264TypeMask;
+  enVideoH264NaluType nal_type =
+      static_cast<enVideoH264NaluType>(payload[0] & kH264TypeMask);
   std::vector<size_t> nalu_start_offsets;
   if (nal_type == kH264StapA) {
     // Skip the StapA header (StapA NAL type + length).
@@ -242,11 +252,13 @@ int H264Unpacketizer::ParseStapAOrSingleNalu(
     int ret =
         ParseStapAStartOffsets(nalu_start, nalu_length, &nalu_start_offsets);
     if (ret) {
-      tylog("parseStapAStartOffsets  ret=%d", ret);
+      tylog("parseStapAStartOffsets ret=%d", ret);
       return ret;
     }
 
-    nal_type = payload[kStapAHeaderSize] & kH264TypeMask;
+    nal_type = static_cast<enVideoH264NaluType>(payload[kStapAHeaderSize] &
+                                                kH264TypeMask);
+    // no use?
   } else {
     nalu_start_offsets.push_back(0);
   }
@@ -254,8 +266,7 @@ int H264Unpacketizer::ParseStapAOrSingleNalu(
   if (frame_buffer_.frames.empty()) {
     frame_buffer_.NewFrame(rtpHeader);
   } else {
-    int idx = (int)frame_buffer_.frames.size() - 1;
-    if (frame_buffer_.slice_info[idx].timestamp != rtpHeader.getTimestamp()) {
+    if (frame_buffer_.slice_info.back().timestamp != rtpHeader.getTimestamp()) {
       frame_buffer_.NewFrame(rtpHeader);
     }
   }
@@ -271,12 +282,14 @@ int H264Unpacketizer::ParseStapAOrSingleNalu(
     }
 
     NaluInfo nalu;
-    nalu.type = payload[start_offset] & kH264TypeMask;
+    nalu.type =
+        static_cast<enVideoH264NaluType>(payload[start_offset] & kH264TypeMask);
     nalu.offset = start_offset;
     nalu.size = end_offset - start_offset;
     // start_offset += kNaluTypeSize;
 
     int idx = (int)frame_buffer_.frames.size() - 1;
+    tylog("frame last idx=%d, nalu=%s", idx, nalu.ToString().data());
     char *buff = frame_buffer_.frames[idx];
     auto &info = frame_buffer_.slice_info[idx];
     auto &len = info.length;
@@ -290,6 +303,7 @@ int H264Unpacketizer::ParseStapAOrSingleNalu(
         UpdataPps(payload + start_offset, nalu.size);
         break;
       case kVideoNaluIdr:
+        tylog("recv 264 IDR frame");
         // kVideoFrameKey;
         if (unpack_params_.sps_pkt_len != 0 &&
             unpack_params_.pps_pkt_len != 0 && 0 == len) {
@@ -304,6 +318,7 @@ int H264Unpacketizer::ParseStapAOrSingleNalu(
           len += 4;
           memcpy(buff + len, unpack_params_.sps, unpack_params_.sps_pkt_len);
           len += unpack_params_.sps_pkt_len;
+
           WriteStartCode(buff + len);
           len += 4;
           memcpy(buff + len, unpack_params_.pps, unpack_params_.pps_pkt_len);
@@ -322,16 +337,16 @@ int H264Unpacketizer::ParseStapAOrSingleNalu(
       case kH264FuA:
         delete[] buff;
         return -4;
+
+      default:
+        break;
     }
 
     buff[len] = 0;
     buff[len + 1] = 0;
     buff[len + 2] = 0;
     buff[len + 3] = 1;
-
-    // 两帧间的最小时戳差值
-#define VIDEO_NAL_START_CODE_LEN (4)
-    len += VIDEO_NAL_START_CODE_LEN;
+    len += 4;
     memcpy(buff + len, payload + start_offset, nalu.size);
     len += nalu.size;
   }
@@ -339,7 +354,8 @@ int H264Unpacketizer::ParseStapAOrSingleNalu(
   return 0;
 }
 
-H264Unpacketizer::H264Unpacketizer(uint32_t ssrc) : ssrc_(ssrc) {
+H264Unpacketizer::H264Unpacketizer() {
+  // must refactor, use unpack_params_ constructor
   unpack_params_.raw_stm_buff = NULL;
   unpack_params_.pps = NULL;
   unpack_params_.sps = NULL;
@@ -422,14 +438,14 @@ std::vector<std::unique_ptr<MediaData>> H264Unpacketizer::Unpacketize(
   }
 
   if (AheadOf(last_seq_num_, rtpHeader.getSeqNumber())) {
-    return frames;
+    tylog("warning: last seq num=%d < current seq=%d", last_seq_num_,
+          rtpHeader.getSeqNumber()) return frames;
   }
 
   if (last_seq_num_++ != rtpHeader.getSeqNumber()) {
-    tylog("Chn %" PRIu32
-          " find lost pkt(%d), last pkt(%d), have fus, buf still "
-          "not find fu-end!",
-          ssrc_, rtpHeader.getSeqNumber(), last_seq_num_);
+    tylog(
+        "find lost pkt(%d), last pkt(%d), have fus, buf still not find fu-end!",
+        rtpHeader.getSeqNumber(), last_seq_num_);
 
     last_seq_num_ = rtpHeader.getSeqNumber() + 1;
     // return frames;
@@ -444,20 +460,26 @@ std::vector<std::unique_ptr<MediaData>> H264Unpacketizer::Unpacketize(
   //发现webrtc收到全padding的数据，此数据非264数据，丢弃
   if ((vBufReceive.size() <=
        getRtpPaddingLength(vBufReceive) + rtpHeader.getHeaderLength() + 1)) {
+    tylog("maybe all padding data");
+
     if (vBufReceive.size() !=
         getRtpPaddingLength(vBufReceive) + rtpHeader.getHeaderLength()) {
       tylog(
-          "SSRC %u receive an unknow rtp with padding, rtp=%s, paddinglen=%d, "
+          "receive an unknow rtp with padding, rtp=%s, "
+          "paddinglen=%d, "
           "recv buf len=%zu.",
-          ssrc_, rtpHeader.ToString().data(), getRtpPaddingLength(vBufReceive),
+          rtpHeader.ToString().data(), getRtpPaddingLength(vBufReceive),
           vBufReceive.size());
     }
 
     return frames;
   }
 
-  const char *payload = vBufReceive.data() + rtpHeader.getHeaderLength();
-  uint8_t nal_type = payload[0] & kH264TypeMask;
+  char const *const payload = vBufReceive.data() + rtpHeader.getHeaderLength();
+  enVideoH264NaluType nal_type =
+      static_cast<enVideoH264NaluType>(payload[0] & kH264TypeMask);
+  tylog("nalu type=%d[%s]", nal_type,
+        enVideoH264NaluTypeToString(nal_type).data());
   if (nal_type == kH264FuA) {
     ret = ParseFuaNalu(vBufReceive);
     if (ret) {
@@ -469,7 +491,10 @@ std::vector<std::unique_ptr<MediaData>> H264Unpacketizer::Unpacketize(
       tylog("parseStapAOrSingleNaluarseFuaNalu ret=%d", ret);
     }
   }
+
   if (rtpHeader.getMarker()) {
+    tylog("key: rtp mark=1");
+    // will clear frame_buffer_ frame vector
     frame_buffer_.PopSlices(frames);
   }
 
@@ -482,6 +507,7 @@ void H264Unpacketizer::UpdataSps(const char *data, size_t len) {
   if ((len < VIDEO_MAX_SPP_PPS_LEN) && (unpack_params_.sps)) {
     memcpy(unpack_params_.sps, data, len);
     unpack_params_.sps_pkt_len = len;
+    tylog("recv sps len=%zu", len);
   }
   // status_.sps_pkt_len = len;
 }
@@ -490,6 +516,7 @@ void H264Unpacketizer::UpdataPps(const char *data, size_t len) {
   if ((len < VIDEO_MAX_SPP_PPS_LEN) && (unpack_params_.pps)) {
     memcpy(unpack_params_.pps, data, len);
     unpack_params_.pps_pkt_len = len;
+    tylog("recv pps len=%zu", len);
   }
   // status_.pps_pkt_len = len;
 }
