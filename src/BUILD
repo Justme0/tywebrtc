@@ -1,31 +1,15 @@
 package(default_visibility = ["//visibility:public"])
 
-# exports_files(["log"])
-
-cc_library(
-    name = "tywebrtclib",
-    srcs = glob(["**/*.cc"]),
-	hdrs = glob(["**/*.h"]),
-    includes = ['.'],
+# bazel doc https://bazel.build/reference/be/c-cpp#cc_library
+cc_binary(
+    name = "server_tywebrtc",
+    srcs = glob(["**/*.cc", "**/*.h"]),
+	# hdrs = glob(["**/*.h"]),
+    # includes = ['.'],
 	copts = ["-I src"],
-
     deps = [
         "@tylib//:tylib",
         "@openssl//:openssl_package",
         "@srtp//:srtp_package",
-    ],
-)
-
-cc_binary(
-    name = "server_tywebrtc",
-    srcs = ["main.cc"],
-    # linkopts = [
-    #     "-l ssl",
-    #     "-l crypto",
-    #     "-l srtp2",
-    # ],
-	copts = ["-I src"],
-    deps = [
-        ":tywebrtclib",
     ],
 )

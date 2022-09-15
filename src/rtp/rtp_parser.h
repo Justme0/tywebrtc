@@ -283,27 +283,6 @@ class VideoSendTiming : public Extension {
   uint8_t flags;
 };
 
-struct VideoUnPackParam {
-  uint32_t pre_fu_valid;
-  uint32_t cur_rtp_seq_no;
-  uint32_t pre_seq_num;
-  uint8_t* raw_stm_buff;  // taylor to refactor
-  int32_t raw_stm_size;
-  uint32_t cur_frame_ts;
-  VideoRotation rotate_angle;
-  uint8_t cam_type;
-  uint16_t max_play_out_delay_ms;
-  uint16_t min_play_out_delay_ms;
-  uint8_t* pps;
-  uint8_t* sps;
-  uint8_t pps_pkt_len;
-  uint8_t sps_pkt_len;
-  uint8_t wait_i_frame_flag;
-  uint32_t ssrc;
-  uint32_t payload_type;
-  uint8_t drop_flag;
-};
-
 enum MediaType { kMediaVideo, kMediaAudio, kMediaData, kMediaMax };
 
 static inline uint16_t rtp_read_uint16(const uint8_t* ptr) {
@@ -445,6 +424,7 @@ class RtpHeader {
   }
 
   // taylor FIX must parse
+  // return ptr for multi-type
   std::vector<std::shared_ptr<Extension>> getParsedExtensions() const {
     std::vector<std::shared_ptr<Extension>> ret;
     return ret;

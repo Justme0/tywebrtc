@@ -43,7 +43,22 @@ find . | egrep ".+\.(c|cc|h)$" | xargs clang-format -i || true
 # compile
 # make V=1
 kServerName="server_tywebrtc" # svr name is same in Makefile
-bazel build --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --verbose_failures //src:$kServerName
+
+# -Wfatal-errors
+# no -Wdeprecated-declarations is temp
+# cmd doc https://bazel.build/docs/user-manual
+# shit copt multiple flags cannot be in one option
+bazel build \
+  --copt="-g"\
+  --copt="-Werror"\
+  --copt="-Wall"\
+  --copt="-Wextra"\
+  --copt="-Weffc++"\
+  --copt="-Wno-error=effc++" \
+  --copt="-Wno-error=deprecated-declarations" \
+  --copt="-Wno-error=unused-parameter" \
+  --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --verbose_failures //src:$kServerName
+
 rm -rf src/$kServerName
 cp bazel-bin/src/$kServerName src
 

@@ -424,6 +424,8 @@ void CrossPlatformNetworkIO() {
 #endif
 
 int main(int argc, char* argv[]) {
+  (void)argc;
+  (void)argv;
   // before server launch, print log to standard out and file
   tylogAndPrintfln("OPENSSL_VERSION_NUMBER=%#lx < 0x10100000 is %d",
                    OPENSSL_VERSION_NUMBER,

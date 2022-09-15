@@ -196,6 +196,7 @@ int IceHandler::DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
 // taylor return not error code
 int IceHandler::EncoderXORMappedAddress(char *pBuff, int Len) {
   // taylor should check Len
+  (void)Len;
   STUN_XOR_MSG_MAPPED_V4_ADDRESS *pMapAddr =
       reinterpret_cast<STUN_XOR_MSG_MAPPED_V4_ADDRESS *>(pBuff);
 

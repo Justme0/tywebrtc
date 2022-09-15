@@ -234,8 +234,6 @@ int RtpHandler::HandleRtcpPacket_(const std::vector<char> &vBufReceive) {
   return 0;
 }
 
-FILE *rtp_2_h264_file_;  // to move to 264 unpack class
-
 int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   int ret = 0;
 
@@ -294,19 +292,21 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     tylog("recv rtp=%s", rtpHeader.ToString().data());
 
     if (mediaType == kMediaTypeVideo) {
-      auto media =
-          this->ssrc2unpacker[rtpHeader.getSSRC()].Unpacketize(vBufReceive);
-      tylog("unpack media.size=%zu", media.size());
-      for (auto &it : media) {
-        // dump H.264
-        if (rtp_2_h264_file_ == nullptr) {
-          std::string f("./test_");
-          f += "uplink";
-          f += ".h264";
-          rtp_2_h264_file_ = fopen(f.c_str(), "wb+");
-        }
+      H264Unpacketizer &unpacker = ssrc2unpacker_[rtpHeader.getSSRC()];
+      std::vector<MediaData> media;
+      ret = unpacker.Unpacketize(vBufReceive, &media);
+      if (ret) {
+        tylog("unpacketize rtp ret=%d", ret);
+        return ret;
+      }
 
-        fwrite(it->data_, it->len_, 1, rtp_2_h264_file_);
+      tylog("unpack media.size=%zu", media.size());
+      for (const MediaData &m : media) {
+        ret = unpacker.DumpRawStream(m.data_, rtpHeader.getSSRC());
+        if (ret) {
+          tylog("dump ret=%d", ret);
+          return ret;
+        }
       }
     }
 

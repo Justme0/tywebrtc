@@ -19,7 +19,8 @@ class RtpHandler {
 
  private:
   PeerConnection &belongingPeerConnection_;
-  std::unordered_map<int, H264Unpacketizer> ssrc2unpacker;
+  // why define ssrc map: save unpacked frame e.g. FU-A
+  std::unordered_map<uint32_t, H264Unpacketizer> ssrc2unpacker_;
 };
 
 #endif  // RTP_RTP_HANDLER_H_
