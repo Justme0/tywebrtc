@@ -38,7 +38,7 @@ inline typename std::enable_if<(M == 0), bool>::type AheadOrAt(T a, T b) {
                 "Type must be an unsigned integer.");
   const T maxDist = std::numeric_limits<T>::max() / 2 + T(1);
   if (a - b == maxDist) return b < a;
-  return ForwardDiff(b, a) < maxDist;
+  return ForwardDiff(b, a) < maxDist;  // 0 < a-b < maxDist
 }
 
 template <typename T>
@@ -46,6 +46,7 @@ inline bool AheadOrAt(T a, T b) {
   return AheadOrAt<T, 0>(a, b);
 }
 
+// "a > b"
 template <typename T, T M = 0>
 inline bool AheadOf(T a, T b) {
   static_assert(std::is_unsigned<T>::value,
@@ -145,7 +146,8 @@ int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
   enVideoH264NaluType original_nal_type =
       static_cast<enVideoH264NaluType>(payload[1] & kH264TypeMask);
   bool first_fragment = ((payload[1] & kSBit) != 0);
-  tylog("first_fragment=%d", first_fragment);
+  tylog("original_nal_type=%s, first_fragment=%d",
+        enVideoH264NaluTypeToString(original_nal_type).data(), first_fragment);
 
   if (first_fragment) {
     if (frame_buffer_.frames.empty() ||
@@ -368,21 +370,22 @@ int H264Unpacketizer::Unpacketize(const std::vector<char> &vBufReceive,
   }
 
   if (AheadOf(last_seq_num_, rtpHeader.getSeqNumber())) {
-    tylog("warning: last seq num=%d < current seq=%d", last_seq_num_,
-          rtpHeader.getSeqNumber());
+    tylog("warning: last seq num=%d > current seq=%d, should be <=",
+          last_seq_num_, rtpHeader.getSeqNumber());
 
     return -1;
   }
 
-  if (last_seq_num_++ != rtpHeader.getSeqNumber()) {
+  if (last_seq_num_ != rtpHeader.getSeqNumber()) {
     tylog(
         "NOTE: find lost pkt(%d), last pkt(%d), have fus, buf still not find "
         "fu-end!",
-        rtpHeader.getSeqNumber(), last_seq_num_);
+        rtpHeader.getSeqNumber(), last_seq_num_ + 1);  // ?
 
     last_seq_num_ = rtpHeader.getSeqNumber() + 1;
     // return frames;
   }
+  ++last_seq_num_;  // ?
 
   // status_.in_buf_cnt++; // just for monitor
   // VideoUnPackCheckLost(rtp_data, rtp_len, lost_pkt_cnt);

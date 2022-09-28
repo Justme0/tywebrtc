@@ -5,6 +5,7 @@
 
 #include <netinet/in.h>
 
+#include <cstdint>
 #include <limits>
 
 #include "log/log.h"
@@ -301,6 +302,8 @@ static inline void rtp_write_uint32(uint8_t* ptr, uint32_t val) {
   ptr[3] = (uint8_t)(val & 0xFF);
 }
 
+class PowerfulSeq {};
+
 //  0                   1                   2                   3
 //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -388,6 +391,15 @@ class RtpHeader {
 
   uint16_t getSeqNumber() const { return ntohs(seqnum); }
   void setSeqNumber(uint16_t aSeqNumber) { seqnum = htons(aSeqNumber); }
+
+  // define cycle as uint64_t (use 48 bit at most), first value is 0.
+  // e.g. 8Mbps, each video packet is 1000 Byte, so 8*2^20/8/1000=2^10 packets
+  // per second, 2^(48+16)/2^10/3600/24/365 = 571232829 year, it's enough
+  uint64_t getExtendSeqNum() const {
+    uint64_t cycle = 0;
+    // assert(cycle < 2^48);
+    return (cycle << 16) + getSeqNumber();
+  }
 
   uint32_t getTimestamp() const { return ntohl(timestamp); }
   void setTimestamp(uint32_t aTimestamp) { timestamp = htonl(aTimestamp); }
@@ -481,7 +493,7 @@ class RtpHeader {
   uint32_t marker : 1;
 
   // all are net order
-  uint32_t seqnum : 16;
+  uint16_t seqnum;
   uint32_t timestamp;
   uint32_t ssrc;
   // ... csrc

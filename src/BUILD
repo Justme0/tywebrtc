@@ -7,6 +7,7 @@ cc_binary(
 	# hdrs = glob(["**/*.h"]),
     # includes = ['.'],
 	copts = ["-I src"],
+    linkopts = ["-l dl -pthreads"],
     deps = [
         "@tylib//:tylib",
         "@openssl//:openssl_package",

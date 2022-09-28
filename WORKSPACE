@@ -7,7 +7,11 @@ local_repository(
 # https://stackoverflow.com/questions/49937820/include-headers-h-installed-in-non-standard-location
 new_local_repository(
     name = "openssl",
-    path = "/opt/homebrew/opt/openssl",
+    path = "openssl",
+    # path = select({
+    # "@bazel_tools//src/conditions:linux": "openssl",
+    # "@bazel_tools//src/conditions:darwin": "/opt/homebrew/opt/openssl"}),
+
     build_file_content = """
 package(default_visibility = ["//visibility:public"])
 cc_library(
@@ -21,7 +25,11 @@ cc_library(
 
 new_local_repository(
     name = "srtp",
-    path = "/opt/homebrew/opt/srtp",
+    path = "srtp",
+    # path = select({
+    # "@bazel_tools//src/conditions:linux": "srtp",
+    # "@bazel_tools//src/conditions:darwin": "/opt/homebrew/opt/srtp"}),
+
     build_file_content = """
 package(default_visibility = ["//visibility:public"])
 cc_library(

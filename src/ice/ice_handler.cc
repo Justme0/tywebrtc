@@ -543,9 +543,7 @@ int IceHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
     case CMD_STUN_BINGING_RES: {
       break;
     }
-    default: {
-      break;
-    }
+    default: { break; }
   }
 
   return 0;

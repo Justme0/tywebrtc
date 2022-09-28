@@ -18,11 +18,12 @@ inline std::ifstream::pos_type filesize(const std::string &filename) {
 // to optimize performance
 inline void HandleFileSize() {
   // should in config file
-  const std::string &g_kLogFile = "./log.txt";
+  const std::string &g_kLogFile = "./tywebrtc.log";
   int64_t size = filesize(g_kLogFile);
   const int64_t g_kMaxSingleFileByte = 200 * 1024 * 1024;
   if (size >= g_kMaxSingleFileByte) {
-    system("mv ./log.txt ./log.txt.1");  // to use config and cross platform
+    system("mv ./tywebrtc.log ./tywebrtc.log.1");  // to use config and cross
+                                                   // platform
   }
 }
 
@@ -54,7 +55,7 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
   // append instead of overwrite, maybe fail?
   // TODO: roll log and reserve recent N files
   // why append mode not work?
-  const std::string &g_kLogFile = "./log.txt";
+  const std::string &g_kLogFile = "./tywebrtc.log";
   outfile.open(g_kLogFile, std::ios_base::app);
 
   // taylor : move get now time util to tylib
