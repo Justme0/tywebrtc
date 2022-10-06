@@ -116,7 +116,7 @@ std::vector<MediaData> FrameBuffer::PopFrames() {
   frames.clear();
 
   // https://stackoverflow.com/questions/11817873/using-stdmove-when-returning-a-value-from-a-function-to-avoid-to-copy
-  // avoid copy
+  // OPT: avoid copy
   // MediaData should support move constructor
   return v;
 }
@@ -139,11 +139,22 @@ int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
     return -1;
   }
 
+  // +---------------+
+  // |0|1|2|3|4|5|6|7|
+  // +-+-+-+-+-+-+-+-+
+  // |F|NRI|  Type   |
+  // +---------------+
+  // https://segmentfault.com/a/1190000006698552?utm_source=sf-backlinks
+  // The first bit of this sequence ( which is a 0 ) is the forbidden zero and
+  // is used to verify if errors where encountered during the transmission of
+  // the packet.
   const int kFBit = 0x80;
+  // The following 2 bits ( the 11 ) are called nal_ref_idc and they indicates
+  // if NAL unit is a reference field, frame or picture.
   const int kNriMask = 0x60;
   uint8_t fnri = payload[0] & (kFBit | kNriMask);
-  enVideoH264NaluType original_nal_type =
-      static_cast<enVideoH264NaluType>(payload[1] & kH264TypeMask);
+  enVideoH264NaluType original_nal_type = static_cast<enVideoH264NaluType>(
+      payload[1] & kH264TypeMask);  // taylor not payload[0] ?
   bool first_fragment = ((payload[1] & kSBit) != 0);
   tylog("first_fragment=%d", first_fragment);
 
@@ -205,27 +216,56 @@ int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
 }
 
 int H264Unpacketizer::ParseStapAStartOffsets(const char *nalu_ptr,
-                                             size_t length_remaining,
+                                             int length_remaining,
                                              std::vector<size_t> *offsets) {
   size_t offset = 0;
   while (length_remaining > 0) {
     // Buffer doesn't contain room for additional nalu length.
-    if (length_remaining < sizeof(uint16_t)) {
+    const int kNaluLenSizeB = 2;
+    if (length_remaining < kNaluLenSizeB) {
+      tylog("err: length_remaining=%d too short(< 2 Byte)", length_remaining);
+
       return -1;
     }
-    uint16_t nalu_size = ((nalu_ptr[0] << 8) | nalu_ptr[1]);
+
+    uint16_t nalu_size = ntohs(*reinterpret_cast<const uint16_t *>(nalu_ptr));
+    tylog("nalu size=%d", nalu_size);
     nalu_ptr += sizeof(uint16_t);
     length_remaining -= sizeof(uint16_t);
     if (nalu_size > length_remaining) {
+      tylog("err: nalu_size=%d > length_remaining=%d", nalu_size,
+            length_remaining);
+
       return -2;
     }
+
     nalu_ptr += nalu_size;
     length_remaining -= nalu_size;
 
     offsets->push_back(offset + kStapAHeaderSize);
     offset += kLengthFieldSize + nalu_size;
   }
+
   return 0;
+}
+
+// move to tylib
+// pool performance, should re-design interface
+std::string ConvertToReadableHex(std::string_view s) {
+  std::string hexString;
+  bool first = true;
+  for (unsigned char c : s) {
+    char arr[3];
+    if (!first) {
+      hexString.append({' '});
+    } else {
+      first = false;
+    }
+    sprintf(arr, "%02X", c);
+    hexString.append(arr, arr + 2);
+  }
+
+  return hexString;
 }
 
 int H264Unpacketizer::ParseStapAOrSingleNalu(
@@ -246,12 +286,14 @@ int H264Unpacketizer::ParseStapAOrSingleNalu(
     if (length <= kStapAHeaderSize) {
       tylog("error: length=%d <= kStapAHeaderSize=%d", length,
             kStapAHeaderSize);
+
       return -1;
     }
 
     ret = ParseStapAStartOffsets(nalu_start, nalu_length, &nalu_start_offsets);
     if (ret) {
       tylog("parseStapAStartOffsets ret=%d", ret);
+
       return ret;
     }
 
@@ -316,14 +358,13 @@ int H264Unpacketizer::ParseStapAOrSingleNalu(
           return -3;
         }
 
-        assert(frame.rawData.empty() || !"new frame.rawData should empty");
-        frame.rawData.append(kH264StartCodeCharArray)
-            .append(unpack_params_.sps)
-            .append(kH264StartCodeCharArray)
-            .append(unpack_params_.pps);
-
-        tylog("recv IDR frame, sps len=%zu, pps len=%zu",
-              unpack_params_.sps.size(), unpack_params_.pps.size());
+        if (frame.rawData.empty()) {
+          // 一般之前有sps, pps 在switch结构后会加
+          frame.rawData.append(kH264StartCodeCharArray)
+              .append(unpack_params_.sps)
+              .append(kH264StartCodeCharArray)
+              .append(unpack_params_.pps);
+        }
 
       case kVideoNaluSlice:
         break;
@@ -417,13 +458,21 @@ int H264Unpacketizer::Unpacketize(const std::vector<char> &vBufReceive,
   if (nal_type == kH264FuA) {
     ret = ParseFuaNalu(vBufReceive);
     if (ret) {
-      tylog("parseFuaNalu ret=%d", ret);
+      tylog("parseFuaNalu ret=%d, hexString=%s.", ret,
+            ConvertToReadableHex(
+                std::string_view{vBufReceive.data(), vBufReceive.size()})
+                .data());
+
       return ret;
     }
   } else {
     ret = ParseStapAOrSingleNalu(vBufReceive);
     if (ret) {
-      tylog("parseStapAOrSingleNaluarseFuaNalu ret=%d", ret);
+      tylog("parseStapAOrSingleNalu ret=%d, hexString=%s.", ret,
+            ConvertToReadableHex(
+                std::string_view{vBufReceive.data(), vBufReceive.size()})
+                .data());
+
       return ret;
     }
   }

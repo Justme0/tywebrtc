@@ -154,7 +154,7 @@ int SrtpHandler::UnprotectRtp(std::vector<char> *io_vBufForSrtp) {
       srtp_unprotect(receive_session_, io_vBufForSrtp->data(), &len);
   if (ret) {
     // if return srtp_err_status_replay_old
-    // https://xie.infoq.cn/article/a35380d0e5a47786dffab1605
+    // https://mp.weixin.qq.com/s/u7eStMiCGxNyEWsYkG8UYg
     tylog("error srtp_unprotect ret=%d", ret);
     return ret;
   }
