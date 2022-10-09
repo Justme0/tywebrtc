@@ -17,28 +17,28 @@ int GetCertificateAndKey(X509*& outCert, EVP_PKEY*& pkey) {
   /* Read private key */
 
   fp = fopen(keyfile, "r");
-  if (fp == NULL) {
+  if (fp == nullptr) {
     tylog("shit no keyfile");
     exit(1);
   }
-  pkey = PEM_read_PrivateKey(fp, NULL, NULL, NULL);
+  pkey = PEM_read_PrivateKey(fp, nullptr, nullptr, nullptr);
   fclose(fp);
 
-  if (pkey == NULL) {
+  if (pkey == nullptr) {
     ERR_print_errors_fp(stderr);
     tylog("shit");
     exit(1);
   }
 
   fp = fopen(certfile, "r");
-  if (fp == NULL) {
+  if (fp == nullptr) {
     tylog("shit no certfile");
     exit(1);
   }
-  outCert = PEM_read_X509(fp, NULL, NULL, NULL);
+  outCert = PEM_read_X509(fp, nullptr, nullptr, nullptr);
   fclose(fp);
 
-  if (outCert == NULL) {
+  if (outCert == nullptr) {
     ERR_print_errors_fp(stderr);
     tylog("outCert err addr %p, cannot print msg?", stderr);
     tylog("shit");

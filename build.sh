@@ -25,7 +25,7 @@ cd webclient
 g_localip=`ifconfig | egrep -w "en0|wifi0" -A5 | grep -w inet | head -n 1 | awk '{print $2}'`
 
 echo $g_localip > $g_dst_dir/conf/LOCAL_IP.txt
-sed "s/CANDIDATE_PLACEHOLDER/${g_localip}/g" index.html.template > index.html
+sed "s/CANDIDATE_PLACEHOLDER/${g_localip}/g" index.template.html > index.html
 
 # first kill, ignore error if not exist
 ps aux | grep "node index.js" | grep -v grep | awk '{print $2}' | xargs kill -9 || true
@@ -47,13 +47,15 @@ kServerName="server_tywebrtc" # svr name is same in Makefile
 # -Wfatal-errors
 # no -Wdeprecated-declarations is temp
 # cmd doc https://bazel.build/docs/user-manual
-# shit copt multiple flags cannot be in one option
+# shit copt multiple flags cannot be in one option.
+# must specify -c dbg, or strip debug info
 bazel build \
   --copt="-g"\
-  --copt="-Werror"\
-  --copt="-Wall"\
-  --copt="-Wextra"\
-  --copt="-Weffc++"\
+  -c dbg \
+  --copt="-Werror" \
+  --copt="-Wall" \
+  --copt="-Wextra" \
+  --copt="-Weffc++" \
   --copt="-Wno-error=effc++" \
   --copt="-Wno-error=deprecated-declarations" \
   --copt="-Wno-error=unused-parameter" \

@@ -49,7 +49,7 @@ int RtpHandler::HandleRtcpPacket_(const std::vector<char> &vBufReceive) {
     }
 
     unsigned int subType = 0;
-    STVideoUserInfo *pWatcherUser = NULL;
+    STVideoUserInfo *pWatcherUser = nullptr;
 
     // 行使用远端ssrc判断
     if (m_pTWebRTCUserInfo->ullTinyId == m_pc->ullTinyId) {

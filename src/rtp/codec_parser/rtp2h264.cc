@@ -152,7 +152,7 @@ int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
   // The following 2 bits ( the 11 ) are called nal_ref_idc and they indicates
   // if NAL unit is a reference field, frame or picture.
   const int kNriMask = 0x60;
-  uint8_t fnri = payload[0] & (kFBit | kNriMask);
+  uint8_t fnri = payload[0] & (kFBit | kNriMask);  // taylor not payload[1] ?
   enVideoH264NaluType original_nal_type = static_cast<enVideoH264NaluType>(
       payload[1] & kH264TypeMask);  // taylor not payload[0] ?
   bool first_fragment = ((payload[1] & kSBit) != 0);
