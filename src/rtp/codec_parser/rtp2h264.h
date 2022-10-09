@@ -183,7 +183,7 @@ class H264Unpacketizer {
   int UpdataPps(const char *data, size_t len);
 
   int ParseFuaNalu(const std::vector<char> &vBufReceive);
-  int ParseStapAStartOffsets(const char *nalu_ptr, size_t length_remaining,
+  int ParseStapAStartOffsets(const char *nalu_ptr, int length_remaining,
                              std::vector<size_t> *offsets);
   int ParseStapAOrSingleNalu(const std::vector<char> &vBufReceive);
 

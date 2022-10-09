@@ -507,7 +507,7 @@ class RtpHeader {
 //       may be needed by some encryption algorithms with fixed block sizes
 //       or for carrying several RTP packets in a lower-layer protocol data
 //       unit.
-// OPT: define RTPPacket, as member function
+// OPT: define RTPPacket, make getRtpPaddingLength member function
 inline int getRtpPaddingLength(const std::vector<char>& vBufReceive) {
   const RtpHeader& rtpHeader =
       *reinterpret_cast<const RtpHeader*>(vBufReceive.data());

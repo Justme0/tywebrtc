@@ -31,20 +31,20 @@ SrtpHandler::SrtpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
 SrtpHandler::~SrtpHandler() {
   int ret = 0;
 
-  if (send_session_ != NULL) {
+  if (send_session_ != nullptr) {
     ret = srtp_dealloc(send_session_);
     if (ret) {
       tylog("srtp_dealloc send_session fail, ret=%d", ret);
     }
-    send_session_ = NULL;
+    send_session_ = nullptr;
   }
 
-  if (receive_session_ != NULL) {
+  if (receive_session_ != nullptr) {
     ret = srtp_dealloc(receive_session_);
     if (ret) {
       tylog("srtp_dealloc receive_session fail, ret=%d", ret);
     }
-    receive_session_ = NULL;
+    receive_session_ = nullptr;
   }
 }
 
@@ -65,7 +65,7 @@ bool SrtpHandler::ConfigureSrtpSession(srtp_t *session, const std::string &key,
   policy.ssrc.value = 0;
   policy.window_size = 8192;
   policy.allow_repeat_tx = 1;
-  policy.next = NULL;
+  policy.next = nullptr;
   std::string decodedKey = tylib::Base64Decode(key);
   tylog(
       "transmit type=%s. input key len=%zu, data=%s, after base64 decode, "
@@ -154,7 +154,7 @@ int SrtpHandler::UnprotectRtp(std::vector<char> *io_vBufForSrtp) {
       srtp_unprotect(receive_session_, io_vBufForSrtp->data(), &len);
   if (ret) {
     // if return srtp_err_status_replay_old
-    // https://xie.infoq.cn/article/a35380d0e5a47786dffab1605
+    // https://mp.weixin.qq.com/s/u7eStMiCGxNyEWsYkG8UYg
     tylog("error srtp_unprotect ret=%d", ret);
     return ret;
   }

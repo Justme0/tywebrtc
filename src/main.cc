@@ -18,6 +18,7 @@
 #include "log/log.h"
 #include "pc/peer_connection.h"
 #include "tylib/ip/ip.h"
+#include "tylib/timer/timer.h"
 
 int g_sock_fd;
 
@@ -63,6 +64,8 @@ class Singleton {
     }
   };
 
+  int GetPeerConnectionSize() const { return client2PC_.size(); }
+
   // if construct map's value is expensive
   // https://stackoverflow.com/questions/97050/stdmap-insert-or-stdmap-find
   // here we can also use insert and update, but lower_bound is more general
@@ -72,7 +75,7 @@ class Singleton {
                                                     const std::string& ufrag) {
     ClientSrcId clientSrcId{ip, port};
     auto lb = client2PC_.lower_bound(clientSrcId);
-    tylog("client2PC_ size=%zu", client2PC_.size());
+    tylog("client to pc map size=%zu", client2PC_.size());
 
     if (lb != client2PC_.end() &&
         !(client2PC_.key_comp()(clientSrcId, lb->first))) {
@@ -278,9 +281,10 @@ const int kMultiplexIOMaxEventNum = 1024;
 #if _WIN32
 // _WIN32 is also defined for _WIN64
 
-void CrossPlatformNetworkIO() { tylogAndPrintfln("in Windows"); }
+void CrossPlatformNetworkIO() { tylogAndPrintfln("in Windows, not implement"); }
 
 #elif __APPLE__ || __FreeBSD__
+
 #include <sys/event.h>
 
 void CrossPlatformNetworkIO() {
@@ -290,15 +294,15 @@ void CrossPlatformNetworkIO() {
   int kq = kqueue();
 
   struct kevent evSet;
-  EV_SET(&evSet, g_sock_fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
-  assert(-1 != kevent(kq, &evSet, 1, NULL, 0, NULL));
+  EV_SET(&evSet, g_sock_fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+  assert(-1 != kevent(kq, &evSet, 1, nullptr, 0, nullptr));
 
   struct kevent evList[kMultiplexIOMaxEventNum];
   tylogAndPrintfln("to loop");
   while (1) {
     // returns number of events
     int eventNumber =
-        kevent(kq, NULL, 0, evList, kMultiplexIOMaxEventNum, NULL);
+        kevent(kq, nullptr, 0, evList, kMultiplexIOMaxEventNum, nullptr);
     if (-1 == eventNumber) {
       tylog("kevent return -1, errno=%d[%s]", errno, strerror(errno));
       continue;
@@ -306,6 +310,9 @@ void CrossPlatformNetworkIO() {
     tylog("got %d events", eventNumber);
 
     for (int i = 0; i < eventNumber; i++) {
+      g_now.ComputeNow();
+      TimerManager::Instance()->UpdateTimers(g_now);
+
       const struct kevent& activeEvent = evList[i];
       int fd = activeEvent.ident;
 
@@ -325,7 +332,7 @@ void CrossPlatformNetworkIO() {
         } else {
           ret = HandleRequest();
           if (ret) {
-            tylog("HandleRequest fail, ret=%d", ret);
+            tylog("handleRequest fail, ret=%d", ret);
           }
         }
       }
@@ -338,25 +345,29 @@ void CrossPlatformNetworkIO() {
 
       //      off_t offset = (off_t)activeEvent.udata;
       //      off_t len = 0;//activeEvent.data;
-      //      if (sendfile(junk, fd, offset, &len, NULL, 0) != 0) {
+      //      if (sendfile(junk, fd, offset, &len, nullptr, 0) != 0) {
       //        //            perror("sendfile");
       //        //            tylog("err %d", errno);
 
       //          if (errno == EAGAIN) {
       //              // schedule to send the rest of the file
       //              EV_SET(&evSet, fd, EVFILT_WRITE, EV_ADD | EV_ONESHOT, 0,
-      //              0, (void *)(offset + len)); kevent(kq, &evSet, 1, NULL, 0,
-      //              NULL);
+      //              0, (void *)(offset + len)); kevent(kq, &evSet, 1, nullptr,
+      //              0, nullptr);
       //          }
       //      }
       //      bytes_written += len;
       //      tylog("wrote %lld bytes, %lld total", len, bytes_written);
       //  }
     }
+
+    g_now.ComputeNow();
+    TimerManager::Instance()->UpdateTimers(g_now);
   }
 }
 
 #elif __linux__
+
 #include <sys/epoll.h>
 
 void CrossPlatformNetworkIO() {
@@ -394,12 +405,15 @@ void CrossPlatformNetworkIO() {
     // tylog("nfds=%d", nfds);
 
     for (int i = 0; i < nfds; i++) {
+      g_now.ComputeNow();
+      TimerManager::Instance()->UpdateTimers(g_now);
+
       int fd = events[i].data.fd;
       if (fd == g_sock_fd) {
         if (events[i].events | EPOLLIN) {
           int ret = HandleRequest();
           if (ret) {
-            tylog("HandleRequest fail, ret=%d", ret);
+            tylog("handleRequest fail, ret=%d", ret);
           }
         } else {
           tylog("unexpect epoll events=%d", events[i].events);
@@ -423,6 +437,21 @@ void CrossPlatformNetworkIO() {
 }
 #endif
 
+class MonitorStateTimer : public Timer {
+ public:
+  MonitorStateTimer() : Timer(2000, -1) {}
+
+ private:
+  bool _OnTimer() override {
+    tylog("client2pc size=%d.", Singleton::Instance().GetPeerConnectionSize());
+    return true;
+  }
+};
+
+static void InitTimer() {
+  TimerManager::Instance()->AddTimer(new MonitorStateTimer);
+}
+
 int main(int argc, char* argv[]) {
   (void)argc;
   (void)argv;
@@ -439,7 +468,7 @@ int main(int argc, char* argv[]) {
   }
   tylogAndPrintfln("important: get local ip=%s", g_localip.data());
 
-  // step 1 create socket
+  // step 1: create socket
   g_sock_fd = socket(PF_INET, SOCK_DGRAM, 0);
   if (ret < 0) {
     tylogAndPrintfln("create listen socket failed, ret %d", ret);
@@ -447,7 +476,7 @@ int main(int argc, char* argv[]) {
   }
   // TODO set nonblock
 
-  // step 2 bind
+  // step 2: bind
   struct sockaddr_in address;
   bzero(&address, sizeof(address));
   address.sin_family = AF_INET;
@@ -461,7 +490,7 @@ int main(int argc, char* argv[]) {
              sizeof(address));
   if (ret == -1) {
     tylogAndPrintfln("bind return -1, errno=%d[%s]", errno, strerror(errno));
-    // before run success, should also printf to show problem directly
+
     return 0;
   }
   tylogAndPrintfln("bind succ");
@@ -473,7 +502,10 @@ int main(int argc, char* argv[]) {
   //     strerror(errno)); return 0;
   // }
 
-  // step 3
+  // step 3: init some component
+  InitTimer();
+
+  // step 4: event loop
   CrossPlatformNetworkIO();
 
   return 0;

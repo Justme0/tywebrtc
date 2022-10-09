@@ -44,10 +44,10 @@ const int DTLS_MTU = 1100;
 const char* DtlsHandler::DefaultSrtpProfile = "SRTP_AES128_CM_SHA1_80";
 
 //证书格式，包含公钥、加密算法、有效期等参数。
-X509* DtlsHandler::mCert = NULL;
+X509* DtlsHandler::mCert = nullptr;
 
 // key 的EVP，可封装rsa、dsa、ecc等key
-EVP_PKEY* DtlsHandler::privkey = NULL;
+EVP_PKEY* DtlsHandler::privkey = nullptr;
 
 std::string WebRtcPrintTimeMs(unsigned long long TimeMs) {
   // taylor TODO
@@ -231,11 +231,11 @@ long DtlsOutBIOCallback(BIO* bio, int cmd, const char* argp, int argi,
 
 void DtlsHandler::InitOpensslAndCert() {
 #if (OPENSSL_VERSION_NUMBER > 0x10100000L)
-  OPENSSL_init_ssl(0, NULL);
+  OPENSSL_init_ssl(0, nullptr);
   tylog("shit 2");
-  OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS, NULL);
+  OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS, nullptr);
   tylog("shit ");
-  OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_DIGESTS, NULL);
+  OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_DIGESTS, nullptr);
   tylog("shit ");
 #else
   tylog("shit ok");
@@ -300,12 +300,12 @@ DtlsHandler::DtlsHandler(PeerConnection& pc, bool isServer)
   SSL_CTX_set_read_ahead(mContext, 1);
 
   mSsl = SSL_new(mContext);
-  assert(mSsl != NULL);
+  assert(mSsl != nullptr);
   SSL_set_mtu(mSsl, DTLS_MTU);
   mInBio = BIO_new(BIO_s_mem());
 
   mOutBio = BIO_new(BIO_s_mem());
-  BIO_ctrl(mOutBio, BIO_CTRL_DGRAM_SET_MTU, 0, NULL);
+  BIO_ctrl(mOutBio, BIO_CTRL_DGRAM_SET_MTU, 0, nullptr);
   BIO_set_callback(mOutBio, DtlsOutBIOCallback);
   BIO_set_callback_arg(mOutBio, reinterpret_cast<char*>(this));
 
@@ -315,10 +315,10 @@ DtlsHandler::DtlsHandler(PeerConnection& pc, bool isServer)
 DtlsHandler::~DtlsHandler() {
   tylog("in destructor closing dtls, %s", ToString().data());
 
-  if (mSsl != NULL) {
+  if (mSsl != nullptr) {
     // SSL_shutdown(mSsl);
     SSL_free(mSsl);
-    mSsl = NULL;
+    mSsl = nullptr;
   }
 
   SSL_CTX_free(mContext);
@@ -384,8 +384,9 @@ int DtlsHandler::HandshakeCompleted(bool bSessionCompleted) {
   unsigned char material[SRTP_MASTER_KEY_LEN << 1];
 
   // SSL_export_keying_material() returns 0 or -1 on failure or 1 on success.
-  int isSucc = SSL_export_keying_material(
-      mSsl, material, sizeof(material), "EXTRACTOR-dtls_srtp", 19, NULL, 0, 0);
+  int isSucc =
+      SSL_export_keying_material(mSsl, material, sizeof(material),
+                                 "EXTRACTOR-dtls_srtp", 19, nullptr, 0, 0);
   if (1 != isSucc) {
     tylog("SSL_export_keying_material err, isSucc=%d %s", isSucc,
           ToString().data());
@@ -609,8 +610,8 @@ void DtlsHandler::computeFingerprint(const X509* cert,
 // @return 是否成功获取指纹
 bool DtlsHandler::getRemoteFingerprint(char* fprint) const {
   X509* x = SSL_get_peer_certificate(mSsl);
-  if (NULL == x) {
-    tylog("SSL_get_peer_certificate NULL %s", ToString().data());
+  if (nullptr == x) {
+    tylog("SSL_get_peer_certificate nullptr %s", ToString().data());
     return false;
   }
 
@@ -750,7 +751,7 @@ void DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
 void DtlsHandler::rewriteDtlsPacket(const void* data, size_t len) {
   m_CheckTime = g_GetNowMs();
 
-  if (NULL != mSsl) {
+  if (nullptr != mSsl) {
     // tylog("ReWrite Dtls message len %zu, MTU %u sslMtu:%d %s", len, DTLS_MTU,
     // mSsl->d1->mtu, ToString().data());
     tylog("ReWrite Dtls message len %zu, MTU %u %s", len, DTLS_MTU,

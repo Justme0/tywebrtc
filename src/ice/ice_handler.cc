@@ -214,10 +214,10 @@ int IceHandler::EncoderXORMappedAddress(char *pBuff, int Len) {
 
 int IceHandler::EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
                                      char *pHeadBuf, int Len) {
-  WEB_ERROR_CHECK((NULL == pMsgIntergrityBuff), -1, "pBuff is null");
+  WEB_ERROR_CHECK((nullptr == pMsgIntergrityBuff), -1, "pBuff is null");
   WEB_ERROR_CHECK(((int)sizeof(STUN_MSG_INTEGRITY) > LeftLen), -2,
                   "LeftLen[%d] err", LeftLen);
-  WEB_ERROR_CHECK((NULL == pHeadBuf), -3, "pHeadBuf is null");
+  WEB_ERROR_CHECK((nullptr == pHeadBuf), -3, "pHeadBuf is null");
   WEB_ERROR_CHECK((0 >= Len), -4, "Msg Len[%d] err", Len);
   STUN_MSG_INTEGRITY *pMsgIntergrity = (STUN_MSG_INTEGRITY *)pMsgIntergrityBuff;
   pMsgIntergrity->AttributeType = htons(ATTRIBUTE_MESSGAE_INTEGRITY);
@@ -231,17 +231,17 @@ int IceHandler::EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
 
 #if (OPENSSL_VERSION_NUMBER > 0x10100000L)
   HMAC_CTX *ctx = HMAC_CTX_new();
-  WEB_ERROR_CHECK((NULL == ctx), -5, "HMAC_CTX_new err");
+  WEB_ERROR_CHECK((nullptr == ctx), -5, "HMAC_CTX_new err");
   int ret = 0;
   const EVP_MD *evp_md = EVP_sha1();
 
-  if (NULL == evp_md) {
+  if (nullptr == evp_md) {
     HMAC_CTX_free(ctx);
     return -6;
   }
 
   ret = HMAC_Init_ex(ctx, (unsigned char *)iceInfo_.LocalPassWord,
-                     strlen(iceInfo_.LocalPassWord), evp_md, NULL);
+                     strlen(iceInfo_.LocalPassWord), evp_md, nullptr);
 
   if (0 == ret) {
     HMAC_CTX_free(ctx);
@@ -264,7 +264,7 @@ int IceHandler::EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
   tylog("taylor iceInfo_.LocalPassWord=%s, strlen=%zu", iceInfo_.LocalPassWord,
         strlen(iceInfo_.LocalPassWord));
   HMAC_Init_ex(&ctx, iceInfo_.LocalPassWord, strlen(iceInfo_.LocalPassWord),
-               EVP_sha1(), NULL);  // should check EVP_sha1() return value
+               EVP_sha1(), nullptr);  // should check EVP_sha1() return value
   HMAC_Update(&ctx, (unsigned char *)pHeadBuf, Len);
   HMAC_Final(&ctx, (unsigned char *)(pMsgIntergrity->HmacSha1), &Outlen);
   HMAC_CTX_cleanup(&ctx);  // old api
@@ -376,7 +376,7 @@ unsigned int Crc32Calc(const unsigned char *data, int nbytes) {
 int IceHandler::EncoderFingerprint(const char *pFingerprintBuff,
                                    int FingerprintLen, char *pHeadBuf,
                                    int Len) {
-  WEB_ERROR_CHECK((NULL == pFingerprintBuff), -1, "pBuff is null");
+  WEB_ERROR_CHECK((nullptr == pFingerprintBuff), -1, "pBuff is null");
   WEB_ERROR_CHECK(((int)sizeof(STUN_MSG_FINGERPRINT) > FingerprintLen), -2,
                   "Len[%d] err", FingerprintLen);
   STUN_MSG_FINGERPRINT *pMsgIntergrity =
