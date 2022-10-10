@@ -433,6 +433,9 @@ void CrossPlatformNetworkIO() {
         }
       }
     }
+
+    g_now.ComputeNow();
+    TimerManager::Instance()->UpdateTimers(g_now);
   }
 }
 #endif
