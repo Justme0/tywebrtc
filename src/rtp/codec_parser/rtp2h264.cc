@@ -140,24 +140,10 @@ int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
     return -1;
   }
 
-  // +---------------+
-  // |0|1|2|3|4|5|6|7|
-  // +-+-+-+-+-+-+-+-+
-  // |F|NRI|  Type   |
-  // +---------------+
-  // https://segmentfault.com/a/1190000006698552?utm_source=sf-backlinks
-  // The first bit of this sequence ( which is a 0 ) is the forbidden zero and
-  // is used to verify if errors where encountered during the transmission of
-  // the packet.
-  const int kFBit = 0x80;
-  // The following 2 bits ( the 11 ) are called nal_ref_idc and they indicates
-  // if NAL unit is a reference field, frame or picture.
-  const int kNriMask = 0x60;
-  uint8_t fnri = payload[0] & (kFBit | kNriMask);  // taylor not payload[1] ?
   enVideoH264NaluType original_nal_type = static_cast<enVideoH264NaluType>(
       payload[1] & kH264TypeMask);  // taylor not payload[0] ?
   bool first_fragment = ((payload[1] & kSBit) != 0);
-  tylog("original_nal_type=%s, first_fragment=%d",
+  tylog("original_nal_type=%s, first_fragment=%d.",
         enVideoH264NaluTypeToString(original_nal_type).data(), first_fragment);
 
   if (first_fragment) {
@@ -188,6 +174,22 @@ int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
       }
     }
     FrameItem &frame = frame_buffer_.frames.back();
+
+    // +---------------+
+    // |0|1|2|3|4|5|6|7|
+    // +-+-+-+-+-+-+-+-+
+    // |F|NRI|  Type   |
+    // +---------------+
+    // https://segmentfault.com/a/1190000006698552?utm_source=sf-backlinks
+    // The first bit of this sequence ( which is a 0 ) is the forbidden zero and
+    // is used to verify if errors where encountered during the transmission of
+    // the packet.
+    const int kFBit = 0x80;
+    // The following 2 bits ( the 11 ) are called nal_ref_idc and they indicates
+    // if NAL unit is a reference field, frame or picture.
+    const int kNriMask = 0x60;
+    uint8_t fnri = payload[0] & (kFBit | kNriMask);  // taylor not payload[1] ?
+
     char original_nal_header = fnri | original_nal_type;
     frame.rawData.append(kH264StartCodeCharArray).append({original_nal_header});
   }
