@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "rtp/codec_parser/rtp2h264.h"
+#include "rtp/pack_unpack/rtp_to_h264.h"
 
 class PeerConnection;
 
@@ -13,6 +13,8 @@ class RtpHandler {
   explicit RtpHandler(PeerConnection &pc);
 
   int HandleRtpPacket(const std::vector<char> &vBufReceive);
+
+  std::string ToString() const;
 
  private:
   int HandleRtcpPacket_(const std::vector<char> &vBufReceive);

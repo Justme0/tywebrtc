@@ -1,5 +1,5 @@
-#ifndef RTP_CODEC_PARSER_RTP2H264_H_
-#define RTP_CODEC_PARSER_RTP2H264_H_
+#ifndef RTP_PACK_UNPACK_RTP_TO_H264_H_
+#define RTP_PACK_UNPACK_RTP_TO_H264_H_
 
 #include <cassert>
 #include <cstdio>
@@ -196,4 +196,4 @@ class H264Unpacketizer {
   FILE *rtp_2_h264_file_ = nullptr;
 };
 
-#endif  // RTP_CODEC_PARSER_RTP2H264_H_
+#endif  // RTP_PACK_UNPACK_RTP_TO_H264_H_

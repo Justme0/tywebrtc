@@ -86,6 +86,8 @@ class PeerConnection {
     tylog("src ip=%s, port=%d", clientIP_.data(), clientPort_);
   }
 
+  std::string ToString() const;
+
   // private:
   enum EnumStateMachine stateMachine_;
 
@@ -98,6 +100,8 @@ class PeerConnection {
 
   std::string clientIP_;
   int clientPort_ = 0;
+  int64_t initTimeMs_ = 0;        // construct *this obj time
+  int64_t lastActiveTimeMs_ = 0;  // last receive data time
 };
 
 #endif  // PC_PEER_CONNECTION_H_

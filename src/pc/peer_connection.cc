@@ -1,6 +1,8 @@
 #include "pc/peer_connection.h"
 
 #include "log/log.h"
+#include "tylib/time/time_util.h"
+#include "tylib/time/timer.h"
 
 PeerConnection::PeerConnection()
     : stateMachine_(EnumStateMachine::GOT_CANDIDATE),  // sdp has candiate
@@ -8,9 +10,12 @@ PeerConnection::PeerConnection()
       iceHandler_(*this),
       dtlsHandler_(*this, false),  // taylor 写死 dtls client
       rtpHandler_(*this),
-      srtpHandler_(*this) {}
+      srtpHandler_(*this),
+      initTimeMs_(g_now_ms) {}
 
 int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
+  this->lastActiveTimeMs_ = g_now_ms;
+
   int ret = 0;
 
   uint8_t cSubCmd = vBufReceive.front();
@@ -55,4 +60,12 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
   }
 
   return 0;
+}
+
+std::string PeerConnection::ToString() const {
+  return tylib::format_string(
+      "{state=%s, client=%s:%d, initTime=%s, lastLiveTime=%s}",
+      StateMachineToString(stateMachine_).data(), clientIP_.data(), clientPort_,
+      tylib::MilliSecondToLocalTimeString(initTimeMs_).data(),
+      tylib::MilliSecondToLocalTimeString(lastActiveTimeMs_).data());
 }

@@ -11,6 +11,8 @@
 #include "log/log.h"
 #include "tylib/string/format_string.h"
 
+using PowerSeqT = uint64_t;
+
 #define VIDEO_RTP_EXTERN_NAME_LEN (2)   // 扩展位名字
 #define VIDEO_RTP_EXTERN_VALUE_LEN (4)  // 扩展数据长度单位为4个字节
 #define VIDEO_RTP_EXTERN_LEN_VALUE_LEN (2)  // 扩展数据长度占据2字节
@@ -395,9 +397,10 @@ class RtpHeader {
   // define cycle as uint64_t (use 48 bit at most), first value is 0.
   // e.g. 8Mbps, each video packet is 1000 Byte, so 8*2^20/8/1000=2^10 packets
   // per second, 2^(48+16)/2^10/3600/24/365 = 571232829 year, it's enough
-  uint64_t getExtendSeqNum() const {
+  PowerSeqT getPowerSeq() const {
     uint64_t cycle = 0;
     // assert(cycle < 2^48);
+    // fix: define cycle to external and save it
     return (cycle << 16) + getSeqNumber();
   }
 

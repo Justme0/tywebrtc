@@ -18,24 +18,13 @@
 
 #include "tylib/codec/codec.h"
 #include "tylib/string/format_string.h"
+#include "tylib/time/time_util.h"
+#include "tylib/time/timer.h"
 
 #include "dtls/certificate_key.h"
 #include "log/log.h"
 #include "openssl/bio.h"
 #include "pc/peer_connection.h"
-
-int64_t g_GetNowMs() {
-  // taylor : move get now time util to tylib
-  struct timespec t;
-  clock_gettime(CLOCK_REALTIME, &t);
-
-  // get sec(tm struct presentation), ms, us
-  struct tm tm;
-  localtime_r(&t.tv_sec, &tm);
-
-  int ms = t.tv_nsec / 1000000;
-  return t.tv_sec + ms;
-}
 
 const int SRTP_MASTER_KEY_KEY_LEN = 16;
 const int SRTP_MASTER_KEY_SALT_LEN = 14;
@@ -46,13 +35,8 @@ const char* DtlsHandler::DefaultSrtpProfile = "SRTP_AES128_CM_SHA1_80";
 //证书格式，包含公钥、加密算法、有效期等参数。
 X509* DtlsHandler::mCert = nullptr;
 
-// key 的EVP，可封装rsa、dsa、ecc等key
+// key的EVP，可封装rsa、dsa、ecc等key
 EVP_PKEY* DtlsHandler::privkey = nullptr;
-
-std::string WebRtcPrintTimeMs(unsigned long long TimeMs) {
-  // taylor TODO
-  return "taylorMock";
-}
 
 int DummyCb(int preverify_ok, X509_STORE_CTX* x509_ctx) { return 1; }
 
@@ -258,7 +242,7 @@ DtlsHandler::DtlsHandler(PeerConnection& pc, bool isServer)
       mHandshakeCompleted(false),
       mGetKeyFlag(false),
       m_SendBuffNum(0),
-      m_CheckTime(g_GetNowMs()),
+      m_CheckTime(g_now_ms),
       m_SSl_BuffState(SSL_ERROR_NONE),
       m_ResetFlag(false),
       m_ReSendTime(0),
@@ -708,7 +692,7 @@ extern int g_sock_fd;
 extern struct sockaddr_in g_stConnAddr;  // to use data member
 
 void DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
-  m_CheckTime = g_GetNowMs();
+  m_CheckTime = g_now_ms;
 
   if (m_ResetFlag) {
     m_SendBuffNum = 0;
@@ -749,7 +733,7 @@ void DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
 }
 
 void DtlsHandler::rewriteDtlsPacket(const void* data, size_t len) {
-  m_CheckTime = g_GetNowMs();
+  m_CheckTime = g_now_ms;
 
   if (nullptr != mSsl) {
     // tylog("ReWrite Dtls message len %zu, MTU %u sslMtu:%d %s", len, DTLS_MTU,
@@ -812,7 +796,7 @@ void DtlsHandler::OnTime() {
     return;
   }
 
-  const int64_t TimePassMs = g_GetNowMs() - m_CheckTime;
+  const int64_t TimePassMs = g_now_ms - m_CheckTime;
   const int64_t CheckIntervalMs = GetCheckIntervalMs();
 
   if ((CheckIntervalMs <= TimePassMs) && (0 != m_CheckTime) &&
@@ -834,8 +818,8 @@ void DtlsHandler::OnTime() {
     }
 
     tylog("after onTime rewrite, Now:%" PRId64 " %s passMs:%" PRId64 " %s",
-          g_GetNowMs(), WebRtcPrintTimeMs(g_GetNowMs()).data(), TimePassMs,
-          ToString().data());
+          g_now_ms, tylib::MilliSecondToLocalTimeString(g_now_ms).data(),
+          TimePassMs, ToString().data());
   }
 
   if (m_IsHandshakeCanComplete &&
@@ -862,9 +846,10 @@ std::string DtlsHandler::ToString() const {
       // 构造函数中确保mSsl不为空指针
       SSL_get_state(mSsl), SSL_state_string_long(mSsl),
       (m_isServer ? "server" : "client"), mHandshakeCompleted, mGetKeyFlag,
-      m_SendBuffNum, m_CheckTime, WebRtcPrintTimeMs(m_CheckTime).data(),
-      m_SSl_BuffState, GetSslBuffStateString(m_SSl_BuffState), m_ResetFlag,
-      m_ReSendTime, mHandshakeFail, m_ClientKeySendTime,
+      m_SendBuffNum, m_CheckTime,
+      tylib::MilliSecondToLocalTimeString(m_CheckTime).data(), m_SSl_BuffState,
+      GetSslBuffStateString(m_SSl_BuffState), m_ResetFlag, m_ReSendTime,
+      mHandshakeFail, m_ClientKeySendTime,
       GetStreamDirectionString(m_StmDirect), m_IsHandshakeCanComplete,
       m_LastSslState, GetSslStateString(m_LastSslState).data(), m_startFlag);
 }

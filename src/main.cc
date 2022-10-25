@@ -18,7 +18,7 @@
 #include "log/log.h"
 #include "pc/peer_connection.h"
 #include "tylib/ip/ip.h"
-#include "tylib/timer/timer.h"
+#include "tylib/time/timer.h"
 
 int g_sock_fd;
 
@@ -66,6 +66,19 @@ class Singleton {
 
   int GetPeerConnectionSize() const { return client2PC_.size(); }
 
+  void CleanTimeoutPeerConnection() {
+    const int kPCDeadTimeoutMs = 10000;
+    for (auto it = this->client2PC_.begin(); it != client2PC_.end();) {
+      if (it->second->lastActiveTimeMs_ + kPCDeadTimeoutMs <
+          static_cast<int64_t>(g_now_ms)) {
+        tylog("timeout pc, clean it=%s.", it->second->ToString().data());
+        it = client2PC_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+
   // if construct map's value is expensive
   // https://stackoverflow.com/questions/97050/stdmap-insert-or-stdmap-find
   // here we can also use insert and update, but lower_bound is more general
@@ -81,15 +94,18 @@ class Singleton {
         !(client2PC_.key_comp()(clientSrcId, lb->first))) {
       assert(nullptr != lb->second);
       assert(lb->second->clientIP_ == ip && lb->second->clientPort_ == port);
+
+      tylog("get old pc done");
       return lb->second;
     } else {
-      tylog("new pc, ip=%s, port=%d, ufrag=%s", ip.data(), port, ufrag.data());
       // Use lb as a hint to insert, so it can avoid another lookup
       // OPT: ICE未选上的地址也会为它生成PC，可优化为PC池
       auto i = client2PC_.emplace_hint(
           lb, std::make_pair(clientSrcId, std::make_shared<PeerConnection>()));
       assert(nullptr != i->second);
       i->second->StoreClientIPPort(ip, port);
+
+      tylog("new pc, ip=%s, port=%d, ufrag=%s", ip.data(), port, ufrag.data());
       return i->second;
     }
   }
@@ -258,7 +274,6 @@ int HandleRequest() {
   // get some pc according to clientip, port or ICE username (taylor FIX)
   std::shared_ptr<PeerConnection> pc = Singleton::Instance().GetPeerConnection(
       ip, port, "");  // have bug, ufrag is ""
-  tylog("get pc done");
   // pc->StoreClientIPPort(ip, port);  // should be in GetPeerConnection()
   // if (ret) {
   //   tylog("pc storeClientIPPort fail, ret=%d", ret);
@@ -309,10 +324,9 @@ void CrossPlatformNetworkIO() {
     }
     tylog("got %d events", eventNumber);
 
-    for (int i = 0; i < eventNumber; i++) {
-      g_now.ComputeNow();
-      TimerManager::Instance()->UpdateTimers(g_now);
-
+    for (int i = 0; g_now.ComputeNow(),
+             TimerManager::Instance()->UpdateTimers(g_now), i < eventNumber;
+         i++) {
       const struct kevent& activeEvent = evList[i];
       int fd = activeEvent.ident;
 
@@ -360,9 +374,6 @@ void CrossPlatformNetworkIO() {
       //      tylog("wrote %lld bytes, %lld total", len, bytes_written);
       //  }
     }
-
-    g_now.ComputeNow();
-    TimerManager::Instance()->UpdateTimers(g_now);
   }
 }
 
@@ -404,10 +415,9 @@ void CrossPlatformNetworkIO() {
 
     // tylog("nfds=%d", nfds);
 
-    for (int i = 0; i < nfds; i++) {
-      g_now.ComputeNow();
-      TimerManager::Instance()->UpdateTimers(g_now);
-
+    for (int i = 0; g_now.ComputeNow(),
+             TimerManager::Instance()->UpdateTimers(g_now), i < nfds;
+         i++) {
       int fd = events[i].data.fd;
       if (fd == g_sock_fd) {
         if (events[i].events | EPOLLIN) {
@@ -433,9 +443,6 @@ void CrossPlatformNetworkIO() {
         }
       }
     }
-
-    g_now.ComputeNow();
-    TimerManager::Instance()->UpdateTimers(g_now);
   }
 }
 #endif
@@ -446,7 +453,9 @@ class MonitorStateTimer : public Timer {
 
  private:
   bool _OnTimer() override {
+    Singleton::Instance().CleanTimeoutPeerConnection();
     tylog("client2pc size=%d.", Singleton::Instance().GetPeerConnectionSize());
+
     return true;
   }
 };

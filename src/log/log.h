@@ -20,7 +20,8 @@ inline void HandleFileSize() {
   // should in config file
   const std::string &g_kLogFile = "./tywebrtc.log";
   int64_t size = filesize(g_kLogFile);
-  const int64_t g_kMaxSingleFileByte = 200 * 1024 * 1024;
+  // move to config file
+  const int64_t g_kMaxSingleFileByte = 20 * 1024 * 1024;
   if (size >= g_kMaxSingleFileByte) {
     system("mv ./tywebrtc.log ./tywebrtc.log.1");  // to use config and cross
                                                    // platform
@@ -106,11 +107,11 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
 }
 
 #define tylog(format, arg...) \
-  tylogWithMoreInfo(__FILE__, __LINE__, __func__, format, ##arg);
+  tylogWithMoreInfo(__FILE__, __LINE__, __func__, format, ##arg)
 
 #define tylogAndPrintfln(format, arg...)                          \
   tylogWithMoreInfo(__FILE__, __LINE__, __func__, format, ##arg); \
   printf(format, ##arg);                                          \
-  std::cout << std::endl;
+  std::cout << std::endl
 
 #endif  // LOG_LOG_H_
