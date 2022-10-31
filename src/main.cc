@@ -2,7 +2,6 @@
 #include <net/if.h>
 #include <strings.h>
 #include <sys/ioctl.h>
-#include <sys/socket.h>
 #include <unistd.h>
 
 #include <array>
@@ -38,7 +37,6 @@ std::string execCmd(const char* cmd) {
 }
 
 std::string g_localip;
-struct sockaddr_in g_stConnAddr;  // ipv4, must reflector taylor
 
 // TODO: should save to remote DB ? must refactor! Now we use singleton
 // OPT2: move to tylib
@@ -234,15 +232,17 @@ int GetLanIp(std::string* o_ip) {
 int HandleRequest() {
   int ret = 0;
 
-  socklen_t addr_size = sizeof(struct sockaddr_in);
   // to use memory pool for so large buffer, UDP is enough, TCP?
   // OPT: media packet should less copy as possible
   const int kSendRecvUdpMaxLength = 4 * 1024;
   std::vector<char> vBufReceive(kSendRecvUdpMaxLength);
 
+  struct sockaddr_in address;
+  socklen_t addr_size = sizeof(struct sockaddr_in);
+
   ssize_t iRecvLen =
       recvfrom(g_sock_fd, vBufReceive.data(), vBufReceive.size(), 0,
-               (struct sockaddr*)&g_stConnAddr, (socklen_t*)&addr_size);
+               (struct sockaddr*)&address, (socklen_t*)&addr_size);
   tylog("=============== recv len=%ld (application layer)", iRecvLen);
   if (iRecvLen < -1) {
     // should not appear
@@ -269,7 +269,7 @@ int HandleRequest() {
 
   std::string ip;
   int port = 0;
-  tylib::GetIpPort(g_stConnAddr, ip, port);
+  tylib::ParseIpPort(address, ip, port);
   tylog("src ip=%s, port=%d", ip.data(), port);
   // get some pc according to clientip, port or ICE username (taylor FIX)
   std::shared_ptr<PeerConnection> pc = Singleton::Instance().GetPeerConnection(

@@ -1,12 +1,6 @@
 #ifndef RTP_PACK_UNPACK_RTP_TO_H264_H_
 #define RTP_PACK_UNPACK_RTP_TO_H264_H_
 
-#include <cassert>
-#include <cstdio>
-#include <fstream>
-#include <functional>
-#include <iostream>
-#include <memory>
 #include <vector>
 
 #include "tylib/string/any_to_string.h"
@@ -15,83 +9,6 @@
 
 #define _DUMP_RTP_ 1
 
-// Nalu type定义，根据H264协议标准定义
-// https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-h264.c#L302
-enum enVideoH264NaluType {
-  kVideoNakuUnspecific = 0,
-  kVideoNaluSlice = 1,
-  kVideoNaluDpa = 2,
-  kVideoNaluDpb = 3,
-  kVideoNaluDpc = 4,
-  kVideoNaluIdr = 5,
-  kVideoNaluSei = 6,
-  kVideoNaluSps = 7,
-  kVideoNaluPps = 8,
-  kVideoNaluUnitDelimiterRbsp = 9,
-  kVideoNaluUnitEoseq = 10,
-  kVideoNaluUnitEostm = 11,
-  kVideoNaluUnitFilter = 12,
-  kVideoNaluUnitSpsExtn = 13,
-  kH264StapA = 24,
-  kH264FuA = 28,
-};
-
-inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
-  switch (v) {
-    case kVideoNakuUnspecific:
-      return "Undefined";
-    case kVideoNaluSlice:
-      return "NAL unit - Coded slice of a non-IDR picture";
-    case kVideoNaluDpa:
-      return "NAL unit - Coded slice data partition A";
-    case kVideoNaluDpb:
-      return "NAL unit - Coded slice data partition B";
-    case kVideoNaluDpc:
-      return "NAL unit - Coded slice data partition C";
-    case kVideoNaluIdr:
-      return "NAL unit - Coded slice of an IDR picture";
-    case kVideoNaluSei:
-      return "NAL unit - Supplemental enhancement information (SEI)";
-    case kVideoNaluSps:
-      return "NAL unit - Sequence parameter set";
-    case kVideoNaluPps:
-      return "NAL unit - Picture parameter set";
-    case kVideoNaluUnitDelimiterRbsp:
-      return "NAL unit - Access unit delimiter";
-    case kVideoNaluUnitEoseq:
-      return "NAL unit - End of sequence";
-    case kVideoNaluUnitEostm:
-      return "NAL unit - End of stream";
-    case kVideoNaluUnitFilter:
-      return "NAL unit - Filler data";
-    case kVideoNaluUnitSpsExtn:
-      return "NAL unit - Sequence parameter set extension";
-      // "NAL unit - Prefix" // 14
-      // "NAL unit - Subset sequence parameter set" // 15
-      // "NAL unit - Reserved" // 16
-      // "NAL unit - Reserved" // 17
-      // "NAL unit - Reserved" // 18
-      // "NAL unit - Coded slice of an auxiliary coded picture without
-      // partitioning" // 19
-      // "NAL unit - Coded slice extension" // 20
-      // "NAL unit - Coded slice extension for depth view components" // 21
-      // "NAL unit - Reserved" // 22
-      // "NAL unit - Reserved" // 23
-    case kH264StapA:
-      return "Single-time aggregation packet A (STAP-A)";
-      //  "Single-time aggregation packet B (STAP-B)" // 25
-      // "Multi-time aggregation packet 16 (MTAP16)" // 26
-      // "Multi-time aggregation packet 24 (MTAP24)" // 27
-    case kH264FuA:
-      return "Fragmentation unit A (FU-A)";
-    // "Fragmentation unit B (FU-B)" // 29
-    // "NAL unit - Payload Content Scalability Information (PACSI)" // 30
-    // "NAL unit - Extended NAL Header" // 31
-    default:
-      return tylib::format_string("Unknown[%d]", v);
-  }
-};
-
 // OPT: can cancel the struct ?
 class MediaData {
  public:
@@ -99,7 +16,6 @@ class MediaData {
 
   MediaData(MediaType media_type, std::string &&data, uint32_t payload_type,
             uint32_t rtp_timestamp, uint64_t timestamp,
-
             int composition_timestamp, VideoRotation rotate_angle)
       : media_type_(media_type),
         data_(data),

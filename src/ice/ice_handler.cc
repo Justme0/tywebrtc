@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cstring>
 
+#include "tylib/ip/ip.h"
+
 #include "log/log.h"
 #include "openssl/hmac.h"
 #include "pc/peer_connection.h"
@@ -20,7 +22,6 @@
   } while (0)
 
 extern int g_sock_fd;
-extern struct sockaddr_in g_stConnAddr;  // to use data member
 uint64_t g_tinyid = 144115262675375852;  // taylor to opt
 
 #define STUN_HEX_DIGITS ("0123456789abcdef")
@@ -474,14 +475,19 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   LeftLen -= EncLen;
   int SndLen = (int)(pOffset - SndBuff);
 
+  sockaddr_in addr =
+      tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
+                               this->belongingPeerConnection_.clientPort_);
   ssize_t sendtoLen = sendto(g_sock_fd, SndBuff, SndLen, 0,
-                             reinterpret_cast<struct sockaddr *>(&g_stConnAddr),
+                             reinterpret_cast<struct sockaddr *>(&addr),
                              sizeof(struct sockaddr_in));
   if (-1 == sendtoLen) {
     tylog("sendto errorno=%d[%s]", errno, strerror(errno));
     return -4;
   }
-  tylog("sendto reply buf size=%ld", sendtoLen);
+  tylog("sendto reply succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
+        belongingPeerConnection_.clientIP_.data(),
+        belongingPeerConnection_.clientPort_);
 
   return 0;
 }

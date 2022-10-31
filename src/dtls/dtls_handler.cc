@@ -17,6 +17,7 @@
 #include <cinttypes>
 
 #include "tylib/codec/codec.h"
+#include "tylib/ip/ip.h"
 #include "tylib/string/format_string.h"
 #include "tylib/time/time_util.h"
 #include "tylib/time/timer.h"
@@ -689,7 +690,6 @@ void DtlsHandler::SetStreamDirect(StreamDirection direct) {
 bool DtlsHandler::GetHandshakeCompleted() const { return mHandshakeCompleted; }
 
 extern int g_sock_fd;
-extern struct sockaddr_in g_stConnAddr;  // to use data member
 
 void DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
   m_CheckTime = g_now_ms;
@@ -722,14 +722,20 @@ void DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
   //     return;
   // }
   // pUser->SendDtlsPacketToClient((const char*)data, len);
-  ssize_t sendtoLen = sendto(g_sock_fd, data, len, 0,
-                             reinterpret_cast<struct sockaddr*>(&g_stConnAddr),
-                             sizeof(struct sockaddr_in));
+
+  sockaddr_in addr =
+      tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
+                               this->belongingPeerConnection_.clientPort_);
+  ssize_t sendtoLen =
+      sendto(g_sock_fd, data, len, 0, reinterpret_cast<sockaddr*>(&addr),
+             sizeof(struct sockaddr_in));
   if (-1 == sendtoLen) {
     tylog("sendto errorno=%d[%s]", errno, strerror(errno));
     return;
   }
-  tylog("sendto succ buf size=%ld", sendtoLen);
+  tylog("sendto reply succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
+        belongingPeerConnection_.clientIP_.data(),
+        belongingPeerConnection_.clientPort_);
 }
 
 void DtlsHandler::rewriteDtlsPacket(const void* data, size_t len) {
@@ -750,14 +756,19 @@ void DtlsHandler::rewriteDtlsPacket(const void* data, size_t len) {
   //     return;
   // }
   // pUser->SendDtlsPacketToClient((const char*)data, len);
-  ssize_t sendtoLen = sendto(g_sock_fd, data, len, 0,
-                             reinterpret_cast<struct sockaddr*>(&g_stConnAddr),
-                             sizeof(struct sockaddr_in));
+  sockaddr_in addr =
+      tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
+                               this->belongingPeerConnection_.clientPort_);
+  ssize_t sendtoLen =
+      sendto(g_sock_fd, data, len, 0, reinterpret_cast<sockaddr*>(&addr),
+             sizeof(struct sockaddr_in));
   if (-1 == sendtoLen) {
     tylog("sendto errorno=%d[%s]", errno, strerror(errno));
     return;
   }
-  tylog("sendto succ buf size=%ld", sendtoLen);
+  tylog("sendto reply succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
+        belongingPeerConnection_.clientIP_.data(),
+        belongingPeerConnection_.clientPort_);
 }
 
 // 在我方SDP中提供
