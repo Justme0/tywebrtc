@@ -102,6 +102,7 @@ bool SrtpHandler::SetRtpParams(const std::string &sending_key,
 
     return false;
   }
+  assert(nullptr != send_session_);
 
   ok = ConfigureSrtpSession(&receive_session_, receiving_key, kReceiving);
   if (!ok) {
@@ -109,6 +110,7 @@ bool SrtpHandler::SetRtpParams(const std::string &sending_key,
 
     return false;
   }
+  assert(nullptr != receive_session_);
 
   sending_key_ = sending_key;  // OPT: use move
   receiving_key_ = receiving_key;
@@ -125,6 +127,8 @@ int SrtpHandler::ProtectRtp(std::vector<char> *io_vBufForSrtp) {
 
   int len = io_vBufForSrtp->size();
   const int kOriginLen = len;
+
+  assert(nullptr != send_session_);
 
   // protect may increase SRTP_MAX_TRAILER_LEN
   // https://source.chromium.org/chromium/chromium/src/+/main:third_party/libsrtp/srtp/srtp.c;l=2352
@@ -148,6 +152,8 @@ int SrtpHandler::UnprotectRtp(std::vector<char> *io_vBufForSrtp) {
     tylog("error active=%d", active_);
     return -1;
   }
+
+  assert(nullptr != receive_session_);
 
   int len = io_vBufForSrtp->size();
   srtp_err_status_t ret =
@@ -177,6 +183,8 @@ int SrtpHandler::ProtectRtcp(std::vector<char> *io_vBufForSrtp) {
   int len = io_vBufForSrtp->size();
   const int kOriginLen = len;
 
+  assert(nullptr != send_session_);
+
   // protect may increase SRTP_MAX_TRAILER_LEN + 4
   // NOTE add 4, refer `srtp_protect_rtcp` interface doc
   // 4 means sizeof(srtcp_trailer_t)
@@ -203,6 +211,8 @@ int SrtpHandler::UnprotectRtcp(std::vector<char> *io_vBufForSrtp) {
     tylog("error active=%d", active_);
     return -1;
   }
+
+  assert(nullptr != receive_session_);
 
   int len = io_vBufForSrtp->size();
   srtp_err_status_t ret =
