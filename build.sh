@@ -50,7 +50,7 @@ kServerName="server_tywebrtc" # svr name is same in Makefile
 # shit copt multiple flags cannot be in one option.
 # must specify -c dbg, or strip debug info
 bazel build \
-  --copt="-g"\
+  --copt="-g" \
   -c dbg \
   --copt="-Werror" \
   --copt="-Wall" \
