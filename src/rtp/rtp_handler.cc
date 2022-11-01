@@ -6,6 +6,7 @@
 #include <cstring>
 #include <string>
 
+#include "tylib/ip/ip.h"
 #include "tylib/string/any_to_string.h"
 
 #include "log/log.h"
@@ -22,7 +23,6 @@ const std::string kMediaTypeAudio = "audio";
 RtpHandler::RtpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {}
 
 extern int g_sock_fd;
-extern struct sockaddr_in g_stConnAddr;  // to use data member
 
 // move to tylib
 // static void printAscii(const std::string &s) {
@@ -34,6 +34,95 @@ extern struct sockaddr_in g_stConnAddr;  // to use data member
 //   }
 //   tylog("%s", arr);
 // }
+
+int DumpPacketH264(const std::vector<char> &packet,
+                   H264Unpacketizer &unpacker) {
+  int ret = 0;
+  const RtpHeader &rtpHeader =
+      *reinterpret_cast<const RtpHeader *>(packet.data());
+
+  std::string mediaType;
+  ret = RtpRtcpStrategy::GetMediaType(packet, &mediaType);
+  if (ret) {
+    tylog("get media type fail, ret=%d", ret);
+    return ret;
+  }
+
+  if (mediaType == kMediaTypeVideo) {
+    std::vector<MediaData> media;
+    ret = unpacker.Unpacketize(packet, &media);
+    if (ret) {
+      tylog("unpacketize rtp ret=%d", ret);
+      return ret;
+    }
+
+    tylog("unpack media.size=%zu", media.size());
+    for (const MediaData &m : media) {
+      ret = unpacker.DumpRawStream(m.data_, rtpHeader.getSSRC());
+      if (ret) {
+        tylog("dump ret=%d", ret);
+        return ret;
+      }
+    }
+  }
+
+  return 0;
+}
+
+int RtpHandler::SendToPeer_(std::vector<char> &packet) {
+  int ret = 0;
+  RtpHeader &downlinkRtpHeader = *reinterpret_cast<RtpHeader *>(packet.data());
+
+  std::string mediaType;
+  ret = RtpRtcpStrategy::GetMediaType(packet, &mediaType);
+  if (ret) {
+    tylog("get media type fail, ret=%d", ret);
+    return ret;
+  }
+
+  tylog("downlink send media type=%s.", mediaType.data());
+
+  if (mediaType == kMediaTypeAudio) {
+    // taylor audio not use pacing
+    const int kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
+    downlinkRtpHeader.setSSRC(kDownlinkAudioSsrc);
+
+    const int kDownlinkAudioPayloadType = 111;
+    downlinkRtpHeader.setPayloadType(kDownlinkAudioPayloadType);
+  } else if (mediaType == kMediaTypeVideo) {
+    const int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
+    downlinkRtpHeader.setSSRC(kDownlinkVideoSsrc);
+
+    const int kDownlinkVideoPayloadType = 125;  // H.264
+    downlinkRtpHeader.setPayloadType(kDownlinkVideoPayloadType);
+  } else {
+    tylog("invalid downlink send media type=%s.", mediaType.data());
+    assert(!"invalid media type");
+  }
+
+  ret = this->belongingPeerConnection_.srtpHandler_.ProtectRtp(
+      const_cast<std::vector<char> *>(&packet));
+  if (ret) {
+    tylog("downlink protect rtp ret=%d", ret);
+    return ret;
+  }
+
+  sockaddr_in addr =
+      tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
+                               this->belongingPeerConnection_.clientPort_);
+  ssize_t sendtoLen =
+      sendto(g_sock_fd, packet.data(), packet.size(), 0,
+             reinterpret_cast<sockaddr *>(&addr), sizeof(struct sockaddr_in));
+  if (-1 == sendtoLen) {
+    tylog("sendto errorno=%d[%s]", errno, strerror(errno));
+    return -1;
+  }
+  tylog("sendto reply succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
+        belongingPeerConnection_.clientIP_.data(),
+        belongingPeerConnection_.clientPort_);
+
+  return 0;
+}
 
 // use OO?
 int RtpHandler::HandleRtcpPacket_(const std::vector<char> &vBufReceive) {
@@ -223,15 +312,19 @@ int RtpHandler::HandleRtcpPacket_(const std::vector<char> &vBufReceive) {
     return ret;
   }
 
-  ssize_t sendtoLen =
-      sendto(g_sock_fd, vBufReceive.data(), vBufReceive.size(), 0,
-             reinterpret_cast<struct sockaddr *>(&g_stConnAddr),
-             sizeof(struct sockaddr_in));
+  sockaddr_in addr =
+      tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
+                               this->belongingPeerConnection_.clientPort_);
+  ssize_t sendtoLen = sendto(g_sock_fd, vBufReceive.data(), vBufReceive.size(),
+                             0, reinterpret_cast<struct sockaddr *>(&addr),
+                             sizeof(struct sockaddr_in));
   if (-1 == sendtoLen) {
     tylog("sendto errorno=%d[%s]", errno, strerror(errno));
     return -1;
   }
-  tylog("sendto reply buf size=%ld", sendtoLen);
+  tylog("sendto reply succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
+        belongingPeerConnection_.clientIP_.data(),
+        belongingPeerConnection_.clientPort_);
 
   return 0;
 }
@@ -242,7 +335,6 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   // if we recv web's data, dtls should complete in Chrome
   // OPT: no need call hand shake complete function each time recv rtp
   const bool kSessionCompleted = true;
-  // taylor no need call every time?
   ret = belongingPeerConnection_.dtlsHandler_.HandshakeCompleted(
       kSessionCompleted);
   if (ret) {
@@ -291,61 +383,42 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
 
     const RtpHeader &rtpHeader =
         *reinterpret_cast<const RtpHeader *>(vBufReceive.data());
-    tylog("recv rtp=%s", rtpHeader.ToString().data());
+    tylog("recv rtp=%s (maybe out-of-order)", rtpHeader.ToString().data());
 
-    if (mediaType == kMediaTypeVideo) {
-      H264Unpacketizer &unpacker = ssrc2unpacker_[rtpHeader.getSSRC()];
-      std::vector<MediaData> media;
-      ret = unpacker.Unpacketize(vBufReceive, &media);
+    SSRCInfo &ssrcInfo = this->ssrcInfoMap_[rtpHeader.getSSRC()];
+    // hack
+    ssrcInfo.rtpReceiver.PushPacket(
+        std::move(const_cast<std::vector<char> &>(vBufReceive)));
+
+    assert(vBufReceive.empty());
+
+    std::vector<std::vector<char>> orderedPackets =
+        ssrcInfo.rtpReceiver.PopOrderedPackets();
+
+    tylog("pop jitter's OrderedPackets size=%zu", orderedPackets.size());
+
+    for (std::vector<char> &packet : orderedPackets) {
+      ret = DumpPacketH264(packet, ssrcInfo.h264Unpacketizer);
       if (ret) {
-        tylog("unpacketize rtp ret=%d", ret);
+        tylog("dump uplink h264 ret=%d", ret);
         return ret;
       }
 
-      tylog("unpack media.size=%zu", media.size());
-      for (const MediaData &m : media) {
-        ret = unpacker.DumpRawStream(m.data_, rtpHeader.getSSRC());
-        if (ret) {
-          tylog("dump ret=%d", ret);
-          return ret;
-        }
-      }
+      ssrcInfo.rtpSender.Enqueue(std::move(packet));
+      assert(packet.empty());
     }
 
     // downlink
+    std::vector<std::vector<char>> sendPackets = ssrcInfo.rtpSender.Dequeue();
 
-    RtpHeader &downlinkRtpHeader = const_cast<RtpHeader &>(rtpHeader);
-
-    if (mediaType == kMediaTypeAudio) {
-      const int kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
-      downlinkRtpHeader.setSSRC(kDownlinkAudioSsrc);
-
-      const int kDownlinkAudioPayloadType = 111;
-      downlinkRtpHeader.setPayloadType(kDownlinkAudioPayloadType);
-    } else {
-      const int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
-      downlinkRtpHeader.setSSRC(kDownlinkVideoSsrc);
-
-      const int kDownlinkVideoPayloadType = 125;  // H.264
-      downlinkRtpHeader.setPayloadType(kDownlinkVideoPayloadType);
+    tylog("send to peer packets size=%zu", sendPackets.size());
+    for (std::vector<char> &packet : sendPackets) {
+      ret = SendToPeer_(packet);
+      if (ret) {
+        tylog("send to peer ret=%d", ret);
+        return ret;
+      }
     }
-
-    ret = this->belongingPeerConnection_.srtpHandler_.ProtectRtp(
-        const_cast<std::vector<char> *>(&vBufReceive));
-    if (ret) {
-      tylog("downlink protect rtp ret=%d", ret);
-      return ret;
-    }
-
-    ssize_t sendtoLen =
-        sendto(g_sock_fd, vBufReceive.data(), vBufReceive.size(), 0,
-               reinterpret_cast<struct sockaddr *>(&g_stConnAddr),
-               sizeof(struct sockaddr_in));
-    if (-1 == sendtoLen) {
-      tylog("sendto errorno=%d[%s]", errno, strerror(errno));
-      return -1;
-    }
-    tylog("sendto reply buf size=%ld", sendtoLen);
   } else {
     tylog("receive unknown type of data=%s, return", mediaType.data());
 
@@ -358,8 +431,8 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   return 0;
 }
 
-std::string RtpHandler::ToString() const
-{
+std::string RtpHandler::ToString() const {
   return "rtpDummyData";
-  // return tylib::format_string( "{ssrcMap=%s}", tylib::AnyToString(ssrc2unpacker_).data());
+  // return tylib::format_string( "{ssrcMap=%s}",
+  // tylib::AnyToString(ssrc2unpacker_).data());
 }

@@ -5,13 +5,13 @@
 
 #include <netinet/in.h>
 
-#include <cstdint>
 #include <limits>
+#include <memory>
 
 #include "log/log.h"
 #include "tylib/string/format_string.h"
 
-using PowerSeqT = uint64_t;
+using PowerSeq = int64_t;
 
 #define VIDEO_RTP_EXTERN_NAME_LEN (2)   // 扩展位名字
 #define VIDEO_RTP_EXTERN_VALUE_LEN (4)  // 扩展数据长度单位为4个字节
@@ -22,14 +22,14 @@ extern const std::string kMediaTypeVideo;
 extern const std::string kMediaTypeAudio;
 
 // to move to tylib
-inline void WriteBigEndian(uint8_t* data, uint32_t val, int max_byte) {
+inline void WriteBigEndian(char* data, uint32_t val, int max_byte) {
   int i;
   for (i = 0; i < max_byte; ++i) {
     data[i] = val >> ((max_byte - 1 - i) * 8);
   }
 }
 
-inline uint32_t ReadBigEndian(const uint8_t* data, int max_byte) {
+inline uint32_t ReadBigEndian(const char* data, int max_byte) {
   uint32_t val = 0;
   int i;
   for (i = 0; i < max_byte; ++i) {
@@ -225,7 +225,7 @@ class VideoSendTiming : public Extension {
   const uint8_t kNetworkTimestampDeltaOffset = 9;
   const uint8_t kNetwork2TimestampDeltaOffset = 11;
 
-  bool Parse(const uint8_t* data, size_t size) {
+  bool Parse(const char* data, size_t size) {
     int64_t off = 0;
     if (static_cast<uint8_t>(size) == kValueSizeBytes - 1) {
       flags = 0;
@@ -254,7 +254,7 @@ class VideoSendTiming : public Extension {
     // flags,encode_start_delta_ms,encode_finish_delta_ms,packetization_finish_delta_ms,pacer_exit_delta_ms,network_timestamp_delta_ms,network2_timestamp_delta_ms);
     return true;
   }
-  bool Write(uint8_t* data, size_t size) {
+  bool Write(char* data, size_t size) {
     if (size != kValueSizeBytes) {
       return false;
     }
@@ -394,10 +394,11 @@ class RtpHeader {
   uint16_t getSeqNumber() const { return ntohs(seqnum); }
   void setSeqNumber(uint16_t aSeqNumber) { seqnum = htons(aSeqNumber); }
 
-  // define cycle as uint64_t (use 48 bit at most), first value is 0.
-  // e.g. 8Mbps, each video packet is 1000 Byte, so 8*2^20/8/1000=2^10 packets
-  // per second, 2^(48+16)/2^10/3600/24/365 = 571232829 year, it's enough
-  PowerSeqT getPowerSeq() const {
+  // define cycle as int64_t (use 47 bit at most, most significant bit for sign
+  // if need), first value is 0. e.g. 8Mbps, each video packet is 1000 Byte, so
+  // 8*2^20/8/1000=2^10 packets per second, 2^(47+16)/2^10/3600/24/365 =
+  // 285616414 year, it's enough
+  PowerSeq getPowerSeq() const {
     uint64_t cycle = 0;
     // assert(cycle < 2^48);
     // fix: define cycle to external and save it
@@ -429,7 +430,7 @@ class RtpHeader {
     }
     */
 
-  // return RTP head length.
+  // get RTP head length.
   // include 3 parts: Fix Header; CSRC; extension
   int getHeaderLength() const {
     const int csrcLen = cc * 4;
@@ -439,11 +440,8 @@ class RtpHeader {
   }
 
   // taylor FIX must parse
-  // return ptr for multi-type
-  std::vector<std::shared_ptr<Extension>> getParsedExtensions() const {
-    std::vector<std::shared_ptr<Extension>> ret;
-    return ret;
-  }
+  // return ptr for multi-type, key
+  std::vector<std::shared_ptr<Extension>> parseExtensions() const { return {}; }
 
   /*
     inline int GetRtpExtOffset(char* pRtpData, int RtpLen) {
@@ -488,12 +486,12 @@ class RtpHeader {
 
  private:
   // the following is all netorder for RAW RTP format
-  uint32_t cc : 4;
-  uint32_t hasextension : 1;
-  uint32_t padding : 1;
-  uint32_t version : 2;
-  uint32_t payloadtype : 7;
-  uint32_t marker : 1;
+  uint8_t cc : 4;
+  uint8_t hasextension : 1;
+  uint8_t padding : 1;
+  uint8_t version : 2;
+  uint8_t payloadtype : 7;
+  uint8_t marker : 1;
 
   // all are net order
   uint16_t seqnum;

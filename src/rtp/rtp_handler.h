@@ -5,8 +5,17 @@
 #include <vector>
 
 #include "rtp/pack_unpack/rtp_to_h264.h"
+#include "transport/receiver/receiver.h"
+#include "transport/sender/sender.h"
 
 class PeerConnection;
+
+struct SSRCInfo {
+  // why define ssrc's unpacketizer: save unpacked frame e.g. FU-A
+  H264Unpacketizer h264Unpacketizer;
+  RtpReceiver rtpReceiver;
+  RtpSender rtpSender;
+};
 
 class RtpHandler {
  public:
@@ -18,11 +27,11 @@ class RtpHandler {
 
  private:
   int HandleRtcpPacket_(const std::vector<char> &vBufReceive);
+  int SendToPeer_(std::vector<char> &packet);
 
  private:
   PeerConnection &belongingPeerConnection_;
-  // why define ssrc map: save unpacked frame e.g. FU-A
-  std::unordered_map<uint32_t, H264Unpacketizer> ssrc2unpacker_;
+  std::unordered_map<uint32_t, SSRCInfo> ssrcInfoMap_;
 };
 
 #endif  // RTP_RTP_HANDLER_H_

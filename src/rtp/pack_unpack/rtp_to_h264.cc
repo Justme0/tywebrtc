@@ -1,13 +1,14 @@
 
 #include "rtp/pack_unpack/rtp_to_h264.h"
 
-#include "rtp/rtp_parser.h"
-
 #include <cassert>
 #include <cinttypes>
 #include <cstdint>
 #include <cstring>
 #include <vector>
+
+#include "rtp/pack_unpack/pack_unpack_common.h"
+#include "rtp/rtp_parser.h"
 
 // to move to tylib
 template <typename T, T M>
@@ -21,9 +22,6 @@ template <typename T>
 inline T ForwardDiff(T a, T b) {
   return ForwardDiff<T, 0>(a, b);
 }
-
-// move to head file
-const int kH264TypeMask = 0x1F;
 
 template <typename T, T M>
 inline typename std::enable_if<(M == 0), bool>::type AheadOrAt(T a, T b) {
@@ -73,7 +71,7 @@ struct NaluInfo {
 FrameItem &FrameBuffer::PushNewFrame(const RtpHeader &h) {
   int cts = 0;
   // to get cts for new frame
-  for (const std::shared_ptr<Extension> &ext : h.getParsedExtensions()) {
+  for (const std::shared_ptr<Extension> &ext : h.parseExtensions()) {
     if (ext->extension_type != kRtpExtCompositionTime) {
       continue;
     }
@@ -94,6 +92,7 @@ FrameItem &FrameBuffer::PushNewFrame(const RtpHeader &h) {
 
   // what if cts = 0? that is not found composition time extension
   frames.emplace_back(std::string(), h.getPayloadType(), h.getTimestamp(), cts);
+
   return frames.back();
 }
 
@@ -114,10 +113,6 @@ std::vector<MediaData> FrameBuffer::PopFrames() {
   // MediaData should support move constructor
   return v;
 }
-
-enum FuDefs { kSBit = 0x80, kEBit = 0x40, kRBit = 0x20 };
-
-#define VIDEO_MAX_SPP_PPS_LEN (100)
 
 // use constexpr?
 const std::string kH264StartCodeCharArray({0, 0, 0, 1});
