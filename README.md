@@ -26,11 +26,35 @@ WebRTC server play
 ## 运行本项目
 ```
 $ git clone --recursive https://github.com/Justme0/tywebrtc.git
-$ cd src
-$ ./build.sh --run # --run在本机执行，可能失败
+$ cd tywebrtc
+$ ./build.sh # only compile, exe file is tywebrtc
+$ ./tywebrtc # run
 ```
 
 更新
 ```
 $ git submodule update --remote
 ```
+
+## 效果
+client demo 位于 webclient/ 下，目前写死的SDP，支持Chrome，运行请修改 candidate 地址为你的服务器访问地址。
+
+笔者运行效果如下，client(北京) -> server(南京) -> client(北京) 端到端延迟60ms:
+
+![test](./doc_pic/testPic.jpg)
+
+其中client到server的RTT占27ms:
+
+```
+7 packets transmitted, 7 received, 0% packet loss, time 6003ms
+rtt min/avg/max/mdev = 25.649/27.907/32.317/2.044 ms
+```
+
+传输+解码+渲染耗时 [target_delay_ms](https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/media/base/media_channel.h;l=670;drc=1e6c1a39cbbc1dcad6e7828661d74d76463465ed;bpv=1;bpt=1):
+Target overall delay: network+decode+render, accounting for min_playout_delay_ms.
+
+![targetDelay](doc_pic/targetDelay.jpg)
+
+端到服务器 ICE RTT：
+
+![ice](doc_pic/ice.jpg)

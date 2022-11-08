@@ -70,15 +70,14 @@ bazel build \
   --copt="-Wno-error=unused-parameter" \
   --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --verbose_failures --test_output=all //src:$kServerName
 
-rm -rf src/$kServerName
-cp bazel-bin/src/$kServerName src
+rm -rf $kServerName
+cp bazel-bin/src/$kServerName .
 
 # deploy
 # rsync --port=22222 -vzrtp --progress --password-file=/data/home/taylorjiang/rsync/rsync.pass $kServerName devsync@9.218.129.75::workspace || true
 cd $g_dst_dir
 
 # 3, run server
-cd src
 # Could move to a single file meaning run server
 runSvr()
 {

@@ -93,7 +93,7 @@ bool IsLanAddr(const std::string& ip) {
          (uiHostIP == 0x7f000001);
 }
 
-// to move to tylib
+// to move to tylib, now no use
 int GetLanIp(std::string* o_ip) {
   // should also provided by env var or cmd option
   const std::string& kIpFile = "conf/LOCAL_IP.txt";
@@ -161,7 +161,7 @@ int HandleRequest() {
   ssize_t iRecvLen =
       recvfrom(g_sock_fd, vBufReceive.data(), vBufReceive.size(), 0,
                (struct sockaddr*)&address, (socklen_t*)&addr_size);
-  tylog("=============== recv len=%ld (application layer)", iRecvLen);
+  tylog("========================= recv len=%ld (application layer) =========================", iRecvLen);
   if (iRecvLen < -1) {
     // should not appear
     tylog("unknown errno %d[%s]", errno, strerror(errno));
@@ -417,6 +417,8 @@ int mkdir_p(const char* path, mode_t mode) {
   } while (0)
 
 int main(int argc, char* argv[]) {
+  int ret = 0;
+
   INIT_LOG_V2("./log/",
               tylib::MLOG_F_TIME | tylib::MLOG_F_FILELINE | tylib::MLOG_F_FUNC,
               6, 512 * 1024 * 1024);
@@ -428,15 +430,6 @@ int main(int argc, char* argv[]) {
                    OPENSSL_VERSION_NUMBER,
                    OPENSSL_VERSION_NUMBER < 0x10100000L);
 
-  std::string localip;
-  int ret = GetLanIp(&localip);
-  if (ret) {
-    tylogAndPrintfln("get lan ip fail, ret=%d", ret);
-
-    return ret;
-  }
-  tylogAndPrintfln("important: get local ip=%s", localip.data());
-
   // step 1: create socket
   g_sock_fd = socket(PF_INET, SOCK_DGRAM, 0);
   if (ret < 0) {
@@ -446,14 +439,15 @@ int main(int argc, char* argv[]) {
   // TODO set nonblock
 
   // step 2: bind
+  const char* kInterfaceAny = "0.0.0.0";  // maybe should in config
+  const int kListenPort = 8090;
+
   struct sockaddr_in address;
   bzero(&address, sizeof(address));
   address.sin_family = AF_INET;
-  inet_pton(AF_INET, localip.data(),
-            &address.sin_addr);  // taylor to change addr
-  const int kListenPort = 8090;
+  inet_pton(AF_INET, kInterfaceAny, &address.sin_addr);
   address.sin_port = htons(kListenPort);
-  tylogAndPrintfln("to bind to %s:%d", localip.data(), kListenPort);
+  tylogAndPrintfln("to bind to %s:%d", kInterfaceAny, kListenPort);
 
   ret = bind(g_sock_fd, reinterpret_cast<const sockaddr*>(&address),
              sizeof(address));

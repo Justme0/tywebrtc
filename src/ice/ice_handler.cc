@@ -128,6 +128,7 @@ int IceHandler::DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
     int AttributeLen = ntohs(pMsgComm->Len);
     char *pData = (char *)pMsgComm + kStunAttributeCommonFieldLength;
 
+    // opt: print readable
     tylog("AttributeType=%hu, attr len=%d, pData=%p", AttributeType,
           AttributeLen, pData);
 
