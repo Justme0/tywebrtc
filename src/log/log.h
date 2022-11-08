@@ -1,3 +1,5 @@
+// A poor but simple log
+
 #ifndef LOG_LOG_H_
 #define LOG_LOG_H_
 
@@ -8,6 +10,23 @@
 #include <iostream>
 #include <string>
 
+#include "tylib/log/log.h"
+#include "tylib/time/timer.h"
+
+// https://stackoverflow.com/questions/478898/how-do-i-execute-a-command-and-get-the-output-of-the-command-within-c-using-po
+// inline std::string ExecLinuxCmd(const char *cmd) {
+//   std::array<char, 128> buffer;
+//   std::string result;
+//   std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+//   if (!pipe) {
+//     throw std::runtime_error("popen() failed!");
+//   }
+//   while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+//     result += buffer.data();
+//   }
+//   return result;
+// }
+
 // to move to tylib
 // C++17 can use `std::filesystem::file_size`
 inline std::ifstream::pos_type filesize(const std::string &filename) {
@@ -16,17 +35,26 @@ inline std::ifstream::pos_type filesize(const std::string &filename) {
 }
 
 // to optimize performance
-inline void HandleFileSize() {
-  // should in config file
-  const std::string &g_kLogFile = "./tywebrtc.log";
-  int64_t size = filesize(g_kLogFile);
-  // move to config file
-  const int64_t g_kMaxSingleFileByte = 20 * 1024 * 1024;
-  if (size >= g_kMaxSingleFileByte) {
-    system("mv ./tywebrtc.log ./tywebrtc.log.1");  // to use config and cross
-                                                   // platform
-  }
-}
+// inline std::string HandleFileSize() {
+//   const int kReserveRecentLogFileNumber = 10;
+//   const int64_t kMaxSingleFileByte = 200 * 1024 * 1024;
+//
+//   // should in config file
+//   int64_t size = filesize(g_kLogFile);
+//   // move to config file
+//   if (size >= g_kMaxSingleFileByte) {
+//     system("mv ./tywebrtc.log ./tywebrtc.log.1");  // to use config and cross
+//                                                    // platform
+//   }
+//
+//   struct tm t;
+//   time_t nowSec = g_now_ms / 1000;
+//   localtime_r(&nowSec, &t);
+//   char tmp[1024];
+//   snprintf(tmp, sizeof(tmp), "tywebrtc_%4d%02d%02d_%02d%02d%02d.log",
+//            t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min,
+//            t.tm_sec);
+// }
 
 // get last file name, not path
 inline const char *CleanFileName(const char *fileName) {
@@ -50,12 +78,12 @@ void tylogWithMoreInfo(const char *fileName, int lineNumber,
 inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
                               const char *functionName, const char *format,
                               ...) {
-  HandleFileSize();
+  // HandleFileSize();
 
   std::ofstream outfile;
   // append instead of overwrite, maybe fail?
-  // TODO: roll log and reserve recent N files
   // why append mode not work?
+
   const std::string &g_kLogFile = "./tywebrtc.log";
   outfile.open(g_kLogFile, std::ios_base::app);
 
@@ -74,7 +102,7 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
 
   char timeBuffer[50];
   snprintf(timeBuffer, sizeof(timeBuffer),
-           "%4d-%02d-%02d %02d:%02d:%02d.%03d %03d", tm.tm_year + 1900,
+           "%4d-%02d-%02d %02d:%02d:%02d.%03d%03d", tm.tm_year + 1900,
            tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, ms, us);
 
   outfile << timeBuffer;
@@ -86,7 +114,7 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
   outfile << ":" << lineNumber;
 
   // * function name
-  outfile << " " << functionName << "()";
+  outfile << " " << functionName;
 
   // * user's content
   const int kUserContentMaxLengthByte = 8 * 1024;
@@ -106,12 +134,12 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
                                           // style to escape string copy
 }
 
-#define tylog(format, arg...) \
-  tylogWithMoreInfo(__FILE__, __LINE__, __func__, format, ##arg)
+#define tylog(format, arg...) MLOG_NORMAL(MLOG_DEF_LOGGER, format, ##arg);
+// mlogWithMoreInfo(__FILE__, __LINE__, __func__, format, ##arg)
 
-#define tylogAndPrintfln(format, arg...)                          \
-  tylogWithMoreInfo(__FILE__, __LINE__, __func__, format, ##arg); \
-  printf(format, ##arg);                                          \
+#define tylogAndPrintfln(format, arg...)       \
+  MLOG_NORMAL(MLOG_DEF_LOGGER, format, ##arg); \
+  printf(format, ##arg);                       \
   std::cout << std::endl
 
 #endif  // LOG_LOG_H_

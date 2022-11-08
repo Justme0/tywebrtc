@@ -9,6 +9,7 @@
 #include "tylib/ip/ip.h"
 #include "tylib/string/any_to_string.h"
 
+#include "global_tmp/global_tmp.h"
 #include "log/log.h"
 #include "pc/peer_connection.h"
 #include "rtp/pack_unpack/rtp_to_h264.h"
@@ -386,34 +387,89 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     tylog("recv rtp=%s (maybe out-of-order)", rtpHeader.ToString().data());
 
     SSRCInfo &ssrcInfo = this->ssrcInfoMap_[rtpHeader.getSSRC()];
+
+    const uint16_t itemSeq = rtpHeader.getSeqNumber();
+    int64_t itemCycle = 0;
+
+    // monitor corner cass 12 packet
+    if (itemSeq >= 65530 || itemSeq <= 5) {
+      tylog("monitor corner case, packet=%s.", rtpHeader.ToString().data());
+    }
+
+    // update 3 var: ssrcInfo.biggestSeq, ssrcInfo.biggestCycle, itemCycle
+    if (itemSeq == ssrcInfo.biggestSeq) {
+      // todo more logic
+      tylog("recv repeated rtp packet, ignoer it=%s.",
+            rtpHeader.ToString().data());
+      itemCycle = ssrcInfo.biggestCycle;
+    } else if (itemSeq > ssrcInfo.biggestSeq) {
+      if (AheadOf(itemSeq, ssrcInfo.biggestSeq)) {
+        // case 1 recv newer, not rollback, most common case
+        // ssrcInfo.biggestCycle not change
+        ssrcInfo.biggestSeq = itemSeq;
+        itemCycle = ssrcInfo.biggestCycle;
+      } else {
+        // case 2 recv old, but is last cycle
+        if (ssrcInfo.biggestCycle <= 0) {
+          // todo more logic, should return?
+          tylog("recv shit packet, ignore it=%s.", rtpHeader.ToString().data());
+          assert(!"should not reach here unless hacker attacks us, now we assert it");
+        } else {
+          itemCycle = ssrcInfo.biggestCycle - 1;  // notice
+          tylog("recv old packet=%s. also old cycle",
+                rtpHeader.ToString().data());
+        }
+      }
+    } else {
+      // itemSeq < ssrcInfo.biggestSeq
+      // e.g. ssrcInfo.biggestSeq is 65535, itemSeq is 0
+      if (AheadOf(itemSeq, ssrcInfo.biggestSeq)) {
+        // case 3, recv newer, but rollback
+        ssrcInfo.biggestSeq = itemSeq;
+        ++ssrcInfo.biggestCycle;  // key
+        itemCycle = ssrcInfo.biggestCycle;
+        tylog("recv newer packet=%s. seq rollback",
+              rtpHeader.ToString().data());
+      } else {
+        // case 4 recv old, same cycle
+        tylog("recv old packet=%s.", rtpHeader.ToString().data());
+        // ssrcInfo.biggestSeq, ssrcInfo.biggestCycle not change
+        itemCycle = ssrcInfo.biggestCycle;
+      }
+    }
+
+    // must save cycle for each packet, because may be different
+    RtpBizPacket rtpBizPacket(
+        std::move(const_cast<std::vector<char> &>(vBufReceive)), itemCycle);
+    assert(vBufReceive.empty());
+
     // hack
-    ssrcInfo.rtpReceiver.PushPacket(
-        std::move(const_cast<std::vector<char> &>(vBufReceive)));
+    ssrcInfo.rtpReceiver.PushToJitter(std::move(rtpBizPacket));
 
     assert(vBufReceive.empty());
 
-    std::vector<std::vector<char>> orderedPackets =
+    std::vector<RtpBizPacket> orderedPackets =
         ssrcInfo.rtpReceiver.PopOrderedPackets();
 
     tylog("pop jitter's OrderedPackets size=%zu", orderedPackets.size());
 
-    for (std::vector<char> &packet : orderedPackets) {
-      ret = DumpPacketH264(packet, ssrcInfo.h264Unpacketizer);
+    for (RtpBizPacket &packet : orderedPackets) {
+      ret = DumpPacketH264(packet.rtpRawPacket, ssrcInfo.h264Unpacketizer);
       if (ret) {
         tylog("dump uplink h264 ret=%d", ret);
         return ret;
       }
 
       ssrcInfo.rtpSender.Enqueue(std::move(packet));
-      assert(packet.empty());
+      assert(packet.rtpRawPacket.empty());
     }
 
     // downlink
-    std::vector<std::vector<char>> sendPackets = ssrcInfo.rtpSender.Dequeue();
+    std::vector<RtpBizPacket> sendPackets = ssrcInfo.rtpSender.Dequeue();
 
     tylog("send to peer packets size=%zu", sendPackets.size());
-    for (std::vector<char> &packet : sendPackets) {
-      ret = SendToPeer_(packet);
+    for (RtpBizPacket &packet : sendPackets) {
+      ret = SendToPeer_(packet.rtpRawPacket);
       if (ret) {
         tylog("send to peer ret=%d", ret);
         return ret;

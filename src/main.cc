@@ -14,10 +14,15 @@
 #include <string>
 #include <vector>
 
-#include "log/log.h"
-#include "pc/peer_connection.h"
 #include "tylib/ip/ip.h"
 #include "tylib/time/timer.h"
+
+#include "log/log.h"
+#include "pc/peer_connection.h"
+
+#include "global_tmp/global_tmp.h"
+
+// TODO: use tywebrtc namespace?
 
 int g_sock_fd;
 
@@ -35,93 +40,6 @@ std::string execCmd(const char* cmd) {
   }
   return result;
 }
-
-std::string g_localip;
-
-// TODO: should save to remote DB ? must refactor! Now we use singleton
-// OPT2: move to tylib
-class Singleton {
- public:
-  static Singleton& Instance() {
-    // 1. C++11: If control enters the declaration concurrently while the
-    // variable is being initialized, the concurrent execution shall wait for
-    // completion of the initialization.
-    // 2. Lazy evaluation.
-    static Singleton s;
-
-    return s;
-  }
-
-  struct ClientSrcId {
-    std::string ip;
-    int port;
-    ClientSrcId(const std::string& ip, int port) : ip(ip), port(port) {}
-
-    bool operator<(const ClientSrcId& that) const {
-      return std::tie(ip, port) < std::tie(that.ip, that.port);
-    }
-  };
-
-  int GetPeerConnectionSize() const { return client2PC_.size(); }
-
-  void CleanTimeoutPeerConnection() {
-    const int kPCDeadTimeoutMs = 10000;
-    for (auto it = this->client2PC_.begin(); it != client2PC_.end();) {
-      if (it->second->lastActiveTimeMs_ + kPCDeadTimeoutMs <
-          static_cast<int64_t>(g_now_ms)) {
-        tylog("timeout pc, clean it=%s.", it->second->ToString().data());
-        it = client2PC_.erase(it);
-      } else {
-        ++it;
-      }
-    }
-  }
-
-  // if construct map's value is expensive
-  // https://stackoverflow.com/questions/97050/stdmap-insert-or-stdmap-find
-  // here we can also use insert and update, but lower_bound is more general
-  // OPT: add ufrag logic
-  std::shared_ptr<PeerConnection> GetPeerConnection(const std::string& ip,
-                                                    int port,
-                                                    const std::string& ufrag) {
-    ClientSrcId clientSrcId{ip, port};
-    auto lb = client2PC_.lower_bound(clientSrcId);
-    tylog("client to pc map size=%zu", client2PC_.size());
-
-    if (lb != client2PC_.end() &&
-        !(client2PC_.key_comp()(clientSrcId, lb->first))) {
-      assert(nullptr != lb->second);
-      assert(lb->second->clientIP_ == ip && lb->second->clientPort_ == port);
-
-      tylog("get old pc done");
-      return lb->second;
-    } else {
-      // Use lb as a hint to insert, so it can avoid another lookup
-      // OPT: ICE未选上的地址也会为它生成PC，可优化为PC池
-      auto i = client2PC_.emplace_hint(
-          lb, std::make_pair(clientSrcId, std::make_shared<PeerConnection>()));
-      assert(nullptr != i->second);
-      i->second->StoreClientIPPort(ip, port);
-
-      tylog("new pc, ip=%s, port=%d, ufrag=%s", ip.data(), port, ufrag.data());
-      return i->second;
-    }
-  }
-
- private:
-  Singleton(const Singleton&) = delete;
-  Singleton& operator=(const Singleton&) = delete;
-
-  Singleton() {}
-
-  // don't use global variable STL
-  // taylor 定时清理超时会话（pc）
-  // std::map is not designed to work with objects which are not
-  // copy-constructible. But PeerConnection cannot be copy because its member
-  // has reference data member
-  // https://stackoverflow.com/questions/20972751/how-to-put-a-class-that-has-deleted-copy-ctor-and-assignment-operator-in-map
-  std::map<ClientSrcId, std::shared_ptr<PeerConnection>> client2PC_;
-};
 
 // @brief return get local ip number, maybe <= 0
 int GetEthAddrs(char* ips[], int num) {
@@ -178,7 +96,7 @@ bool IsLanAddr(const std::string& ip) {
 // to move to tylib
 int GetLanIp(std::string* o_ip) {
   // should also provided by env var or cmd option
-  const std::string& kIpFile = "../conf/LOCAL_IP.txt";
+  const std::string& kIpFile = "conf/LOCAL_IP.txt";
   std::ifstream infile(kIpFile);
   if (!(infile >> *o_ip)) {
     tylog("open %s fail", kIpFile.data());
@@ -464,7 +382,45 @@ static void InitTimer() {
   TimerManager::Instance()->AddTimer(new MonitorStateTimer);
 }
 
+int mkdir_p(const char* path, mode_t mode) {
+  const char* p;
+  p = strchr(path + 1, '/');
+
+  struct stat st;
+  while (1) {
+    if (!p) {
+      int n;
+      if ((n = strlen(path)) > 0 && path[n - 1] != '/') {
+        if (stat(path, &st) < 0 && errno == ENOENT &&
+            (mkdir(path, mode) < 0 || chmod(path, mode) < 0))
+          return -1;
+      }
+      break;
+    }
+
+    std::string name = std::string(path, p - path);
+
+    if (stat(name.c_str(), &st) < 0 && errno == ENOENT &&
+        (mkdir(name.c_str(), mode) < 0 || chmod(name.c_str(), mode) < 0))
+      return -1;
+
+    p = strchr(p + 1, '/');
+  }
+
+  return 0;
+}
+
+#define INIT_LOG_V2(path, format, level, size)                        \
+  do {                                                                \
+    mkdir_p(path, 0777);                                              \
+    tylib::MLOG_INIT(MLOG_DEF_LOGGER, level, format, path, "", size); \
+  } while (0)
+
 int main(int argc, char* argv[]) {
+  INIT_LOG_V2("./log/",
+              tylib::MLOG_F_TIME | tylib::MLOG_F_FILELINE | tylib::MLOG_F_FUNC,
+              6, 512 * 1024 * 1024);
+
   (void)argc;
   (void)argv;
   // before server launch, print log to standard out and file
@@ -472,13 +428,14 @@ int main(int argc, char* argv[]) {
                    OPENSSL_VERSION_NUMBER,
                    OPENSSL_VERSION_NUMBER < 0x10100000L);
 
-  int ret = GetLanIp(&g_localip);
+  std::string localip;
+  int ret = GetLanIp(&localip);
   if (ret) {
     tylogAndPrintfln("get lan ip fail, ret=%d", ret);
 
     return ret;
   }
-  tylogAndPrintfln("important: get local ip=%s", g_localip.data());
+  tylogAndPrintfln("important: get local ip=%s", localip.data());
 
   // step 1: create socket
   g_sock_fd = socket(PF_INET, SOCK_DGRAM, 0);
@@ -492,11 +449,11 @@ int main(int argc, char* argv[]) {
   struct sockaddr_in address;
   bzero(&address, sizeof(address));
   address.sin_family = AF_INET;
-  inet_pton(AF_INET, g_localip.data(),
+  inet_pton(AF_INET, localip.data(),
             &address.sin_addr);  // taylor to change addr
-  const int kListenPort = 8007;
+  const int kListenPort = 8090;
   address.sin_port = htons(kListenPort);
-  tylogAndPrintfln("to bind to %s:%d", g_localip.data(), kListenPort);
+  tylogAndPrintfln("to bind to %s:%d", localip.data(), kListenPort);
 
   ret = bind(g_sock_fd, reinterpret_cast<const sockaddr*>(&address),
              sizeof(address));

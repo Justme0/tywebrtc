@@ -8,13 +8,19 @@
 #include "transport/receiver/receiver.h"
 #include "transport/sender/sender.h"
 
+// don't include whole head file avoid recycle reference
 class PeerConnection;
 
 struct SSRCInfo {
+  SSRCInfo() : rtpReceiver(*this), rtpSender(*this) {}
+
   // why define ssrc's unpacketizer: save unpacked frame e.g. FU-A
   H264Unpacketizer h264Unpacketizer;
   RtpReceiver rtpReceiver;
   RtpSender rtpSender;
+
+  uint16_t biggestSeq = 0;
+  int64_t biggestCycle = 0;
 };
 
 class RtpHandler {

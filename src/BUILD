@@ -2,15 +2,37 @@ package(default_visibility = ["//visibility:public"])
 
 # bazel doc https://bazel.build/reference/be/c-cpp#cc_library
 cc_binary(
-    name = "server_tywebrtc",
-    srcs = glob(["**/*.cc", "**/*.h"]),
-	# hdrs = glob(["**/*.h"]),
+    name = "tywebrtc",
+    srcs = glob(["**/*.cc", "**/*.h"], exclude = ["**/*_test.cc"],),
+	  # hdrs = glob(["**/*.h"]),
     # includes = ['.'],
-	copts = ["-I src"],
-    linkopts = ["-l dl -pthreads"],
+	  copts = ["-I src"],
+    linkopts = ["-l dl -pthread"],
     deps = [
         "@tylib//:tylib",
         "@openssl//:openssl_package",
         "@srtp//:srtp_package",
     ],
+)
+
+
+# gtest at least C++14 compiler
+# http://google.github.io/googletest/quickstart-bazel.html
+cc_test(
+  name = "tywebrtc_test",
+  size = "small",
+  srcs = glob([
+    "**/*_test.cc",
+    "**/*.h"
+  ]),
+
+  copts = [
+    "-I src",
+    # "-Iexternal/googletest/include",
+  ],
+
+  deps = [
+    "@com_google_googletest//:gtest_main",
+    "@tylib//:tylib",
+  ],
 )

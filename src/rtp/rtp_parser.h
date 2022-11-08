@@ -7,11 +7,27 @@
 
 #include <limits>
 #include <memory>
+#include <utility>
+#include <vector>
 
 #include "log/log.h"
 #include "tylib/string/format_string.h"
 
-using PowerSeq = int64_t;
+#include "global_tmp/global_tmp.h"
+
+// define cycle as int64_t (use 47 bit at most, most significant bit for sign
+// if need), first value is 0. e.g. 8Mbps, each video packet is 1000 Byte, so
+// 8*2^20/8/1000=2^10 packets per second, 2^(47+16)/2^10/3600/24/365 =
+// 285616414 year, it's enough.
+// common case one cycle: 550kbps, 955B/s, 65535/(550000/8/955)/60=15min
+using PowerSeqT = int64_t;
+
+inline std::pair<int64_t, uint16_t> SplitPowerSeq(PowerSeqT powerSeq) {
+  int64_t cycle = powerSeq >> 16;
+  uint16_t seq = powerSeq & 0xFFFF;
+
+  return std::make_pair(cycle, seq);
+}
 
 #define VIDEO_RTP_EXTERN_NAME_LEN (2)   // 扩展位名字
 #define VIDEO_RTP_EXTERN_VALUE_LEN (4)  // 扩展数据长度单位为4个字节
@@ -20,6 +36,42 @@ using PowerSeq = int64_t;
 extern const std::string kMediaTypeRtcp;
 extern const std::string kMediaTypeVideo;
 extern const std::string kMediaTypeAudio;
+
+// @return "b - a"
+template <typename T, T M>
+inline typename std::enable_if<(M == 0), T>::type ForwardDiff(T a, T b) {
+  static_assert(std::is_unsigned<T>::value,
+                "Type must be an unsigned integer.");
+  return b - a;
+}
+
+template <typename T>
+inline T ForwardDiff(T a, T b) {
+  return ForwardDiff<T, 0>(a, b);
+}
+
+// @return if "a > b"
+template <typename T, T M>
+inline typename std::enable_if<(M == 0), bool>::type AheadOrAt(T a, T b) {
+  static_assert(std::is_unsigned<T>::value,
+                "Type must be an unsigned integer.");
+  const T maxDist = std::numeric_limits<T>::max() / 2 + T(1);
+  if (a - b == maxDist) return b < a;
+  return ForwardDiff(b, a) < maxDist;  // 0 < a-b < maxDist
+}
+
+template <typename T>
+inline bool AheadOrAt(T a, T b) {
+  return AheadOrAt<T, 0>(a, b);
+}
+
+// @return if "a > b"
+template <typename T, T M = 0>
+inline bool AheadOf(T a, T b) {
+  static_assert(std::is_unsigned<T>::value,
+                "Type must be an unsigned integer.");
+  return a != b && AheadOrAt<T, M>(a, b);
+}
 
 // to move to tylib
 inline void WriteBigEndian(char* data, uint32_t val, int max_byte) {
@@ -394,17 +446,6 @@ class RtpHeader {
   uint16_t getSeqNumber() const { return ntohs(seqnum); }
   void setSeqNumber(uint16_t aSeqNumber) { seqnum = htons(aSeqNumber); }
 
-  // define cycle as int64_t (use 47 bit at most, most significant bit for sign
-  // if need), first value is 0. e.g. 8Mbps, each video packet is 1000 Byte, so
-  // 8*2^20/8/1000=2^10 packets per second, 2^(47+16)/2^10/3600/24/365 =
-  // 285616414 year, it's enough
-  PowerSeq getPowerSeq() const {
-    uint64_t cycle = 0;
-    // assert(cycle < 2^48);
-    // fix: define cycle to external and save it
-    return (cycle << 16) + getSeqNumber();
-  }
-
   uint32_t getTimestamp() const { return ntohl(timestamp); }
   void setTimestamp(uint32_t aTimestamp) { timestamp = htonl(aTimestamp); }
 
@@ -498,6 +539,50 @@ class RtpHeader {
   uint32_t timestamp;
   uint32_t ssrc;
   // ... csrc
+};
+
+// RTP packet with biz info.
+// include raw packet and biz info(seq cycle, CSRC ...)
+struct RtpBizPacket {
+  // RtpBizPacket() = default;
+  // RtpBizPacket(const RtpBizPacket&) = default;
+
+  RtpBizPacket(std::vector<char>&& rtpRawPacket, int64_t cycle)
+      : rtpRawPacket(std::move(rtpRawPacket)), cycle(cycle) {}
+
+  // https://learn.microsoft.com/en-us/cpp/cpp/move-constructors-and-move-assignment-operators-cpp?view=msvc-170
+  RtpBizPacket(RtpBizPacket&& other) { *this = std::move(other); }
+
+  RtpBizPacket& operator=(RtpBizPacket&& other) {
+    if (this != &other) {
+      rtpRawPacket = std::move(other.rtpRawPacket);
+      cycle = other.cycle;
+    }
+
+    return *this;
+  }
+
+  bool operator<(const RtpBizPacket& other) const {
+    return this->GetPowerSeq() < other.GetPowerSeq();
+  }
+
+  PowerSeqT GetPowerSeq() const {
+    return (cycle << 16) |
+           reinterpret_cast<const RtpHeader*>(rtpRawPacket.data())
+               ->getSeqNumber();
+  }
+
+  std::string ToString() const {
+    return tylib::format_string(
+        "{rtp=%s, cycle=%ld}",
+        reinterpret_cast<const RtpHeader*>(rtpRawPacket.data())
+            ->ToString()
+            .data(),
+        cycle);
+  }
+
+  std::vector<char> rtpRawPacket;
+  int64_t cycle = 0;
 };
 
 // padding (P): 1 bit

@@ -23,7 +23,7 @@ enum FuDefs { kSBit = 0x80, kEBit = 0x40, kRBit = 0x20 };
 struct VideoFuIndicator {
   uint8_t type : 5;  // nalu的类型，RFC3984中FU-A为28，FU-B为29
   uint8_t
-      nri : 2;  // 参考指示，0~3，这里对于单一nalu，将会使用2作为一组的数据包的结束
+      nri : 2;    // 参考指示，0~3，这里对于单一nalu，将会使用2作为一组的数据包的结束
   uint8_t f : 1;  // 强制0位，无语法冲突为0，否则为1
 };
 
@@ -91,22 +91,22 @@ inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
       return "NAL unit - Filler data";
     case kVideoNaluUnitSpsExtn:
       return "NAL unit - Sequence parameter set extension";
-      // "NAL unit - Prefix" // 14
-      // "NAL unit - Subset sequence parameter set" // 15
-      // "NAL unit - Reserved" // 16
-      // "NAL unit - Reserved" // 17
-      // "NAL unit - Reserved" // 18
-      // "NAL unit - Coded slice of an auxiliary coded picture without
-      // partitioning" // 19
-      // "NAL unit - Coded slice extension" // 20
-      // "NAL unit - Coded slice extension for depth view components" // 21
-      // "NAL unit - Reserved" // 22
-      // "NAL unit - Reserved" // 23
+    // "NAL unit - Prefix" // 14
+    // "NAL unit - Subset sequence parameter set" // 15
+    // "NAL unit - Reserved" // 16
+    // "NAL unit - Reserved" // 17
+    // "NAL unit - Reserved" // 18
+    // "NAL unit - Coded slice of an auxiliary coded picture without
+    // partitioning" // 19
+    // "NAL unit - Coded slice extension" // 20
+    // "NAL unit - Coded slice extension for depth view components" // 21
+    // "NAL unit - Reserved" // 22
+    // "NAL unit - Reserved" // 23
     case kH264StapA:
       return "Single-time aggregation packet A (STAP-A)";
-      //  "Single-time aggregation packet B (STAP-B)" // 25
-      // "Multi-time aggregation packet 16 (MTAP16)" // 26
-      // "Multi-time aggregation packet 24 (MTAP24)" // 27
+    //  "Single-time aggregation packet B (STAP-B)" // 25
+    // "Multi-time aggregation packet 16 (MTAP16)" // 26
+    // "Multi-time aggregation packet 24 (MTAP24)" // 27
     case kH264FuA:
       return "Fragmentation unit A (FU-A)";
     // "Fragmentation unit B (FU-B)" // 29
@@ -115,6 +115,6 @@ inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
     default:
       return tylib::format_string("Unknown[%d]", v);
   }
-};
+}
 
 #endif  //  RTP_PACK_UNPACK_PACK_UNPACK_COMMON_H_

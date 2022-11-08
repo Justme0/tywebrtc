@@ -1,23 +1,31 @@
 #ifndef TRANSPORT_RECEIVER_RECEIVER_H_
 #define TRANSPORT_RECEIVER_RECEIVER_H_
 
-#include <map>
+#include <set>
 #include <vector>
 
 #include "rtp/rtp_parser.h"
 
+class SSRCInfo;
+
+const PowerSeqT kShitRecvPowerSeqInitValue = -1;
+
 class RtpReceiver {
  public:
-  void PushPacket(std::vector<char>&& vBufReceive);
-  std::vector<std::vector<char>> PopOrderedPackets();
+  explicit RtpReceiver(SSRCInfo& ssrcInfo);
+
+  void PushToJitter(RtpBizPacket&& rtpBizPacket);
+  std::vector<RtpBizPacket> PopOrderedPackets();
   int GetJitterSize() const;
 
  private:
+  SSRCInfo& belongingSSRCInfo_;
+
   // must be ordered, cannot be hashmap
-  std::map<PowerSeq, std::vector<char>> jitterBuffer_;
+  std::set<RtpBizPacket> jitterBuffer_;
 
   // mark last popped one, should reserve rtp for nack,
-  PowerSeq lastSeq_ = -1;
+  PowerSeqT lastPowerSeq_ = kShitRecvPowerSeqInitValue;
 };
 
 #endif  //   TRANSPORT_RECEIVER_RECEIVER_H_

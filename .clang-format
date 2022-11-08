@@ -1,6 +1,6 @@
-Language: Cpp
+# Language: Cpp
 BasedOnStyle: Google
 
 # Different version of clang-format behave differently,
 # so we define style explicitly.
-IncludeBlocks: Preserve
+# IncludeBlocks: Preserve

@@ -69,10 +69,31 @@ void IceHandler::CreatLocalUserStunInfo() {
   tylog("ufrag=%s, pws=%s", iceInfo_.LocalUfrag, iceInfo_.LocalPassWord);
 }
 
-extern std::string g_localip;  // taylor change
+// https://datatracker.ietf.org/doc/html/rfc8445
+// 5.1.1.3.  Computing Foundations
+//
+//    The ICE agent assigns each candidate a foundation.  Two candidates
+//    have the same foundation when all of the following are true:
+//
+//    o  They have the same type (host, relayed, server reflexive, or peer
+//       reflexive).
+//
+//    o  Their bases have the same IP address (the ports can be different).
+//
+//    o  For reflexive and relayed candidates, the STUN or TURN servers
+//       used to obtain them have the same IP address (the IP address used
+//       by the agent to contact the STUN or TURN server).
+//
+//    o  They were obtained using the same transport protocol (TCP, UDP).
+//
+//    Similarly, two candidates have different foundations if their types
+//    are different, their bases have different IP addresses, the STUN or
+//    TURN servers used to obtain them have different IP addresses (the IP
+//    addresses used by the agent to contact the STUN or TURN server), or
+//    their transport protocols are different.
 int IceHandler::CreatUserFoundation() {
   unsigned int LocalOuterIP =
-      inet_network(g_localip.data());  // taylor host order
+      tylib::stringToHostOrder("33.2.3.2");  // taylor tmp, now not use
 
   snprintf(iceInfo_.Foundation, sizeof(iceInfo_.Foundation), "%c%x",
            IceGetTypePrefix(ICE_CAND_TYPE_SRFLX), LocalOuterIP);
@@ -274,9 +295,7 @@ int IceHandler::EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
   return sizeof(STUN_MSG_INTEGRITY);
 }
 
-typedef struct Crc32Context {
-  unsigned int CrcState;
-} CRC32_CTX;
+typedef struct Crc32Context { unsigned int CrcState; } CRC32_CTX;
 
 void Crc32Init(CRC32_CTX *ctx) { ctx->CrcState = 0; }
 
@@ -406,8 +425,9 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
     return ret;
   }
 
-  if (bUseCandidate && EnumStateMachine::GOT_USE_CANDIDATE_ICE >
-                           belongingPeerConnection_.stateMachine_) {
+  if (bUseCandidate &&
+      EnumStateMachine::GOT_USE_CANDIDATE_ICE >
+          belongingPeerConnection_.stateMachine_) {
     // When in communication, will always recv use-candiate ice, so check
     // machine state before assigning
     belongingPeerConnection_.stateMachine_ =

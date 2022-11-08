@@ -10,41 +10,6 @@
 #include "rtp/pack_unpack/pack_unpack_common.h"
 #include "rtp/rtp_parser.h"
 
-// to move to tylib
-template <typename T, T M>
-inline typename std::enable_if<(M == 0), T>::type ForwardDiff(T a, T b) {
-  static_assert(std::is_unsigned<T>::value,
-                "Type must be an unsigned integer.");
-  return b - a;
-}
-
-template <typename T>
-inline T ForwardDiff(T a, T b) {
-  return ForwardDiff<T, 0>(a, b);
-}
-
-template <typename T, T M>
-inline typename std::enable_if<(M == 0), bool>::type AheadOrAt(T a, T b) {
-  static_assert(std::is_unsigned<T>::value,
-                "Type must be an unsigned integer.");
-  const T maxDist = std::numeric_limits<T>::max() / 2 + T(1);
-  if (a - b == maxDist) return b < a;
-  return ForwardDiff(b, a) < maxDist;  // 0 < a-b < maxDist
-}
-
-template <typename T>
-inline bool AheadOrAt(T a, T b) {
-  return AheadOrAt<T, 0>(a, b);
-}
-
-// "a > b"
-template <typename T, T M = 0>
-inline bool AheadOf(T a, T b) {
-  static_assert(std::is_unsigned<T>::value,
-                "Type must be an unsigned integer.");
-  return a != b && AheadOrAt<T, M>(a, b);
-}
-
 static const uint8_t kNalHeaderSize = 1;
 static const uint8_t kFuAHeaderSize = 2;
 static const uint8_t kLengthFieldSize = 2;
@@ -241,9 +206,9 @@ int H264Unpacketizer::ParseStapAStartOffsets(const char *nalu_ptr,
   return 0;
 }
 
-// move to tylib
+// move to tylib, use string_view
 // pool performance, should re-design interface
-std::string ConvertToReadableHex(std::string_view s) {
+std::string ConvertToReadableHex(const std::vector<char> &s) {
   std::string hexString;
   bool first = true;
   for (unsigned char c : s) {
@@ -452,9 +417,7 @@ int H264Unpacketizer::Unpacketize(const std::vector<char> &vBufReceive,
     ret = ParseFuaNalu(vBufReceive);
     if (ret) {
       tylog("parseFuaNalu ret=%d, hexString=%s.", ret,
-            ConvertToReadableHex(
-                std::string_view{vBufReceive.data(), vBufReceive.size()})
-                .data());
+            ConvertToReadableHex(vBufReceive).data());
 
       return ret;
     }
@@ -462,9 +425,7 @@ int H264Unpacketizer::Unpacketize(const std::vector<char> &vBufReceive,
     ret = ParseStapAOrSingleNalu(vBufReceive);
     if (ret) {
       tylog("parseStapAOrSingleNalu ret=%d, hexString=%s.", ret,
-            ConvertToReadableHex(
-                std::string_view{vBufReceive.data(), vBufReceive.size()})
-                .data());
+            ConvertToReadableHex(vBufReceive).data());
 
       return ret;
     }
