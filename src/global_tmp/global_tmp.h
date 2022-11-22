@@ -8,6 +8,16 @@
 #include <memory>
 #include <string>
 
+extern int g_UplinkAudioSsrc;  // taylor to make dynamic
+// const int kUplinkAudioPayloadType = 111;
+extern int g_UplinkVideoSsrc;
+// const int kUplinkVideoPayloadType = 125;  // H.264
+
+const int kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
+const int kDownlinkAudioPayloadType = 111;
+const int kDownlinkVideoSsrc = 33697348;    // taylor to make dynamic
+const int kDownlinkVideoPayloadType = 125;  // H.264
+
 class PeerConnection;
 
 // TODO: should save to remote DB ? must refactor! Now we use singleton

@@ -14,11 +14,10 @@ class MediaData {
  public:
   MediaData() = default;
 
-  MediaData(MediaType media_type, std::string &&data, uint32_t payload_type,
-            uint32_t rtp_timestamp, uint64_t timestamp,
-            int composition_timestamp, VideoRotation rotate_angle)
-      : media_type_(media_type),
-        data_(data),
+  MediaData(std::string &&data, uint32_t payload_type, uint32_t rtp_timestamp,
+            uint64_t timestamp, int composition_timestamp,
+            VideoRotation rotate_angle)
+      : data_(data),
         payload_type_(payload_type),
         rtp_timestamp_(rtp_timestamp),
         timestamp_(timestamp),
@@ -27,8 +26,6 @@ class MediaData {
 
   // copy constructor should use move
 
-  // should be private
-  MediaType media_type_ = kMediaMax;
   std::string data_;
   uint32_t payload_type_ = 0;
   uint32_t rtp_timestamp_ = 0;
@@ -95,13 +92,13 @@ class H264Unpacketizer {
   int DumpRawStream(const std::string &rawStream, uint32_t ssrc);
 
  private:
-  int UpdataSps(const char *data, size_t len);
-  int UpdataPps(const char *data, size_t len);
+  int UpdataSps_(const char *data, size_t len);
+  int UpdataPps_(const char *data, size_t len);
 
-  int ParseFuaNalu(const std::vector<char> &vBufReceive);
-  int ParseStapAStartOffsets(const char *nalu_ptr, int length_remaining,
-                             std::vector<size_t> *offsets);
-  int ParseStapAOrSingleNalu(const std::vector<char> &vBufReceive);
+  int ParseFuaNalu_(const std::vector<char> &vBufReceive);
+  int ParseStapAStartOffsets_(const char *nalu_ptr, int length_remaining,
+                              std::vector<size_t> *offsets);
+  int ParseStapAOrSingleNalu_(const std::vector<char> &vBufReceive);
 
  private:
   // key is ssrc

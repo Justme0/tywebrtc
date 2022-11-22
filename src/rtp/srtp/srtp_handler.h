@@ -27,8 +27,6 @@ class SrtpHandler {
   bool SetRtpParams(const std::string &sending_key,
                     const std::string &receiving_key);
 
-  // inline bool IsActive() { return active_; }
-
   // void SetStreamId(const std::string &stream_id);
 
  private:

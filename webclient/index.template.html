@@ -3,6 +3,7 @@
 
 <head>
     <meta http-equiv='Content-Type' content='text/html; charset=UTF-8'>
+    <link rel="shortcut icon" href="#"/>
     <title> webrtc test </title>
     <style type="text/css">
         .room {
@@ -16,6 +17,7 @@
     </style>
 
     <script type='text/javascript'>
+        // ref: https://github.com/webrtc/samples/blob/gh-pages/src/content/peerconnection/pc1/js/main.js
         window.localStorage.setItem('debug', '*');
 
         async function getRemoteStream(e) {
@@ -46,6 +48,22 @@
             }
         }
 
+        let pc;
+        async function unpublish() {
+            console.log("To unpublish")
+            let videoElement = document.getElementById('video_container_publish');
+
+            const tracks = videoElement.srcObject.getTracks();
+            tracks.forEach((track) => {
+                track.stop();
+            });
+
+            videoElement.srcObject = null;
+
+            pc.close();
+            pc = null;
+        }
+
         async function publish() {
             console.log("To publish")
 
@@ -70,7 +88,7 @@
             console.log("to get media done")
             videoElement.srcObject = stream;
 
-            var pc = new RTCPeerConnection();
+            pc = new RTCPeerConnection();
 
             // for uplink
             await pc.addTransceiver(stream.getAudioTracks()[0], {
@@ -104,9 +122,9 @@ o=- 7595655801978680453 2 IN IP4 127.0.0.1
 s=-
 t=0 0
 a=ice-lite
-a=group:BUNDLE 0 1
+a=group:BUNDLE 0 1 2 3
 a=msid-semantic: WMS 5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV
-m=audio 9 UDP/TLS/RTP/SAVPF 111 103 104 9 0 8 126
+m=audio 9 UDP/TLS/RTP/SAVPF 111
 c=IN IP4 0.0.0.0
 a=rtcp:9 IN IP4 0.0.0.0
 a=candidate:1 1 udp 1686052607 36.155.205.204 8090 typ srflx raddr 36.155.205.204 rport 8090 generation 0
@@ -116,13 +134,13 @@ a=fingerprint:sha-256 55:9B:3E:43:91:2D:66:79:0F:B6:84:45:B3:47:3F:56:D4:4C:9E:1
 a=setup:active
 a=mid:0
 a=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level
-a=sendrecv
+a=recvonly
 a=rtcp-mux
 a=rtpmap:111 opus/48000/2
 a=rtcp-fb:111 nack
+a=rtcp-fb:111 rrtr
 a=fmtp:111 minptime=20;sprop-stereo=1;stereo=1
-a=rtpmap:126 telephone-event/8000
-m=video 9 UDP/TLS/RTP/SAVPF 125 107
+m=video 9 UDP/TLS/RTP/SAVPF 125
 c=IN IP4 0.0.0.0
 a=rtcp:9 IN IP4 0.0.0.0
 a=candidate:1 1 udp 1686052607 36.155.205.204 8090 typ srflx raddr 36.155.205.204 rport 8090 generation 0
@@ -133,7 +151,7 @@ a=setup:active
 a=mid:1
 a=extmap:2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
 a=extmap:14 urn:ietf:params:rtp-hdrext:toffset
-a=sendrecv
+a=recvonly
 a=rtcp-mux
 a=rtcp-rsize
 a=rtpmap:125 H264/90000
@@ -143,9 +161,7 @@ a=rtcp-fb:125 nack pli
 a=rtcp-fb:125 rrtr
 a=rtcp-fb:125 remb
 a=fmtp:125 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f;x-google-start-bitrate=400
-a=rtpmap:107 rtx/90000
-a=fmtp:107 apt=125
-m=audio 9 UDP/TLS/RTP/SAVPF 111 103 104 9 0 8 126
+m=audio 9 UDP/TLS/RTP/SAVPF 111
 c=IN IP4 0.0.0.0
 a=rtcp:9 IN IP4 0.0.0.0
 a=candidate:1 1 udp 1686052607 36.155.205.204 8090 typ srflx raddr 36.155.205.204 rport 8090 generation 0
@@ -159,8 +175,8 @@ a=sendonly
 a=rtcp-mux
 a=rtpmap:111 opus/48000/2
 a=rtcp-fb:111 nack
+a=rtcp-fb:111 rrtr
 a=fmtp:111 minptime=20;sprop-stereo=1;stereo=1
-a=rtpmap:126 telephone-event/8000
 a=ssrc:16854838 cname:YZcxBwerFFm6GH69
 a=ssrc:16854838 msid:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV 128f4fa0-81dd-4c3a-bbcd-22e71e29d178
 a=ssrc:16854838 mslabel:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV
@@ -180,10 +196,10 @@ a=sendonly
 a=rtcp-mux
 a=rtcp-rsize
 a=rtpmap:125 H264/90000
+a=rtcp-fb:125 goog-remb
 a=rtcp-fb:125 ccm fir
 a=rtcp-fb:125 nack
 a=rtcp-fb:125 nack pli
-a=rtcp-fb:125 goog-remb
 a=rtcp-fb:125 rrtr
 a=fmtp:125 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f;sps-pps-idr-in-keyframe=1
 a=rtpmap:96 VP8/90000
@@ -224,9 +240,9 @@ a=ssrc:50472669 label:1d7fc300-9889-4f94-9f35-c0bcc77a260d
 
     <div>
         <button onclick="publish()">Publish</button>
-
+        &nbsp;&nbsp;&nbsp;&nbsp;
+        <button onclick="unpublish()">Unpublish</button>
     </div>
-
 
     <br />
     <br />

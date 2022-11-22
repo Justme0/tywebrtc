@@ -43,7 +43,7 @@ cd $g_dst_dir
 # force format code :)
 # not emit failure if no clang-format
 # mac (FreeBSD style) find cmd must specify directory
-find . | egrep ".+\.(c|cc|h)$" | xargs clang-format -i || true
+find src third_party/tylib | egrep ".+\.(c|cc|h)$" | xargs clang-format -i || true
 
 # compile
 # make V=1

@@ -134,7 +134,12 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
                                           // style to escape string copy
 }
 
-#define tylog(format, arg...) MLOG_NORMAL(MLOG_DEF_LOGGER, format, ##arg);
+// temp reserve last 10 log files
+#define tylog(format, arg...) MLOG_NORMAL(MLOG_DEF_LOGGER, format, ##arg)
+
+// very poor preformance:
+// system("ls -tr log/tywebrtc*log | head -n -20 | xargs rm -f")
+
 // mlogWithMoreInfo(__FILE__, __LINE__, __func__, format, ##arg)
 
 #define tylogAndPrintfln(format, arg...)       \

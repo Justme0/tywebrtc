@@ -68,8 +68,8 @@ std::vector<MediaData> FrameBuffer::PopFrames() {
   std::vector<MediaData> v;
   for (FrameItem &f : frames) {
     // move raw data, frames will be cleared
-    v.emplace_back(kMediaVideo, std::move(f.rawData), f.payload_type,
-                   f.timestamp, f.timestamp, f.cts, kVideoRotation0);
+    v.emplace_back(std::move(f.rawData), f.payload_type, f.timestamp,
+                   f.timestamp, f.cts, kVideoRotation0);
   }
   frames.clear();
 
@@ -82,7 +82,7 @@ std::vector<MediaData> FrameBuffer::PopFrames() {
 // use constexpr?
 const std::string kH264StartCodeCharArray({0, 0, 0, 1});
 
-int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
+int H264Unpacketizer::ParseFuaNalu_(const std::vector<char> &vBufReceive) {
   const RtpHeader &rtpHeader =
       *reinterpret_cast<const RtpHeader *>(vBufReceive.data());
   char const *const payload = vBufReceive.data() + rtpHeader.getHeaderLength();
@@ -133,6 +133,7 @@ int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
     // +-+-+-+-+-+-+-+-+
     // |F|NRI|  Type   |
     // +---------------+
+    // https://datatracker.ietf.org/doc/html/rfc6184#section-5.3
     // https://segmentfault.com/a/1190000006698552?utm_source=sf-backlinks
     // The first bit of this sequence ( which is a 0 ) is the forbidden zero and
     // is used to verify if errors where encountered during the transmission of
@@ -172,9 +173,9 @@ int H264Unpacketizer::ParseFuaNalu(const std::vector<char> &vBufReceive) {
   return 0;
 }
 
-int H264Unpacketizer::ParseStapAStartOffsets(const char *nalu_ptr,
-                                             int length_remaining,
-                                             std::vector<size_t> *offsets) {
+int H264Unpacketizer::ParseStapAStartOffsets_(const char *nalu_ptr,
+                                              int length_remaining,
+                                              std::vector<size_t> *offsets) {
   size_t offset = 0;
   while (length_remaining > 0) {
     // Buffer doesn't contain room for additional nalu length.
@@ -225,7 +226,7 @@ std::string ConvertToReadableHex(const std::vector<char> &s) {
   return hexString;
 }
 
-int H264Unpacketizer::ParseStapAOrSingleNalu(
+int H264Unpacketizer::ParseStapAOrSingleNalu_(
     const std::vector<char> &vBufReceive) {
   int ret = 0;
   const RtpHeader &rtpHeader =
@@ -247,7 +248,7 @@ int H264Unpacketizer::ParseStapAOrSingleNalu(
       return -1;
     }
 
-    ret = ParseStapAStartOffsets(nalu_start, nalu_length, &nalu_start_offsets);
+    ret = ParseStapAStartOffsets_(nalu_start, nalu_length, &nalu_start_offsets);
     if (ret) {
       tylog("parseStapAStartOffsets ret=%d", ret);
 
@@ -290,14 +291,14 @@ int H264Unpacketizer::ParseStapAOrSingleNalu(
 
     switch (nalu.type) {
       case kVideoNaluSps:
-        ret = UpdataSps(payload + start_offset, nalu.size);
+        ret = UpdataSps_(payload + start_offset, nalu.size);
         if (ret) {
           return ret;
         }
         break;
 
       case kVideoNaluPps:
-        ret = UpdataPps(payload + start_offset, nalu.size);
+        ret = UpdataPps_(payload + start_offset, nalu.size);
         if (ret) {
           return ret;
         }
@@ -414,7 +415,7 @@ int H264Unpacketizer::Unpacketize(const std::vector<char> &vBufReceive,
   tylog("nalu type=%d[%s]", nal_type,
         enVideoH264NaluTypeToString(nal_type).data());
   if (nal_type == kH264FuA) {
-    ret = ParseFuaNalu(vBufReceive);
+    ret = ParseFuaNalu_(vBufReceive);
     if (ret) {
       tylog("parseFuaNalu ret=%d, hexString=%s.", ret,
             ConvertToReadableHex(vBufReceive).data());
@@ -422,7 +423,7 @@ int H264Unpacketizer::Unpacketize(const std::vector<char> &vBufReceive,
       return ret;
     }
   } else {
-    ret = ParseStapAOrSingleNalu(vBufReceive);
+    ret = ParseStapAOrSingleNalu_(vBufReceive);
     if (ret) {
       tylog("parseStapAOrSingleNalu ret=%d, hexString=%s.", ret,
             ConvertToReadableHex(vBufReceive).data());
@@ -441,7 +442,7 @@ int H264Unpacketizer::Unpacketize(const std::vector<char> &vBufReceive,
   return 0;
 }
 
-int H264Unpacketizer::UpdataSps(const char *data, size_t len) {
+int H264Unpacketizer::UpdataSps_(const char *data, size_t len) {
   if (len >= VIDEO_MAX_SPP_PPS_LEN) {
     tylog("error: recv sps len=%zu too big", len);
     return -1;
@@ -453,7 +454,7 @@ int H264Unpacketizer::UpdataSps(const char *data, size_t len) {
   return 0;
 }
 
-int H264Unpacketizer::UpdataPps(const char *data, size_t len) {
+int H264Unpacketizer::UpdataPps_(const char *data, size_t len) {
   if (len >= VIDEO_MAX_SPP_PPS_LEN) {
     tylog("error: recv pps len=%zu too big", len);
     return -1;

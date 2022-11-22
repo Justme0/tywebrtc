@@ -5,6 +5,9 @@
 #include "log/log.h"
 #include "pc/peer_connection.h"
 
+int g_UplinkAudioSsrc;  // taylor to make dynamic
+int g_UplinkVideoSsrc;
+
 // if construct map's value is expensive
 // https://stackoverflow.com/questions/97050/stdmap-insert-or-stdmap-find
 // here we can also use insert and update, but lower_bound is more general
@@ -36,7 +39,7 @@ std::shared_ptr<PeerConnection> Singleton::GetPeerConnection(
 }
 
 void Singleton::CleanTimeoutPeerConnection() {
-  const int kPCDeadTimeoutMs = 20 * 1000;
+  const int kPCDeadTimeoutMs = 30 * 1000;
   for (auto it = this->client2PC_.begin(); it != client2PC_.end();) {
     if (it->second->lastActiveTimeMs_ + kPCDeadTimeoutMs <
         static_cast<int64_t>(g_now_ms)) {

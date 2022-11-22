@@ -1,35 +1,121 @@
-// from licode
-
-#ifndef RTP_RTCP_PARSER_H_
-#define RTP_RTCP_PARSER_H_
+#ifndef RTP_RTCP_RTCP_PARSER_H_
+#define RTP_RTCP_RTCP_PARSER_H_
 
 #include <netinet/in.h>
 
-#include "log/log.h"
+#include <cstdint>
+
 #include "tylib/string/format_string.h"
 
-// RTCP Payload types
-enum {
-  RTCP_MIN_PT = 194,       // per https://tools.ietf.org/html/rfc5761
-  RTCP_Sender_PT = 200,    // RTCP Sender Report
-  RTCP_Receiver_PT = 201,  // RTCP Receiver Report
-  RTCP_SDES_PT = 202,
-  RTCP_BYE = 203,
-  RTCP_APP = 204,
-  RTCP_RTP_Feedback_PT = 205,  // RTCP Transport Layer Feedback Packet
-  RTCP_PS_Feedback_PT = 206,   // RTCP Payload Specific Feedback Packet
-  RTCP_XR_PT = 207,            // rfc3611
-  RTCP_MAX_PT = 223,
+#include "log/log.h"
+
+// if add new enum, modify ToString and rtcp handler switch case
+// should use polymorphism?
+// https://datatracker.ietf.org/doc/html/rfc5760#section-5
+// note: in RFC, "PT" in RTP is called "payload type", in RTCP is "packet type".
+// per https://tools.ietf.org/html/rfc5761
+// #define RTCP_MIN_PT         194
+// #define RTCP_MAX_PT         223
+enum class RtcpPacketType : uint8_t {
+  RTCP_MIN_PT = 192,        // for FIR
+  kFullIntraRequest = 192,  // use 206
+  // kNACK = 193, // use 205
+  kExtendedJitterReport = 195,
+  kSenderReport = 200,
+  kReceiverReport = 201,
+  kSDES = 202,
+  kBye = 203,
+  kApp = 204,
+  kGenericRtpFeedback = 205,  // NACK  RFC3550
+  kPayloadSpecificFeedback = 206,
+  kXrExtend = 207,
+  RTCP_MAX_PT = 223,  // include
 };
+
+inline std::string RtcpPacketTypeToString(RtcpPacketType type) {
+  switch (type) {
+    case RtcpPacketType::kFullIntraRequest:
+      return "FullIntraRequest";
+    case RtcpPacketType::kExtendedJitterReport:
+      return "ExtendedJitterReport";
+    case RtcpPacketType::kSenderReport:
+      return "SenderReport";
+    case RtcpPacketType::kReceiverReport:
+      return "ReceiverReport";
+    case RtcpPacketType::kSDES:
+      return "SDES";
+    case RtcpPacketType::kBye:
+      return "Bye";
+    case RtcpPacketType::kApp:
+      return "App";
+    case RtcpPacketType::kGenericRtpFeedback:
+      return "GenericRtpFeedback";
+    case RtcpPacketType::kPayloadSpecificFeedback:
+      return "PayloadSpecificFeedback";
+    case RtcpPacketType::kXrExtend:
+      return "XrExtend";
+    default:
+      return "Unknowon[" + std::to_string(static_cast<int>(type)) + "]";
+  }
+}
+
+// @brief check if RTCP
+// 72 to 76 is reserved for RTP
+// 77 to 79 is not reserver but they are not assigned we will block them
+// for RTCP 200 SR  == marker bit + 72
+// for RTCP 204 APP == marker bit + 76
+//
+//       RTCP
+//
+// FIR      full INTRA-frame request             192     [RFC2032] supported
+// NACK     negative acknowledgement             193     [RFC2032]
+// IJ       Extended inter-arrival jitter report 195
+// [RFC-ietf-avt-rtp-toffset-07.txt]
+// http://tools.ietf.org/html/draft-ietf-avt-rtp-toffset-07 SR       sender
+// report                        200     [RFC3551] supported RR receiver
+// report                      201     [RFC3551] supported SDES     source
+// description                   202     [RFC3551] supported BYE goodbye 203
+// [RFC3551] supported APP      application-defined                  204
+// [RFC3551] ignored RTPFB    Transport layer FB message           205
+// [RFC4585] supported PSFB     Payload-specific FB message          206
+// [RFC4585] supported XR       extended report                      207
+// [RFC3611] supported
+// 205       RFC 5104
+// FMT 1      NACK       supported
+// FMT 2      reserved
+// FMT 3      TMMBR      supported
+// FMT 4      TMMBN      supported
+// 206      RFC 5104
+// FMT 1:     Picture Loss Indication (PLI)                      supported
+// FMT 2:     Slice Lost Indication (SLI)
+// FMT 3:     Reference Picture Selection Indication (RPSI)
+// FMT 4:     Full Intra Request (FIR) Command                   supported
+// FMT 5:     Temporal-Spatial Trade-off Request (TSTR)
+// FMT 6:     Temporal-Spatial Trade-off Notification (TSTN)
+// FMT 7:     Video Back Channel Message (VBCM)
+// FMT 15:    Application layer FB message
+inline bool isRtcp(RtcpPacketType packettype) {
+  return packettype >= RtcpPacketType::RTCP_MIN_PT &&
+         packettype <= RtcpPacketType::RTCP_MAX_PT;
+}
 
 #define RRTR_BT 4
 #define DLRR_BT 5
 
-// RTCP_PS_Feedback_PT SubType
-#define RTCP_PLI_FMT 1
-#define RTCP_SLI_FMT 2
-#define RTCP_FIR_FMT 4
-#define RTCP_AFB 15
+// payload type is 205
+enum class RtcpFeedbackFormat {
+  kFeedbackNack = 1,
+  kFeedbackTCC = 15,
+};
+
+// payload type is 206
+enum class RtcpPayloadSpecificFormat {
+  kRtcpPLI = 1,
+  kRtcpSLI = 2,
+  kRtcpRPSI = 3,
+  kRtcpFIR = 4,
+  kRtcpREMB = 15,
+};
 
 // Generic NACK RTCP_RTP_FB + (FMT 1)rfc4585
 //  0                   1                   2                   3
@@ -148,10 +234,12 @@ class NackBlock {
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 class RtcpHeader {
  public:
+  // maybe FMT for payload specific feedback
   uint32_t blockcount : 5;
+
   uint32_t padding : 1;
   uint32_t version : 2;
-  uint32_t packettype : 8;
+  RtcpPacketType packettype : 8;
   uint32_t length : 16;
   uint32_t ssrc;
 
@@ -224,24 +312,23 @@ class RtcpHeader {
       : blockcount(0),
         padding(0),
         version(2),
-        packettype(0),
+        packettype(RtcpPacketType::RTCP_MIN_PT),
         length(0),
         ssrc(0) {}
 
   bool isFeedback(void) {
-    return (packettype == RTCP_Receiver_PT ||
-            packettype == RTCP_PS_Feedback_PT ||
-            packettype == RTCP_RTP_Feedback_PT);
+    return (packettype == RtcpPacketType::kReceiverReport ||
+            packettype == RtcpPacketType::kGenericRtpFeedback ||
+            packettype == RtcpPacketType::kPayloadSpecificFeedback);
   }
 
-  // no use?
-  bool isRtcp(void) {
-    return (packettype >= RTCP_MIN_PT && packettype <= RTCP_MAX_PT);
-  }
-  uint8_t getPacketType() const { return packettype; }
-  void setPacketType(uint8_t pt) { packettype = pt; }
+  RtcpPacketType getPacketType() const { return packettype; }
+  void setPacketType(RtcpPacketType pt) { packettype = pt; }
+
+  // maybe FMT for payload specific feedback
   uint8_t getBlockCount() const { return (uint8_t)blockcount; }
   void setBlockCount(uint8_t count) { blockcount = count; }
+
   uint16_t getLength() const { return ntohs(length); }
   void setLength(uint16_t theLength) { length = htons(theLength); }
   uint32_t getSSRC() const { return ntohl(ssrc); }
@@ -406,10 +493,10 @@ class RtcpHeader {
 
   std::string ToString() const {
     return tylib::format_string(
-        "{blockCnt=%d, pad=%d, packetType=%d, size=%d, ssrc=%d(0x%X)}",
-        getBlockCount(), padding, getPacketType(), getLength(), getSSRC(),
-        getSSRC());
+        "{blockCnt=%d, pad=%d, packetType=%d, len=%d, ssrc=%u(0x%X)}",
+        getBlockCount(), padding, static_cast<int>(getPacketType()),
+        getLength(), getSSRC(), getSSRC());
   }
 };
 
-#endif  // RTP_RTCP_PARSER_H_
+#endif  // RTP_RTCP_RTCP_PARSER_H_

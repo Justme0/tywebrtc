@@ -118,9 +118,9 @@ void IceHandler::CreatUserPrio() {
 
 // always return 0, should return error for wrong packet
 // todo parameter can be std::span or std::string_view
-int IceHandler::DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
-                                               int LeftLen,
-                                               bool *o_bUseCandidate) {
+int IceHandler::DecodeStunBindingAttributesMsg_(const STUN_MSG_COMMON *pMsgComm,
+                                                int LeftLen,
+                                                bool *o_bUseCandidate) {
   const int kStunAttributeCommonFieldLength = 4;  // attr type 2B, len 2B
   while (kStunAttributeCommonFieldLength <= LeftLen) {
     // TLV structure
@@ -415,7 +415,7 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   int ret = 0;
 
   bool bUseCandidate = false;
-  ret = DecodeStunBindingAttributesMsg(
+  ret = DecodeStunBindingAttributesMsg_(
       reinterpret_cast<const STUN_MSG_COMMON *>(vBufReceive.data() +
                                                 sizeof(STUN_MSG_HEAD)),
       vBufReceive.size() - sizeof(STUN_MSG_HEAD), &bUseCandidate);

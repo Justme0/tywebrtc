@@ -10,10 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include "log/log.h"
+#include "tylib/string/any_to_string.h"
 #include "tylib/string/format_string.h"
+#include "tylib/time/time_util.h"
 
 #include "global_tmp/global_tmp.h"
+#include "log/log.h"
+#include "rtp/rtcp/rtcp_parser.h"
 
 // define cycle as int64_t (use 47 bit at most, most significant bit for sign
 // if need), first value is 0. e.g. 8Mbps, each video packet is 1000 Byte, so
@@ -27,6 +30,10 @@ inline std::pair<int64_t, uint16_t> SplitPowerSeq(PowerSeqT powerSeq) {
   uint16_t seq = powerSeq & 0xFFFF;
 
   return std::make_pair(cycle, seq);
+}
+
+inline std::string PowerSeqToString(PowerSeqT powerSeq) {
+  return tylib::AnyToString(SplitPowerSeq(powerSeq));
 }
 
 #define VIDEO_RTP_EXTERN_NAME_LEN (2)   // 扩展位名字
@@ -338,7 +345,7 @@ class VideoSendTiming : public Extension {
   uint8_t flags;
 };
 
-enum MediaType { kMediaVideo, kMediaAudio, kMediaData, kMediaMax };
+// enum MediaType { kMediaVideo, kMediaAudio, kMediaData, kMediaMax };
 
 static inline uint16_t rtp_read_uint16(const uint8_t* ptr) {
   return (((uint16_t)ptr[0]) << 8) | ptr[1];
@@ -508,6 +515,44 @@ class RtpHeader {
   }
   */
 
+  // compatible with RTCP.
+  // taylor RTP should check according to SSRC,
+  // maybe rtcp (payload is 8 bit).
+  // bug:
+  // if the char is RTP payload 95, mark = 1, then char is 223,
+  // checked to rtcp type: RTCP_MAX_PT(223)
+  std::string GetMediaType() const {
+    uint8_t payloadTypeChar = reinterpret_cast<const char*>(this)[1];
+    bool bRtcp = isRtcp(static_cast<RtcpPacketType>(payloadTypeChar));
+    if (bRtcp) {
+      return kMediaTypeRtcp;
+    }
+
+    // remove first MARK bit
+    const uint8_t kRtpPayloadType = payloadTypeChar & 0x7F;
+    switch (kRtpPayloadType) {
+      case 96:
+      case 97:
+      case 98:
+      case 99:
+      case 100:
+      case 101:
+      case 107:
+      case 116:
+      case 117:
+      case 125:
+      case 127:
+        return kMediaTypeVideo;
+
+      case 103:
+      case 104:
+      case 111:
+        return kMediaTypeAudio;
+    }
+
+    return "";
+  }
+
   std::string ToString() const {
     return tylib::format_string(
         "{CSRC count=%d, has ext=%d, has padding=%d, version=%d, "
@@ -545,7 +590,10 @@ class RtpHeader {
 // include raw packet and biz info(seq cycle, CSRC ...)
 struct RtpBizPacket {
   // RtpBizPacket() = default;
-  // RtpBizPacket(const RtpBizPacket&) = default;
+
+  // should avoid copy big blob data
+  RtpBizPacket(const RtpBizPacket&) = delete;
+  RtpBizPacket& operator=(const RtpBizPacket& other) = delete;
 
   RtpBizPacket(std::vector<char>&& rtpRawPacket, int64_t cycle)
       : rtpRawPacket(std::move(rtpRawPacket)), cycle(cycle) {}
@@ -557,6 +605,7 @@ struct RtpBizPacket {
     if (this != &other) {
       rtpRawPacket = std::move(other.rtpRawPacket);
       cycle = other.cycle;
+      enterJitterTimeMs = other.enterJitterTimeMs;
     }
 
     return *this;
@@ -574,15 +623,21 @@ struct RtpBizPacket {
 
   std::string ToString() const {
     return tylib::format_string(
-        "{rtp=%s, cycle=%ld}",
+        "{rtp=%s, cycle=%ld, enterTs=%s, waitMs=%ld}",
         reinterpret_cast<const RtpHeader*>(rtpRawPacket.data())
             ->ToString()
             .data(),
-        cycle);
+        cycle, tylib::MilliSecondToLocalTimeString(enterJitterTimeMs).data(),
+        WaitTimeMs());
   }
 
+  // from enter jitter to now duration
+  int64_t WaitTimeMs() const { return g_now_ms - enterJitterTimeMs; }
+
+  // when add new member, must modify constructor, ToString(), etc.
   std::vector<char> rtpRawPacket;
   int64_t cycle = 0;
+  int64_t enterJitterTimeMs = 0;
 };
 
 // padding (P): 1 bit
@@ -629,56 +684,6 @@ class RtpRtcpStrategy {
     uint16_t length;
   };
 
-  // taylor RTP should check according to SSRC
-  static int GetMediaType(const std::vector<char>& vBufReceive,
-                          std::string* o_mediaType) {
-    int ret = 0;
-
-    uint8_t payloadTypeChar = 0;
-    ret = RtpRtcpStrategy::GetPayloadType(vBufReceive, &payloadTypeChar);
-    if (ret) {
-      tylog("get payload fail, ret=%d", ret);
-      return ret;
-    }
-
-    bool bRtcp = RtpRtcpStrategy::isRTCP(payloadTypeChar);
-    if (bRtcp) {
-      tylog("recv pt=%u, is rtcp", payloadTypeChar);
-      *o_mediaType = kMediaTypeRtcp;
-      return 0;
-    }
-
-    // remove first MARK bit
-    const uint8_t kRtpPayloadType = payloadTypeChar & 0x7F;
-    switch (kRtpPayloadType) {
-      case 96:
-      case 97:
-      case 98:
-      case 99:
-      case 100:
-      case 101:
-      case 107:
-      case 116:
-      case 117:
-      case 125:
-      case 127:
-        tylog("recv pt=%d, is video", kRtpPayloadType);
-        *o_mediaType = kMediaTypeVideo;
-        return 0;
-
-      case 103:
-      case 104:
-      case 111:
-        tylog("recv pt=%d, is audio", kRtpPayloadType);
-        *o_mediaType = kMediaTypeAudio;
-        return 0;
-    }
-
-    tylog("recv pt(char)=%#x, unknown char", payloadTypeChar);
-
-    return -1;
-  }
-
   /*
     static uint16_t getSeqNumShit(const void* packet, size_t bytes) {
       const uint8_t* p = (const uint8_t*)packet;
@@ -722,6 +727,7 @@ class RtpRtcpStrategy {
   // @param o_payloadTypeChar [out] if RTCP, it's real payload type; if RTP,
   // it's a char (payload type + mark bit)
   // @return 0 succ, otherwise not 0
+  /*
   static int GetPayloadType(const std::vector<char>& vBufReceive,
                             uint8_t* o_payloadTypeChar) {
     if (vBufReceive.size() < 4) {
@@ -741,6 +747,7 @@ class RtpRtcpStrategy {
 
     return 0;
   }
+  */
 
  public:
   // taylor remove the following SSRC code?
@@ -759,60 +766,6 @@ class RtpRtcpStrategy {
   }
 
  private:
-  // @brief check if RTCP
-  // 72 to 76 is reserved for RTP
-  // 77 to 79 is not reserver but they are not assigned we will block them
-  // for RTCP 200 SR  == marker bit + 72
-  // for RTCP 204 APP == marker bit + 76
-  //
-  //       RTCP
-  //
-  // FIR      full INTRA-frame request             192     [RFC2032] supported
-  // NACK     negative acknowledgement             193     [RFC2032]
-  // IJ       Extended inter-arrival jitter report 195
-  // [RFC-ietf-avt-rtp-toffset-07.txt]
-  // http://tools.ietf.org/html/draft-ietf-avt-rtp-toffset-07 SR       sender
-  // report                        200     [RFC3551] supported RR receiver
-  // report                      201     [RFC3551] supported SDES     source
-  // description                   202     [RFC3551] supported BYE goodbye 203
-  // [RFC3551] supported APP      application-defined                  204
-  // [RFC3551] ignored RTPFB    Transport layer FB message           205
-  // [RFC4585] supported PSFB     Payload-specific FB message          206
-  // [RFC4585] supported XR       extended report                      207
-  // [RFC3611] supported
-  // 205       RFC 5104
-  // FMT 1      NACK       supported
-  // FMT 2      reserved
-  // FMT 3      TMMBR      supported
-  // FMT 4      TMMBN      supported
-  // 206      RFC 5104
-  // FMT 1:     Picture Loss Indication (PLI)                      supported
-  // FMT 2:     Slice Lost Indication (SLI)
-  // FMT 3:     Reference Picture Selection Indication (RPSI)
-  // FMT 4:     Full Intra Request (FIR) Command                   supported
-  // FMT 5:     Temporal-Spatial Trade-off Request (TSTR)
-  // FMT 6:     Temporal-Spatial Trade-off Notification (TSTN)
-  // FMT 7:     Video Back Channel Message (VBCM)
-  // FMT 15:    Application layer FB message
-  static bool isRTCP(uint8_t payloadType) {
-    switch (payloadType) {
-      case 192:
-      case 193:
-      case 195:
-      case 200:
-      case 201:
-      case 202:
-      case 203:
-      case 204:
-      case 205:
-      case 206:
-      case 207:
-        return true;
-      default:
-        return false;
-    }
-  }
-
  protected:
   unsigned int uiLocalAudioSsrc;
   unsigned int uiLocalVideoSsrc;

@@ -13,8 +13,10 @@
 #include "log/log.h"
 #include "pc/peer_connection.h"
 #include "rtp/pack_unpack/rtp_to_h264.h"
-#include "rtp/rtcp_parser.h"
+#include "rtp/rtcp/rtcp_parser.h"
 #include "rtp/rtp_parser.h"
+
+extern int g_dumpsock_fd;
 
 // string enum, for print convenience
 const std::string kMediaTypeRtcp = "rtcp";
@@ -38,17 +40,14 @@ extern int g_sock_fd;
 
 int DumpPacketH264(const std::vector<char> &packet,
                    H264Unpacketizer &unpacker) {
+  return 0;
   int ret = 0;
   const RtpHeader &rtpHeader =
       *reinterpret_cast<const RtpHeader *>(packet.data());
 
-  std::string mediaType;
-  ret = RtpRtcpStrategy::GetMediaType(packet, &mediaType);
-  if (ret) {
-    tylog("get media type fail, ret=%d", ret);
-    return ret;
-  }
+  std::string mediaType = rtpHeader.GetMediaType();
 
+  // if audio, to dump OPUS file
   if (mediaType == kMediaTypeVideo) {
     std::vector<MediaData> media;
     ret = unpacker.Unpacketize(packet, &media);
@@ -70,31 +69,25 @@ int DumpPacketH264(const std::vector<char> &packet,
   return 0;
 }
 
+// int RtpHandler::Release
+
+SSRCInfo::SSRCInfo() : rtpReceiver(*this), rtpSender(*this) {}
+
 int RtpHandler::SendToPeer_(std::vector<char> &packet) {
   int ret = 0;
   RtpHeader &downlinkRtpHeader = *reinterpret_cast<RtpHeader *>(packet.data());
 
-  std::string mediaType;
-  ret = RtpRtcpStrategy::GetMediaType(packet, &mediaType);
-  if (ret) {
-    tylog("get media type fail, ret=%d", ret);
-    return ret;
-  }
-
+  std::string mediaType = downlinkRtpHeader.GetMediaType();
   tylog("downlink send media type=%s.", mediaType.data());
 
   if (mediaType == kMediaTypeAudio) {
     // taylor audio not use pacing
-    const int kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
     downlinkRtpHeader.setSSRC(kDownlinkAudioSsrc);
 
-    const int kDownlinkAudioPayloadType = 111;
     downlinkRtpHeader.setPayloadType(kDownlinkAudioPayloadType);
   } else if (mediaType == kMediaTypeVideo) {
-    const int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
     downlinkRtpHeader.setSSRC(kDownlinkVideoSsrc);
 
-    const int kDownlinkVideoPayloadType = 125;  // H.264
     downlinkRtpHeader.setPayloadType(kDownlinkVideoPayloadType);
   } else {
     tylog("invalid downlink send media type=%s.", mediaType.data());
@@ -125,209 +118,15 @@ int RtpHandler::SendToPeer_(std::vector<char> &packet) {
   return 0;
 }
 
-// use OO?
-int RtpHandler::HandleRtcpPacket_(const std::vector<char> &vBufReceive) {
-  int ret = 0;
-
-  const RtcpHeader &rtcpHeader =
-      *reinterpret_cast<const RtcpHeader *>(vBufReceive.data());
-  tylog("recv rtcp=%s", rtcpHeader.ToString().data());
-
-  /*
-    RtcpHeader *chead = reinterpret_cast<RtcpHeader *>(pPackage);
-    if (!chead->isRtcp()) {
-      tylog("pkg is not rtcp, pt=%d", chead->packettype);
-      return -1;
-    }
-
-    unsigned int subType = 0;
-    STVideoUserInfo *pWatcherUser = nullptr;
-
-    // 行使用远端ssrc判断
-    if (m_pTWebRTCUserInfo->ullTinyId == m_pc->ullTinyId) {
-      if (chead->getSSRC() == m_pc->tVideoUserInfo[0].uiRemoteSsrc)  //视频SR包
-      {
-        pWatcherUser = &m_pc->tVideoUserInfo[0];
-        subType = DT_BIGVIDIO;
-      } else if (chead->getSSRC() == m_pc->tVideoUserInfo[1].uiRemoteSsrc) {
-        pWatcherUser = &m_pc->tVideoUserInfo[1];
-      } else if (chead->getSSRC() == m_pc->tAudioInfo.uiRemoteSsrc)  //音频SR包
-      {
-        subType = DT_AUDIO;
-      }
-    } else {
-      if (chead->getSourceSSRC() == m_pc->tVideoUserInfo[0].uiLocalSsrc) {
-        subType = DT_BIGVIDIO;
-        pWatcherUser = &m_pc->tVideoUserInfo[0];
-      } else if (chead->getSourceSSRC() == m_pc->tVideoUserInfo[1].uiLocalSsrc)
-    { pWatcherUser = &m_pc->tVideoUserInfo[1]; } else if (chead->getSourceSSRC()
-    == m_pc->tAudioInfo.uiLocalSsrc) { subType = DT_AUDIO;
-      }
-    }
-
-    if (0 == subType) {
-      tylor(
-          "Rtcp packettype:%u BlockCount:%u subType:%u\r\n Rtcp[SSrc:%u "
-          "SrcSSRC:%u] \r\nVid[RemSsrc:%u LocSsrc:%u] \r\nAud[RemSsrc:%u "
-          "LocSsrc:%u]",
-          chead->packettype, chead->getBlockCount(), subType, chead->getSSRC(),
-          chead->getSourceSSRC(), m_pc->tVideoUserInfo[0].uiRemoteSsrc,
-          m_pc->tVideoUserInfo[0].uiLocalSsrc, m_pc->tAudioInfo.uiRemoteSsrc,
-          m_pc->tAudioInfo.uiLocalSsrc);
-    }
-
-    char *movingBuf = pPackage;
-    int rtcpLen = 0;
-    int totalLen = 0;
-    while (true)  //可能是rtcp组合包
-    {
-      if (totalLen >= iLen) break;
-
-      movingBuf += rtcpLen;
-      chead = reinterpret_cast<RtcpHeader *>(movingBuf);
-      rtcpLen = (chead->getLength() + 1) * 4;
-      totalLen += rtcpLen;
-
-      tylor("rtcpLen[%u], totalLen[%u], iLen[%u]", rtcpLen, totalLen,
-                         iLen);
-
-      if (totalLen > iLen) break;
-
-      if (chead->packettype == RTCP_RTP_Feedback_PT)  // NACK  RFC3550
-      {
-        if (chead->getBlockCount() == 1) {
-          HandleNack(chead);
-        } else if (chead->getBlockCount() == RTCP_AFB) {
-          // REMB只会有在房间只有两个web的时候透传
-          if (IsByPassMod()) {
-            RelayRtcpReq(movingBuf, rtcpLen, subType);
-          }
-
-          tylor(
-              "REMB[Recv]:  BitRate[%lu] packettype:%u BlockCount:%u "
-              "subType:%u\r\n Rtcp[SSrc:%u SrcSSRC:%u] \r\nVid[RemSsrc:%u "
-              "LocSsrc:%u] \r\nAud[RemSsrc:%u LocSsrc:%u]",
-              chead->getREMBBitRate(), chead->packettype,
-    chead->getBlockCount(), subType, chead->getSSRC(), chead->getSourceSSRC(),
-              m_pc->tVideoUserInfo[0].uiRemoteSsrc,
-              m_pc->tVideoUserInfo[0].uiLocalSsrc,
-    m_pc->tAudioInfo.uiRemoteSsrc, m_pc->tAudioInfo.uiLocalSsrc);
-        }
-
-      } else if (chead->packettype == RTCP_PS_Feedback_PT) {
-        // I帧申请透传
-        if ((RTCP_PLI_FMT == chead->getBlockCount()) ||
-            (RTCP_SLI_FMT == chead->getBlockCount()) ||
-            (RTCP_FIR_FMT == chead->getBlockCount())) {
-          if (m_pTWebRTCUserInfo->ullTinyId == m_pc->ullTinyId) {
-            continue;
-          }
-
-          tylor(
-              "PLI: MediaMode:%u ClientType:%u Rtcp packettype:%u BlockCount:%u
-    " "subType:%u\r\n Rtcp[SSrc:%u SrcSSRC:%u] \r\nVid[RemSsrc:%u " "LocSsrc:%u]
-    \r\nAud[RemSsrc:%u LocSsrc:%u]", m_pTWebRTCUserInfo->MediaMode,
-    m_pc->ClientType, chead->packettype, chead->getBlockCount(), subType,
-    chead->getSSRC(), chead->getSourceSSRC(),
-    m_pc->tVideoUserInfo[0].uiRemoteSsrc, m_pc->tVideoUserInfo[0].uiLocalSsrc,
-    m_pc->tAudioInfo.uiRemoteSsrc, m_pc->tAudioInfo.uiLocalSsrc);
-
-          if (!pWatcherUser) {
-            continue;
-          }
-
-          // TODO 位置修改
-          pWatcherUser->PLICnt++;
-          if (m_pc->ClientType != USER_TYPE_WEBRTC) {
-            // TODO 位置修改 急速模式下sdk
-            tylor("rtcp from web call RequestPeerIDRFrame");
-            pWatcherUser->ReqSdkIFrFlag++;
-            if (pWatcherUser->ReqSdkIFrFlag == 0) {
-              pWatcherUser->ReqSdkIFrFlag = 1;
-            }
-            m_pTWebRTCUserInfo->RequestPeerIDRFrame(m_pc, pWatcherUser);
-          } else if (m_pc->ClientType == USER_TYPE_WEBRTC) {
-            // TODO 位置修改 急速模式下的web，非急速模式下的web
-            pWatcherUser->ReqICnt++;
-            // RelayRtcpReq(movingBuf,rtcpLen, subType);
-            tylor("rtcp from web call RequestPeerIDRFrame");
-            m_pTWebRTCUserInfo->RequestPeerIDRFrame(m_pc, pWatcherUser, true);
-          }
-        }
-      } else if (chead->packettype == RTCP_Sender_PT)  // SR
-      {
-        //广播发送报告广播
-        if (IsByPassMod()) {
-          BroadcastRtcpReq(movingBuf, rtcpLen, subType);
-        }
-
-        tylor("[RTCP_Sender_PT]");
-        HandleSR(chead);
-      } else if (chead->packettype == RTCP_Receiver_PT)  // RR
-      {
-        //接收报告只会有在房间只有两个web的时候透传
-        if (IsByPassMod()) {
-          RelayRtcpReq(movingBuf, rtcpLen, subType);
-        }
-
-        tylor("[RTCP_Receiver_PT]");
-        HandleRR(chead);
-      } else if (chead->packettype == RTCP_XR_PT)  // XR  rfc3611
-      {
-        tylor("[ExtendedReport]");
-        //广播发送报告广播
-        if (IsByPassMod()) {
-          BroadcastRtcpReq(movingBuf, rtcpLen, subType);
-        }
-        HandleXR(chead);
-      }
-    }
-    */
-
-  // taylor origin:
-
-  // downlink
-
-  // RtcpHeader &downlinkRtcpHeader = const_cast<RtcpHeader &>(rtcpHeader);
-
-  /*
-    if (mediaType == kMediaTypeAudio) {
-      const int kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
-      downlinkRtpHeader.setSSRC(kDownlinkAudioSsrc);
-
-      const int kDownlinkAudioPayloadType = 111;
-      downlinkRtpHeader.setPayloadType(kDownlinkAudioPayloadType);
-    } else {
-      const int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
-      downlinkRtpHeader.setSSRC(kDownlinkVideoSsrc);
-
-      const int kDownlinkVideoPayloadType = 125;  // H.264
-      downlinkRtpHeader.setPayloadType(kDownlinkVideoPayloadType);
-    }
-    */
-
-  ret = this->belongingPeerConnection_.srtpHandler_.ProtectRtcp(
-      const_cast<std::vector<char> *>(&vBufReceive));
-  if (ret) {
-    tylog("downlink protect rtcp ret=%d", ret);
-    return ret;
-  }
-
-  sockaddr_in addr =
-      tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
-                               this->belongingPeerConnection_.clientPort_);
-  ssize_t sendtoLen = sendto(g_sock_fd, vBufReceive.data(), vBufReceive.size(),
-                             0, reinterpret_cast<struct sockaddr *>(&addr),
-                             sizeof(struct sockaddr_in));
+void DumpPacket(const std::vector<char> &packet) {
+  sockaddr_in addr = tylib::ConstructSockAddr("127.0.0.1", 12347);
+  ssize_t sendtoLen =
+      sendto(g_dumpsock_fd, packet.data(), packet.size(), 0,
+             reinterpret_cast<sockaddr *>(&addr), sizeof(struct sockaddr_in));
   if (-1 == sendtoLen) {
     tylog("sendto errorno=%d[%s]", errno, strerror(errno));
-    return -1;
+    // return -1;
   }
-  tylog("sendto reply succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
-        belongingPeerConnection_.clientIP_.data(),
-        belongingPeerConnection_.clientPort_);
-
-  return 0;
 }
 
 int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
@@ -346,13 +145,8 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   }
 
   belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_RTP;
-  std::string mediaType;
-  ret = RtpRtcpStrategy::GetMediaType(vBufReceive, &mediaType);
-  if (ret) {
-    tylog("get media type fail, ret=%d", ret);
-    return ret;
-  }
-
+  std::string mediaType =
+      reinterpret_cast<const RtpHeader *>(vBufReceive.data())->GetMediaType();
   tylog("receive %s", mediaType.data());
 
   // should refactor if else for media type
@@ -362,15 +156,37 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         const_cast<std::vector<char> *>(&vBufReceive));
     if (ret) {
       tylog("unprotect RTCP fail, ret=%d", ret);
+
       return ret;
     }
 
-    ret = HandleRtcpPacket_(vBufReceive);
+    DumpPacket(vBufReceive);
+
+    ret = belongingPeerConnection_.rtcpHandler_.HandleRtcpPacket(vBufReceive);
     if (ret) {
-      tylog("HandleRtcpPacket fail, ret=%d", ret);
+      tylog("handleRtcpPacket fail, ret=%d", ret);
+
       return ret;
     }
   } else if (mediaType == kMediaTypeAudio || mediaType == kMediaTypeVideo) {
+    // test video loss,
+    // must before srtp, otherwise srtp_err_status_replay_fail
+    // https://segmentfault.com/a/1190000040211375
+    if (mediaType == kMediaTypeVideo) {
+      const int kUplossRate = 100;
+      int dropKey = rand() % 1000;
+
+      if (dropKey < kUplossRate) {
+        tylog("up dropKey=%d lostrate=%d%%, drop! rtp=%s.", dropKey,
+              kUplossRate,
+              reinterpret_cast<const RtpHeader *>(vBufReceive.data())
+                  ->ToString()
+                  .data());
+
+        return 0;
+      }
+    }
+
     tylog("before unprotect, paddinglen=%d", getRtpPaddingLength(vBufReceive));
     // reuse original buffer
     // taylor consider restart svr
@@ -384,14 +200,22 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
 
     const RtpHeader &rtpHeader =
         *reinterpret_cast<const RtpHeader *>(vBufReceive.data());
-    tylog("recv rtp=%s (maybe out-of-order)", rtpHeader.ToString().data());
+    tylog("recv rtp=%s.", rtpHeader.ToString().data());
+
+    if (mediaType == kMediaTypeAudio) {
+      g_UplinkAudioSsrc = rtpHeader.getSSRC();
+    } else if (mediaType == kMediaTypeVideo) {
+      g_UplinkVideoSsrc = rtpHeader.getSSRC();
+    }
+
+    DumpPacket(vBufReceive);
 
     SSRCInfo &ssrcInfo = this->ssrcInfoMap_[rtpHeader.getSSRC()];
 
     const uint16_t itemSeq = rtpHeader.getSeqNumber();
     int64_t itemCycle = 0;
 
-    // monitor corner cass 12 packet
+    // monitor corner case 12 packet
     if (itemSeq >= 65530 || itemSeq <= 5) {
       tylog("monitor corner case, packet=%s.", rtpHeader.ToString().data());
     }
@@ -446,7 +270,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     // hack
     ssrcInfo.rtpReceiver.PushToJitter(std::move(rtpBizPacket));
 
-    assert(vBufReceive.empty());
+    assert(rtpBizPacket.rtpRawPacket.empty());
 
     std::vector<RtpBizPacket> orderedPackets =
         ssrcInfo.rtpReceiver.PopOrderedPackets();

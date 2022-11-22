@@ -124,8 +124,8 @@ class IceHandler {
   int CheckIcePacket(const std::vector<char> &vBufReceive);
   int HandleBindReq(const std::vector<char> &vBufReceive);
   int EncoderXORMappedAddress(char *pBuff, int Len);
-  int DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
-                                     int LeftLen, bool *o_bUseCandidate);
+  int DecodeStunBindingAttributesMsg_(const STUN_MSG_COMMON *pMsgComm,
+                                      int LeftLen, bool *o_bUseCandidate);
   int EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
                            char *pHeadBuf, int Len);
   int EncoderFingerprint(const char *pFingerprintBuff, int FingerprintLen,

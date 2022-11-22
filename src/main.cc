@@ -25,6 +25,7 @@
 // TODO: use tywebrtc namespace?
 
 int g_sock_fd;
+int g_dumpsock_fd;
 
 // Execute `system` and get output, OPT: move to lib
 // https://stackoverflow.com/questions/478898/how-do-i-execute-a-command-and-get-the-output-of-the-command-within-c-using-po
@@ -161,7 +162,9 @@ int HandleRequest() {
   ssize_t iRecvLen =
       recvfrom(g_sock_fd, vBufReceive.data(), vBufReceive.size(), 0,
                (struct sockaddr*)&address, (socklen_t*)&addr_size);
-  tylog("========================= recv len=%ld (application layer) =========================", iRecvLen);
+
+  tylog("recv len=%ld (application layer)", iRecvLen);
+
   if (iRecvLen < -1) {
     // should not appear
     tylog("unknown errno %d[%s]", errno, strerror(errno));
@@ -182,13 +185,15 @@ int HandleRequest() {
   }
   vBufReceive.resize(iRecvLen);
 
-  tylog("taylor recv buffer data addr=%p, size=%zu", vBufReceive.data(),
-        vBufReceive.size());
-
   std::string ip;
   int port = 0;
   tylib::ParseIpPort(address, ip, port);
-  tylog("src ip=%s, port=%d", ip.data(), port);
+  tylog(
+      "=================================="
+      " src ip=%s, port=%d recv size=%zu "
+      "==================================",
+      ip.data(), port, vBufReceive.size());
+
   // get some pc according to clientip, port or ICE username (taylor FIX)
   std::shared_ptr<PeerConnection> pc = Singleton::Instance().GetPeerConnection(
       ip, port, "");  // have bug, ufrag is ""
@@ -416,26 +421,46 @@ int mkdir_p(const char* path, mode_t mode) {
     tylib::MLOG_INIT(MLOG_DEF_LOGGER, level, format, path, "", size); \
   } while (0)
 
-int main(int argc, char* argv[]) {
+int InitDumpSock() {
+  g_dumpsock_fd = socket(AF_INET, SOCK_DGRAM, 0);
+  if (g_dumpsock_fd < 0) {
+    tylog("cannot open dump socket, ret=%d", g_dumpsock_fd);
+    return -1;
+  }
+
+  return 0;
+}
+
+int main() {
   int ret = 0;
 
+  // * init random seed
+  srand(time(NULL) + getpid());
+
+  // * init log
   INIT_LOG_V2("./log/",
               tylib::MLOG_F_TIME | tylib::MLOG_F_FILELINE | tylib::MLOG_F_FUNC,
-              6, 512 * 1024 * 1024);
+              6, 100 * 1024 * 1024);
 
-  (void)argc;
-  (void)argv;
+  // * init const dump socket
+  ret = InitDumpSock();
+  if (ret) {
+    tylog("init dump ret=%d", ret);
+    return ret;
+  }
+
   // before server launch, print log to standard out and file
   tylogAndPrintfln("OPENSSL_VERSION_NUMBER=%#lx < 0x10100000 is %d",
                    OPENSSL_VERSION_NUMBER,
                    OPENSSL_VERSION_NUMBER < 0x10100000L);
 
   // step 1: create socket
-  g_sock_fd = socket(PF_INET, SOCK_DGRAM, 0);
+  ret = socket(PF_INET, SOCK_DGRAM, 0);
   if (ret < 0) {
     tylogAndPrintfln("create listen socket failed, ret %d", ret);
-    return __LINE__;
+    return ret;
   }
+  g_sock_fd = ret;
   // TODO set nonblock
 
   // step 2: bind
@@ -465,10 +490,10 @@ int main(int argc, char* argv[]) {
   //     strerror(errno)); return 0;
   // }
 
-  // step 3: init some component
+  // * init timer
   InitTimer();
 
-  // step 4: event loop
+  // step 3: event loop
   CrossPlatformNetworkIO();
 
   return 0;

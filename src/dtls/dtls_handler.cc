@@ -39,7 +39,7 @@ X509* DtlsHandler::mCert = nullptr;
 // key的EVP，可封装rsa、dsa、ecc等key
 EVP_PKEY* DtlsHandler::privkey = nullptr;
 
-int DummyCb(int preverify_ok, X509_STORE_CTX* x509_ctx) { return 1; }
+int DummyCb(int /*preverify_ok*/, X509_STORE_CTX* /*x509_ctx*/) { return 1; }
 
 // static bool DropUpPkgRand() {
 //   int lossRate = 0;
@@ -193,7 +193,7 @@ int SSLVerifyCallback(int ok, X509_STORE_CTX* store) {
 }
 
 long DtlsOutBIOCallback(BIO* bio, int cmd, const char* argp, int argi,
-                        long argl, long ret) {
+                        long /*argl*/, long ret) {
   long r = 1;
 
   if (BIO_CB_RETURN & cmd) {
@@ -310,7 +310,7 @@ DtlsHandler::~DtlsHandler() {
 }
 
 // @brief 只在HandshakeCompleted()被调用
-int DtlsHandler::OnHandshakeCompleted() {
+int DtlsHandler::OnHandshakeCompleted_() {
   tylog("isServer: %d clientKey: %s, serverKey: %s, swap keys if server",
         m_isServer, sendingRtpKey_.c_str(), receivingRtpKey_.c_str());
 
@@ -350,11 +350,13 @@ int DtlsHandler::HandshakeCompleted(bool bSessionCompleted) {
   char fprint[MAX_FP_SIZE];
   memset(fprint, '\0', MAX_FP_SIZE);
 
-  if (!getRemoteFingerprint(fprint)) {
-    tylog("getRemoteFingerprint error, Peer did not authenticate %s",
-          ToString().data());
+  if (!GetRemoteFingerprint(fprint)) {
+    tylog(
+        "getRemoteFingerprint error, Peer did not authenticate, return succ :) "
+        "%s",
+        ToString().data());
 
-    return -1;
+    return 0;
   }
 
   bool checkOk = checkFingerprint(fprint, strlen(fprint));
@@ -428,7 +430,7 @@ int DtlsHandler::HandshakeCompleted(bool bSessionCompleted) {
 
   tylog("bSessionCompleted=%d %s", bSessionCompleted, ToString().data());
 
-  ret = OnHandshakeCompleted();
+  ret = OnHandshakeCompleted_();
   if (ret) {
     tylog("onHandshakeCompleted fail, ret=%d", ret);
 
@@ -439,7 +441,7 @@ int DtlsHandler::HandshakeCompleted(bool bSessionCompleted) {
 }
 
 // 只在处理DTLS包结尾处调用
-void DtlsHandler::CheckHandshakeComplete() {
+void DtlsHandler::CheckHandshakeComplete_() {
   if (mHandshakeCompleted) {
     tylog("handshake completed, no need check %s", ToString().data());
     return;
@@ -560,7 +562,7 @@ int DtlsHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
     // taylor error handle ?
   }
   assert(r == static_cast<int>(vBufReceive.size()));  // 是否返回
-  CheckHandshakeComplete();
+  CheckHandshakeComplete_();
 
   return 0;
 }
@@ -593,7 +595,7 @@ void DtlsHandler::computeFingerprint(const X509* cert,
 // @brief 获取对端指纹
 // @param fprint [out] 指纹
 // @return 是否成功获取指纹
-bool DtlsHandler::getRemoteFingerprint(char* fprint) const {
+bool DtlsHandler::GetRemoteFingerprint(char* fprint) const {
   X509* x = SSL_get_peer_certificate(mSsl);
   if (nullptr == x) {
     tylog("SSL_get_peer_certificate nullptr %s", ToString().data());
@@ -612,7 +614,7 @@ bool DtlsHandler::checkFingerprint(const char* fingerprint,
                                    unsigned int len) const {
   char fprint[MAX_FP_SIZE];
 
-  if (!getRemoteFingerprint(fprint)) {
+  if (!GetRemoteFingerprint(fprint)) {
     tylog("getRemoteFingerprint fail %s", ToString().data());
     return false;
   }

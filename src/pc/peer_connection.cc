@@ -10,6 +10,7 @@ PeerConnection::PeerConnection()
       iceHandler_(*this),
       dtlsHandler_(*this, false),  // taylor 写死 dtls client
       rtpHandler_(*this),
+      rtcpHandler_(*this),
       srtpHandler_(*this),
       initTimeMs_(g_now_ms) {}
 

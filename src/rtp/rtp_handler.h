@@ -10,17 +10,21 @@
 
 // don't include whole head file avoid recycle reference
 class PeerConnection;
+class RtpHandler;
 
 struct SSRCInfo {
-  SSRCInfo() : rtpReceiver(*this), rtpSender(*this) {}
+  explicit SSRCInfo();
 
   // why define ssrc's unpacketizer: save unpacked frame e.g. FU-A
+  // audio don't use h264Unpacketizer
   H264Unpacketizer h264Unpacketizer;
   RtpReceiver rtpReceiver;
   RtpSender rtpSender;
 
   uint16_t biggestSeq = 0;
   int64_t biggestCycle = 0;
+
+  // RtpHandler &belongingRtpHandler;
 };
 
 class RtpHandler {
@@ -35,8 +39,9 @@ class RtpHandler {
   int HandleRtcpPacket_(const std::vector<char> &vBufReceive);
   int SendToPeer_(std::vector<char> &packet);
 
- private:
   PeerConnection &belongingPeerConnection_;
+
+ private:
   std::unordered_map<uint32_t, SSRCInfo> ssrcInfoMap_;
 };
 

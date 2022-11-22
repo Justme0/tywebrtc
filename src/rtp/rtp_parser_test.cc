@@ -13,15 +13,21 @@
 #include "gtest/gtest.h"
 
 TEST(RtpParserTest, PowerSeq) {
-  auto p = SplitPowerSeq(0);
+  PowerSeqT powerSeq = 0;
+  auto p = SplitPowerSeq(powerSeq);
   EXPECT_EQ(p.first, 0);
   EXPECT_EQ(p.second, 0);
+  EXPECT_EQ(PowerSeqToString(powerSeq), "{0, 0}");
 
-  p = SplitPowerSeq((-1) << 16 | 0xFFFF);
+  powerSeq = ((-1) << 16) | 0xFFFF;
+  p = SplitPowerSeq(powerSeq);
   EXPECT_EQ(p.first, -1);
   EXPECT_EQ(p.second, 0xFFFF);
+  EXPECT_EQ(PowerSeqToString(powerSeq), "{-1, 65535}");
 
-  p = SplitPowerSeq((50) << 16 | 0xABCD);
+  powerSeq = (50 << 16) | 0xABCD;
+  p = SplitPowerSeq(powerSeq);
   EXPECT_EQ(p.first, 50);
   EXPECT_EQ(p.second, 0xABCD);
+  EXPECT_EQ(PowerSeqToString(powerSeq), "{50, 43981}");
 }

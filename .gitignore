@@ -1,3 +1,6 @@
+*.log
+tywebrtc
+
 # Prerequisites
 *.d
 
@@ -30,6 +33,3 @@
 *.exe
 *.out
 *.app
-
-log.txt*
-server_tywebrtc

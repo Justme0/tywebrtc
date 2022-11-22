@@ -85,13 +85,13 @@ class DtlsHandler {
   int HandshakeCompleted(bool bSessionComplete);
 
  private:
-  int OnHandshakeCompleted();
+  int OnHandshakeCompleted_();
   bool checkFingerprint(const char* fingerprint, unsigned int len) const;
-  bool getRemoteFingerprint(char* fprint) const;
+  bool GetRemoteFingerprint(char* fprint) const;
   void computeFingerprint(const X509* cert, char* fingerprint) const;
   void InitOpensslAndCert();
   void rewriteDtlsPacket(const void* data, size_t len);
-  void CheckHandshakeComplete();
+  void CheckHandshakeComplete_();
   int64_t GetCheckIntervalMs() const;
 
  private:
