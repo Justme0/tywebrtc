@@ -41,7 +41,7 @@ client demo 位于 webclient/ 下，目前写死的SDP，支持Chrome，运行�
 
 笔者运行效果如下，client(北京) -> server(南京) -> client(北京) 端到端延迟60ms:
 
-![test](./doc_pic/testPic.jpg)
+![(如果图挂了，可能因为某种原因 raw.githubusercontent.com DNS污染了，请clone下来看)](./doc_pic/testPic.jpg)
 
 其中client到server的RTT占27ms:
 
