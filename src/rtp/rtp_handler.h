@@ -13,7 +13,9 @@ class PeerConnection;
 class RtpHandler;
 
 struct SSRCInfo {
-  explicit SSRCInfo();
+  explicit SSRCInfo(RtpHandler &belongingRtpHandler);
+
+  std::string ToString() const;
 
   // why define ssrc's unpacketizer: save unpacked frame e.g. FU-A
   // audio don't use h264Unpacketizer
@@ -24,7 +26,7 @@ struct SSRCInfo {
   uint16_t biggestSeq = 0;
   int64_t biggestCycle = 0;
 
-  // RtpHandler &belongingRtpHandler;
+  RtpHandler &belongingRtpHandler;
 };
 
 class RtpHandler {
@@ -39,6 +41,7 @@ class RtpHandler {
   int HandleRtcpPacket_(const std::vector<char> &vBufReceive);
   int SendToPeer_(std::vector<char> &packet);
 
+ public:
   PeerConnection &belongingPeerConnection_;
 
  private:

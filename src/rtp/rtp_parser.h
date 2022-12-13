@@ -653,6 +653,7 @@ inline int getRtpPaddingLength(const std::vector<char>& vBufReceive) {
   const RtpHeader& rtpHeader =
       *reinterpret_cast<const RtpHeader*>(vBufReceive.data());
 
+  // pitfall: convert char to int maybe < 0
   return rtpHeader.hasPadding() ? static_cast<uint8_t>(vBufReceive.back()) : 0;
 }
 

@@ -3,11 +3,14 @@
 
 #include <deque>
 #include <map>
+#include <set>
 #include <vector>
 
 #ifndef __USE_SINGLE_THREAD__
 #include <mutex>
 #endif
+
+#include "rtp/rtcp/rtcp_parser.h"
 
 class PeerConnection;
 
@@ -198,6 +201,15 @@ class RtcpHandler {
   // uint32_t CreateNackReport(std::vector<char>& o_rtcpPacketBin);
   uint32_t CreateXr(std::vector<char>& o_rtcpPacketBin);
   // uint32_t CreateBye(RtcpByeInfo& bye, std::vector<char>& o_rtcpPacketBin);
+
+  int CreateNackReportSend(const std::set<int>& lostSeqs, uint32_t localSSRC,
+                           uint32_t remoteSSRC);
+
+ private:
+  // OPT: use separate file
+  int SerializeNackSend_(const std::vector<NackBlock>& nackBlokVect,
+                         uint32_t sinkSSRC, uint32_t soucreSSRC);
+
  private:
   // std::map<uint32_t, std::deque<SenderReportInfo>> remote_send_report_map_;
   uint64_t last_receive_rrtr_time_ms_ = 0;

@@ -7,6 +7,20 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
+
+#include "prometheus/family.h"
+#include "prometheus/gauge.h"
+
+const int kUplossRateMul100 = 1;
+const int kPCDeadTimeoutMs = 30 * 1000;
+
+extern prometheus::Family<prometheus::Gauge>* g_recvPacketNum;
+extern prometheus::Family<prometheus::Gauge>* g_bugShutDown;
+
+extern int g_sock_fd;
+extern int g_dumpRecvSockfd;
+extern int g_dumpSendSockfd;
 
 extern int g_UplinkAudioSsrc;  // taylor to make dynamic
 // const int kUplinkAudioPayloadType = 111;
@@ -58,6 +72,8 @@ class Singleton {
 
   Singleton() {}
 
+  // should be private
+ public:
   // don't use global variable STL
   // taylor 定时清理超时会话（pc）
   // std::map is not designed to work with objects which are not
@@ -66,3 +82,6 @@ class Singleton {
   // https://stackoverflow.com/questions/20972751/how-to-put-a-class-that-has-deleted-copy-ctor-and-assignment-operator-in-map
   std::map<ClientSrcId, std::shared_ptr<PeerConnection>> client2PC_;
 };
+
+void DumpRecvPacket(const std::vector<char>& packet);
+void DumpSendPacket(const std::vector<char>& packet);

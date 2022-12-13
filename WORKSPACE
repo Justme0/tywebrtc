@@ -1,9 +1,10 @@
+# 1. tylib
 local_repository(
     name = "tylib",
     path = "third_party/tylib",
 )
 
-# for third-party lib
+# 2. openssl
 # https://stackoverflow.com/questions/49937820/include-headers-h-installed-in-non-standard-location
 new_local_repository(
     name = "openssl",
@@ -23,6 +24,7 @@ cc_library(
 """
 )
 
+# 3. srtp
 new_local_repository(
     name = "srtp",
     path = "third_party/srtp",
@@ -41,6 +43,7 @@ cc_library(
 """
 )
 
+# 4. gtest
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
@@ -48,3 +51,15 @@ http_archive(
   urls = ["https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip"],
   strip_prefix = "googletest-609281088cfefc76f9d0ce82e1ff6c30cc3591e5",
 )
+
+# 5. prometheus-cpp client
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
+http_archive(
+    name = "com_github_jupp0r_prometheus_cpp",
+    strip_prefix = "prometheus-cpp-master",
+    urls = ["https://github.com/jupp0r/prometheus-cpp/archive/master.zip"],
+)
+
+load("@com_github_jupp0r_prometheus_cpp//bazel:repositories.bzl", "prometheus_cpp_repositories")
+
+prometheus_cpp_repositories()

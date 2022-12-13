@@ -1,6 +1,7 @@
 #include "pc/peer_connection.h"
 
 #include "log/log.h"
+#include "tylib/ip/ip.h"
 #include "tylib/time/time_util.h"
 #include "tylib/time/timer.h"
 
@@ -13,6 +14,40 @@ PeerConnection::PeerConnection()
       rtcpHandler_(*this),
       srtpHandler_(*this),
       initTimeMs_(g_now_ms) {}
+
+// vBufSend is crypto data
+int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {
+  sockaddr_in addr = tylib::ConstructSockAddr(clientIP_, clientPort_);
+  ssize_t sendtoLen =
+      sendto(g_sock_fd, vBufSend.data(), vBufSend.size(), 0,
+             reinterpret_cast<sockaddr *>(&addr), sizeof(struct sockaddr_in));
+  if (-1 == sendtoLen) {
+    tylog("sendto ret=-1 errorno=%d[%s]", errno, strerror(errno));
+    return -1;
+  }
+  tylog("sendto succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
+        clientIP_.data(), clientPort_);
+
+  return 0;
+}
+
+// vBufSend is crypto data
+int PeerConnection::SendToPeer(const std::vector<char> &vBufSend) const {
+  // maybe not clientip
+  sockaddr_in addr = tylib::ConstructSockAddr(clientIP_, clientPort_);
+  ssize_t sendtoLen =
+      sendto(g_sock_fd, vBufSend.data(), vBufSend.size(), 0,
+             reinterpret_cast<sockaddr *>(&addr), sizeof(struct sockaddr_in));
+  if (-1 == sendtoLen) {
+    tylog("sendto ret=-1 errorno=%d[%s]", errno, strerror(errno));
+    return errno;
+  }
+
+  tylog("sendto succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
+        clientIP_.data(), clientPort_);
+
+  return 0;
+}
 
 int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
   this->lastActiveTimeMs_ = g_now_ms;

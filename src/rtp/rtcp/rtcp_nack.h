@@ -7,7 +7,7 @@
 #include <cstdint>
 
 int CreateNackReport(const std::set<int>& lostSeqs, uint32_t localSSRC,
-                     uint32_t remoteSSRC, std::vector<char>& o_rtcpPacketBin);
+                     uint32_t remoteSSRC);
 // #include "rtp/rtcp/rtcp_packet.h"
 
 // class RTCPNACK : public RTCPPacket {

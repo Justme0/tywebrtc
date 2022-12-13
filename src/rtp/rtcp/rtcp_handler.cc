@@ -13,6 +13,7 @@ extern int g_sock_fd;
 
 RtcpHandler::RtcpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {}
 
+// 处理解密后的 RTCP 包
 int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
   int ret = 0;
 
@@ -274,6 +275,8 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
     }
   }
 
+  DumpSendPacket(vBufReceive);
+
   ret = this->belongingPeerConnection_.srtpHandler_.ProtectRtcp(
       const_cast<std::vector<char> *>(&vBufReceive));
   if (ret) {
@@ -281,19 +284,12 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
     return ret;
   }
 
-  sockaddr_in addr =
-      tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
-                               this->belongingPeerConnection_.clientPort_);
-  ssize_t sendtoLen = sendto(g_sock_fd, vBufReceive.data(), vBufReceive.size(),
-                             0, reinterpret_cast<struct sockaddr *>(&addr),
-                             sizeof(struct sockaddr_in));
-  if (-1 == sendtoLen) {
-    tylog("sendto errorno=%d[%s]", errno, strerror(errno));
-    return -1;
+  // unvarnished transmission to peer
+  ret = this->belongingPeerConnection_.SendToPeer(vBufReceive);
+  if (ret) {
+    tylog("send ret=%d", ret);
+    return ret;
   }
-  tylog("sendto reply succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
-        belongingPeerConnection_.clientIP_.data(),
-        belongingPeerConnection_.clientPort_);
 
   return 0;
   /*
@@ -783,3 +779,82 @@ uint64_t RtcpHandler::GetTimeStamps(uint32_t local_ssrc, uint32_t remote_ssrc,
   return 0;
 }
 */
+
+int RtcpHandler::SerializeNackSend_(const std::vector<NackBlock> &nackBlokVect,
+                                    uint32_t sinkSSRC, uint32_t soucreSSRC) {
+  int ret = 0;
+
+  RtcpHeader nack;
+  nack.setPacketType(RtcpPacketType::kGenericRtpFeedback);
+  nack.setBlockCount(1);
+  nack.setSSRC(sinkSSRC);
+  nack.setSourceSSRC(soucreSSRC);
+  nack.setLength(2 + nackBlokVect.size());
+
+  if (12 + nackBlokVect.size() * 4 > 2048) {
+    tylog("nack pkg len > 2048");
+
+    return -1;
+  }
+
+  const char *head = reinterpret_cast<const char *>(&nack);
+  std::vector<char> rtcpBin(head, head + 12);
+
+  const char *body = reinterpret_cast<const char *>(&nackBlokVect[0]);
+  rtcpBin.insert(rtcpBin.end(), body, body + nackBlokVect.size() * 4);
+
+  DumpSendPacket(rtcpBin);
+
+  ret = this->belongingPeerConnection_.srtpHandler_.ProtectRtcp(
+      const_cast<std::vector<char> *>(&rtcpBin));
+  if (ret) {
+    tylog("uplink send to src client, protect rtcp ret=%d", ret);
+    return ret;
+  }
+
+  ret = this->belongingPeerConnection_.SendToClient(rtcpBin);
+  if (ret) {
+    tylog("send to client nack rtcp ret=%d", ret);
+
+    return ret;
+  }
+
+  return 0;
+}
+
+int RtcpHandler::CreateNackReportSend(const std::set<int> &lostSeqs,
+                                      uint32_t localSSRC, uint32_t remoteSSRC) {
+  tylog("lostseqs=%s.", tylib::AnyToString(lostSeqs).data());
+
+  int ret = 0;
+
+  std::vector<NackBlock> nackBlokVect;
+  for (auto it = lostSeqs.begin(); it != lostSeqs.end();) {
+    uint16_t pid = *it;
+    uint16_t blp = 0;
+
+    for (++it; it != lostSeqs.end(); ++it) {
+      uint16_t diff = *it - pid - 1;
+
+      if (diff >= 16) {
+        break;
+      }
+
+      blp |= (1 << diff);
+    }
+
+    NackBlock block;
+    block.setNackPid(pid);
+    block.setNackBlp(blp);
+    nackBlokVect.push_back(block);
+  }
+
+  ret = SerializeNackSend_(nackBlokVect, localSSRC, remoteSSRC);
+  if (ret) {
+    tylog("serializeNack ret=%d", ret);
+
+    return ret;
+  }
+
+  return 0;
+}

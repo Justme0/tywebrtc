@@ -16,8 +16,6 @@
 #include "rtp/rtcp/rtcp_parser.h"
 #include "rtp/rtp_parser.h"
 
-extern int g_dumpsock_fd;
-
 // string enum, for print convenience
 const std::string kMediaTypeRtcp = "rtcp";
 const std::string kMediaTypeVideo = "video";
@@ -71,11 +69,21 @@ int DumpPacketH264(const std::vector<char> &packet,
 
 // int RtpHandler::Release
 
-SSRCInfo::SSRCInfo() : rtpReceiver(*this), rtpSender(*this) {}
+SSRCInfo::SSRCInfo(RtpHandler &belongingRtpHandler)
+    : rtpReceiver(*this),
+      rtpSender(*this),
+      belongingRtpHandler(belongingRtpHandler) {}
 
-int RtpHandler::SendToPeer_(std::vector<char> &packet) {
+std::string SSRCInfo::ToString() const {
+  return tylib::format_string("{biggestSeq=%u, biggestCycle=%ld}", biggestSeq,
+                              biggestCycle);
+}
+
+// to rename
+int RtpHandler::SendToPeer_(std::vector<char> &vBufSend) {
   int ret = 0;
-  RtpHeader &downlinkRtpHeader = *reinterpret_cast<RtpHeader *>(packet.data());
+  RtpHeader &downlinkRtpHeader =
+      *reinterpret_cast<RtpHeader *>(vBufSend.data());
 
   std::string mediaType = downlinkRtpHeader.GetMediaType();
   tylog("downlink send media type=%s.", mediaType.data());
@@ -94,42 +102,27 @@ int RtpHandler::SendToPeer_(std::vector<char> &packet) {
     assert(!"invalid media type");
   }
 
+  DumpSendPacket(vBufSend);
+
   ret = this->belongingPeerConnection_.srtpHandler_.ProtectRtp(
-      const_cast<std::vector<char> *>(&packet));
+      const_cast<std::vector<char> *>(&vBufSend));
   if (ret) {
     tylog("downlink protect rtp ret=%d", ret);
     return ret;
   }
 
-  sockaddr_in addr =
-      tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
-                               this->belongingPeerConnection_.clientPort_);
-  ssize_t sendtoLen =
-      sendto(g_sock_fd, packet.data(), packet.size(), 0,
-             reinterpret_cast<sockaddr *>(&addr), sizeof(struct sockaddr_in));
-  if (-1 == sendtoLen) {
-    tylog("sendto errorno=%d[%s]", errno, strerror(errno));
-    return -1;
+  ret = this->belongingPeerConnection_.SendToPeer(vBufSend);
+  if (ret) {
+    tylog("send to peer ret=%d", ret);
+    return ret;
   }
-  tylog("sendto reply succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
-        belongingPeerConnection_.clientIP_.data(),
-        belongingPeerConnection_.clientPort_);
 
   return 0;
 }
 
-void DumpPacket(const std::vector<char> &packet) {
-  sockaddr_in addr = tylib::ConstructSockAddr("127.0.0.1", 12347);
-  ssize_t sendtoLen =
-      sendto(g_dumpsock_fd, packet.data(), packet.size(), 0,
-             reinterpret_cast<sockaddr *>(&addr), sizeof(struct sockaddr_in));
-  if (-1 == sendtoLen) {
-    tylog("sendto errorno=%d[%s]", errno, strerror(errno));
-    // return -1;
-  }
-}
-
 int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
+  g_recvPacketNum->Add({{"dummy", "recv"}}).Increment();
+
   int ret = 0;
 
   // if we recv web's data, dtls should complete in Chrome
@@ -160,7 +153,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       return ret;
     }
 
-    DumpPacket(vBufReceive);
+    DumpRecvPacket(vBufReceive);
 
     ret = belongingPeerConnection_.rtcpHandler_.HandleRtcpPacket(vBufReceive);
     if (ret) {
@@ -173,12 +166,9 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     // must before srtp, otherwise srtp_err_status_replay_fail
     // https://segmentfault.com/a/1190000040211375
     if (mediaType == kMediaTypeVideo) {
-      const int kUplossRate = 100;
-      int dropKey = rand() % 1000;
-
-      if (dropKey < kUplossRate) {
-        tylog("up dropKey=%d lostrate=%d%%, drop! rtp=%s.", dropKey,
-              kUplossRate,
+      int r = rand() % 100;
+      if (r < kUplossRateMul100) {
+        tylog("up rand=%d lostrate=%d%%, drop! rtp=%s.", r, kUplossRateMul100,
               reinterpret_cast<const RtpHeader *>(vBufReceive.data())
                   ->ToString()
                   .data());
@@ -196,6 +186,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       tylog("unprotect RTP (not RTCP) fail ret=%d", ret);
       return ret;
     }
+    DumpRecvPacket(vBufReceive);
     tylog("after unprotect, paddinglen=%d", getRtpPaddingLength(vBufReceive));
 
     const RtpHeader &rtpHeader =
@@ -208,9 +199,31 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       g_UplinkVideoSsrc = rtpHeader.getSSRC();
     }
 
-    DumpPacket(vBufReceive);
-
-    SSRCInfo &ssrcInfo = this->ssrcInfoMap_[rtpHeader.getSSRC()];
+    // Constructing a value SSRCInfo is expensive, so we should not insert
+    // directly. Instead find firstly.
+    // OPT: use lower_bound and emplace with hint (ref to
+    // Singleton::GetPeerConnection). Because hash emplace is amortized O(1), so
+    // we do not use hint currently. Using find is more readable.
+    auto it = ssrcInfoMap_.find(rtpHeader.getSSRC());
+    if (ssrcInfoMap_.end() == it) {
+      // second query key, but O(1).
+      // NOTE that SSRCInfo has no default constructor.
+      // What if rehash make original SSRCInfo address changed?
+      // belongingRtpHandler ref to original address.
+      //
+      // ref:
+      // maybe not perfect:
+      // https://stackoverflow.com/questions/1935139/using-stdmapk-v-where-v-has-no-usable-default-constructor
+      // good: https://juejin.cn/post/7029372430397210632
+      auto p = ssrcInfoMap_.emplace(std::piecewise_construct,
+                                    std::forward_as_tuple(rtpHeader.getSSRC()),
+                                    std::forward_as_tuple(*this));
+      assert(p.second);
+      it = p.first;
+      assert(&it->second == &it->second.rtpReceiver.belongingSSRCInfo_);
+    }
+    SSRCInfo &ssrcInfo = it->second;
+    assert(&ssrcInfo == &ssrcInfo.rtpReceiver.belongingSSRCInfo_);
 
     const uint16_t itemSeq = rtpHeader.getSeqNumber();
     int64_t itemCycle = 0;
@@ -291,7 +304,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     // downlink
     std::vector<RtpBizPacket> sendPackets = ssrcInfo.rtpSender.Dequeue();
 
-    tylog("send to peer packets size=%zu", sendPackets.size());
+    tylog("send to peer packets num=%zu", sendPackets.size());
     for (RtpBizPacket &packet : sendPackets) {
       ret = SendToPeer_(packet.rtpRawPacket);
       if (ret) {
@@ -312,7 +325,5 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
 }
 
 std::string RtpHandler::ToString() const {
-  return "rtpDummyData";
-  // return tylib::format_string( "{ssrcMap=%s}",
-  // tylib::AnyToString(ssrc2unpacker_).data());
+  return tylib::format_string("ssrcMapSize=%zu.", ssrcInfoMap_.size());
 }

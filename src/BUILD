@@ -12,9 +12,9 @@ cc_binary(
         "@tylib//:tylib",
         "@openssl//:openssl_package",
         "@srtp//:srtp_package",
+        "@com_github_jupp0r_prometheus_cpp//pull",
     ],
 )
-
 
 # gtest at least C++14 compiler
 # http://google.github.io/googletest/quickstart-bazel.html
@@ -34,5 +34,6 @@ cc_test(
   deps = [
     "@com_google_googletest//:gtest_main",
     "@tylib//:tylib",
+    "@com_github_jupp0r_prometheus_cpp//pull",
   ],
 )

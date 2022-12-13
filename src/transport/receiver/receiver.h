@@ -18,11 +18,13 @@ class RtpReceiver {
   std::vector<RtpBizPacket> PopOrderedPackets();
   int GetJitterSize() const;
 
- private:
+  std::string ToString() const;
+
+ public:
   SSRCInfo& belongingSSRCInfo_;
 
   // must be ordered, cannot be hashmap
-  std::set<RtpBizPacket> jitterBuffer_;
+  std::map<PowerSeqT, RtpBizPacket> jitterBuffer_;
 
   // mark last popped one, should reserve rtp for nack,
   PowerSeqT lastPowerSeq_ = kShitRecvPowerSeqInitValue;

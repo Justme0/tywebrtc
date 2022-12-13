@@ -14,18 +14,22 @@
 #include <string>
 #include <vector>
 
+#include "prometheus/exposer.h"
+#include "prometheus/gauge.h"
+#include "prometheus/registry.h"
+
 #include "tylib/ip/ip.h"
+#include "tylib/string/format_string.h"
 #include "tylib/time/timer.h"
 
+#include "global_tmp/global_tmp.h"
 #include "log/log.h"
+#include "monitor/monitor.h"
 #include "pc/peer_connection.h"
 
-#include "global_tmp/global_tmp.h"
+prometheus::Exposer* g_pExposer;
 
 // TODO: use tywebrtc namespace?
-
-int g_sock_fd;
-int g_dumpsock_fd;
 
 // Execute `system` and get output, OPT: move to lib
 // https://stackoverflow.com/questions/478898/how-do-i-execute-a-command-and-get-the-output-of-the-command-within-c-using-po
@@ -377,7 +381,26 @@ class MonitorStateTimer : public Timer {
  private:
   bool _OnTimer() override {
     Singleton::Instance().CleanTimeoutPeerConnection();
-    tylog("client2pc size=%d.", Singleton::Instance().GetPeerConnectionSize());
+    const int size = Singleton::Instance().GetPeerConnectionSize();
+    tylog("client2pc size=%d.", size);
+
+    static prometheus::Family<prometheus::Gauge>* s_sessionNum = nullptr;
+    // first time maybe null
+    if (nullptr != s_sessionNum) {
+      // https://stackoverflow.com/questions/45172765/how-to-remove-no-longer-valid-gauges
+      g_pRegistry->Remove(*s_sessionNum);
+    }
+    s_sessionNum = &prometheus::BuildGauge()
+                        .Name("session_pcu")
+                        .Help("Number of sessions")
+                        .Register(*g_pRegistry);
+
+    for (auto& session : Singleton::Instance().client2PC_) {
+      s_sessionNum
+          ->Add({{"clientIP", session.first.ip},
+                 {"clientPort", tylib::AnyToString(session.first.port)}})
+          .Set(1);
+    }
 
     return true;
   }
@@ -422,11 +445,106 @@ int mkdir_p(const char* path, mode_t mode) {
   } while (0)
 
 int InitDumpSock() {
-  g_dumpsock_fd = socket(AF_INET, SOCK_DGRAM, 0);
-  if (g_dumpsock_fd < 0) {
-    tylog("cannot open dump socket, ret=%d", g_dumpsock_fd);
-    return -1;
+  int ret = 0;
+
+  // init recv socket
+  ret = socket(AF_INET, SOCK_DGRAM, 0);
+  if (ret == -1) {
+    tylogAndPrintfln("cannot open dump socket, ret=%d, errno=%d[%s]", ret,
+                     errno, strerror(errno));
+    return ret;
   }
+  g_dumpRecvSockfd = ret;
+
+  // bind
+  const char* kLocalIP = "127.0.0.1";  // maybe should in config
+  int kListenPort = 12346;
+  struct sockaddr_in address;
+  bzero(&address, sizeof(address));
+  address.sin_family = AF_INET;
+  inet_pton(AF_INET, kLocalIP, &address.sin_addr);
+  address.sin_port = htons(kListenPort);
+  tylogAndPrintfln("sendSocket to bind to %s:%d", kLocalIP, kListenPort);
+
+  ret = bind(g_dumpRecvSockfd, reinterpret_cast<const sockaddr*>(&address),
+             sizeof(address));
+  if (ret == -1) {
+    tylogAndPrintfln("bind return -1, errno=%d[%s]", errno, strerror(errno));
+
+    return ret;
+  }
+  tylogAndPrintfln("bind socket succ");
+
+  // init recv socket
+  ret = socket(AF_INET, SOCK_DGRAM, 0);
+  if (ret == -1) {
+    tylogAndPrintfln("cannot open dump socket, ret=%d, errno=%d[%s]", ret,
+                     errno, strerror(errno));
+    return ret;
+  }
+  g_dumpSendSockfd = ret;
+
+  // bind
+  kListenPort = 12348;
+  bzero(&address, sizeof(address));
+  address.sin_family = AF_INET;
+  inet_pton(AF_INET, kLocalIP, &address.sin_addr);
+  address.sin_port = htons(kListenPort);
+  tylogAndPrintfln("sendSocket to bind to %s:%d", kLocalIP, kListenPort);
+
+  ret = bind(g_dumpSendSockfd, reinterpret_cast<const sockaddr*>(&address),
+             sizeof(address));
+  if (ret == -1) {
+    tylogAndPrintfln("bind return -1, errno=%d[%s]", errno, strerror(errno));
+
+    return ret;
+  }
+  tylogAndPrintfln("bind socket succ");
+
+  return 0;
+}
+
+int InitMonitor() {
+  // https://github.com/jupp0r/prometheus-cpp
+  // create an http server
+  const int kMonitorPort = 80;
+  tylogAndPrintfln("bind prometheus http port=%d", kMonitorPort);
+  // Exporser object should always alive
+  // https://github.com/jupp0r/prometheus-cpp/issues/559#issuecomment-1068933850
+  g_pExposer =
+      new prometheus::Exposer{tylib::format_string("0.0.0.0:%d", kMonitorPort)};
+  // prometheus::Exposer exposer{{
+  // "listening_ports", "127.0.0.1:8091",
+  // "num_threads", "2",
+  // "enable_keep_alive", "yes",
+  // "keep_alive_timeout_ms", "90000", }};
+
+  // create a metrics registry
+  // @note it's the users responsibility to keep the object alive
+  g_pRegistry = std::make_shared<prometheus::Registry>();
+
+  // case 1
+  // add a new counter family to the registry (families combine values with the
+  // same name, but distinct label dimensions)
+  //
+  // @note please follow the metric-naming best-practices:
+  // https://prometheus.io/docs/practices/naming/
+
+  // case 2
+  // add a counter whose dimensional data is not known at compile time
+  // nevertheless dimensional values should only occur in low cardinality:
+  // https://prometheus.io/docs/practices/naming/#labels
+  g_bugShutDown = &prometheus::BuildGauge()
+                       .Name("bug_shutdown")
+                       .Help("Number of shutdown for bug")
+                       .Register(*g_pRegistry);
+  g_recvPacketNum = &prometheus::BuildGauge()
+                         .Name("recv_packet")
+                         .Help("Number of recv packet")
+                         .Register(*g_pRegistry);
+
+  // ask the exposer to scrape the registry on incoming HTTP requests
+  g_pExposer->RegisterCollectable(g_pRegistry);
 
   return 0;
 }
@@ -435,29 +553,40 @@ int main() {
   int ret = 0;
 
   // * init random seed
-  srand(time(NULL) + getpid());
+  srand(g_now_ms + getpid());
 
   // * init log
   INIT_LOG_V2("./log/",
               tylib::MLOG_F_TIME | tylib::MLOG_F_FILELINE | tylib::MLOG_F_FUNC,
               6, 100 * 1024 * 1024);
 
+  // before server launch, print log to standard out and file
+
   // * init const dump socket
   ret = InitDumpSock();
   if (ret) {
-    tylog("init dump ret=%d", ret);
+    tylogAndPrintfln("init dump ret=%d", ret);
+
     return ret;
   }
 
-  // before server launch, print log to standard out and file
+  // * init monitor
+  ret = InitMonitor();
+  if (ret) {
+    tylog("init monitor ret=%d.", ret);
+
+    return ret;
+  }
+
   tylogAndPrintfln("OPENSSL_VERSION_NUMBER=%#lx < 0x10100000 is %d",
                    OPENSSL_VERSION_NUMBER,
                    OPENSSL_VERSION_NUMBER < 0x10100000L);
 
   // step 1: create socket
   ret = socket(PF_INET, SOCK_DGRAM, 0);
-  if (ret < 0) {
-    tylogAndPrintfln("create listen socket failed, ret %d", ret);
+  if (ret == -1) {
+    tylogAndPrintfln("create listen socket failed, ret=%d, errno=%d[%s]", ret,
+                     errno, strerror(errno));
     return ret;
   }
   g_sock_fd = ret;
@@ -479,7 +608,7 @@ int main() {
   if (ret == -1) {
     tylogAndPrintfln("bind return -1, errno=%d[%s]", errno, strerror(errno));
 
-    return 0;
+    return ret;
   }
   tylogAndPrintfln("bind succ");
 

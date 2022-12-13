@@ -88,6 +88,9 @@ class PeerConnection {
 
   int HandlePacket(const std::vector<char>& vBufReceive);
 
+  int SendToClient(const std::vector<char>& vBufSend) const;
+  int SendToPeer(const std::vector<char>& vBufSend) const;
+
   void StoreClientIPPort(const std::string& ip, int port) {
     clientIP_ = ip;
     clientPort_ = port;
