@@ -62,4 +62,4 @@ Target overall delay: network+decode+render, accounting for min_playout_delay_ms
 # 代码架构
 (在线阅读本项目代码推荐 https://sourcegraph.com/github.com/Justme0/tywebrtc )
 
-![arch](doc_pic/arch.png)
+![arch](doc_pic/arch.svg)
