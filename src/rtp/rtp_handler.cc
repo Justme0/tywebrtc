@@ -38,7 +38,9 @@ extern int g_sock_fd;
 
 int DumpPacketH264(const std::vector<char> &packet,
                    H264Unpacketizer &unpacker) {
+  // temp return
   return 0;
+
   int ret = 0;
   const RtpHeader &rtpHeader =
       *reinterpret_cast<const RtpHeader *>(packet.data());
@@ -79,6 +81,24 @@ std::string SSRCInfo::ToString() const {
                               biggestCycle);
 }
 
+// tmp
+inline std::shared_ptr<PeerConnection> getPeerPC(const std::string &selfIP,
+                                                 int selfPort) {
+  for (const auto &p : Singleton::Instance().client2PC_) {
+    if (selfIP == p.first.ip && selfPort == p.first.port) {
+      continue;
+    }
+
+    if (p.second->stateMachine_ < EnumStateMachine::GOT_RTP) {
+      continue;
+    }
+
+    return p.second;
+  }
+
+  return nullptr;
+}
+
 // to rename
 int RtpHandler::SendToPeer_(std::vector<char> &vBufSend) {
   int ret = 0;
@@ -96,7 +116,7 @@ int RtpHandler::SendToPeer_(std::vector<char> &vBufSend) {
   } else if (mediaType == kMediaTypeVideo) {
     downlinkRtpHeader.setSSRC(kDownlinkVideoSsrc);
 
-    downlinkRtpHeader.setPayloadType(kDownlinkVideoPayloadType);
+    downlinkRtpHeader.setPayloadType(kDownlinkVideoVp8PayloadType);
   } else {
     tylog("invalid downlink send media type=%s.", mediaType.data());
     assert(!"invalid media type");
@@ -104,14 +124,20 @@ int RtpHandler::SendToPeer_(std::vector<char> &vBufSend) {
 
   DumpSendPacket(vBufSend);
 
-  ret = this->belongingPeerConnection_.srtpHandler_.ProtectRtp(
+  auto peerPC = getPeerPC(belongingPeerConnection_.clientIP_,
+                          belongingPeerConnection_.clientPort_);
+  if (nullptr == peerPC) {
+    return 0;
+  }
+
+  ret = peerPC->srtpHandler_.ProtectRtp(
       const_cast<std::vector<char> *>(&vBufSend));
   if (ret) {
     tylog("downlink protect rtp ret=%d", ret);
     return ret;
   }
 
-  ret = this->belongingPeerConnection_.SendToPeer(vBufSend);
+  ret = peerPC->SendToClient(vBufSend);
   if (ret) {
     tylog("send to peer ret=%d", ret);
     return ret;
@@ -183,7 +209,8 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     ret = belongingPeerConnection_.srtpHandler_.UnprotectRtp(
         const_cast<std::vector<char> *>(&vBufReceive));
     if (ret) {
-      tylog("unprotect RTP (not RTCP) fail ret=%d", ret);
+      tylog("warning: unprotect RTP (not RTCP) fail ret=%d", ret);
+
       return ret;
     }
     DumpRecvPacket(vBufReceive);
@@ -301,7 +328,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       assert(packet.rtpRawPacket.empty());
     }
 
-    // downlink
+    // downlink, should be in another file
     std::vector<RtpBizPacket> sendPackets = ssrcInfo.rtpSender.Dequeue();
 
     tylog("send to peer packets num=%zu", sendPackets.size());

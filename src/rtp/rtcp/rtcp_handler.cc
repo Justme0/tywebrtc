@@ -13,6 +13,24 @@ extern int g_sock_fd;
 
 RtcpHandler::RtcpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {}
 
+// tmp
+inline std::shared_ptr<PeerConnection> getPeerPC(const std::string &selfIP,
+                                                 int selfPort) {
+  for (const auto &p : Singleton::Instance().client2PC_) {
+    if (selfIP == p.first.ip && selfPort == p.first.port) {
+      continue;
+    }
+
+    if (p.second->stateMachine_ < EnumStateMachine::GOT_RTP) {
+      continue;
+    }
+
+    return p.second;
+  }
+
+  return nullptr;
+}
+
 // 处理解密后的 RTCP 包
 int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
   int ret = 0;
@@ -223,8 +241,9 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
         break;
       }
       case RtcpPacketType::kGenericRtpFeedback: {
-        switch (static_cast<RtcpFeedbackFormat>(chead->getBlockCount())) {
-          case RtcpFeedbackFormat::kFeedbackNack: {
+        switch (
+            static_cast<RtcpGenericFeedbackFormat>(chead->getBlockCount())) {
+          case RtcpGenericFeedbackFormat::kFeedbackNack: {
             // audio have no nack?
             RtcpHeader *rsphead = const_cast<RtcpHeader *>(chead);
 
@@ -238,7 +257,7 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
 
             break;
           }
-          case RtcpFeedbackFormat::kFeedbackTCC: {
+          case RtcpGenericFeedbackFormat::kFeedbackTCC: {
             break;
           }
         }
@@ -277,7 +296,14 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
 
   DumpSendPacket(vBufReceive);
 
-  ret = this->belongingPeerConnection_.srtpHandler_.ProtectRtcp(
+  auto peerPC = getPeerPC(belongingPeerConnection_.clientIP_,
+                          belongingPeerConnection_.clientPort_);
+
+  if (nullptr == peerPC) {
+    return 0;
+  }
+
+  ret = peerPC->srtpHandler_.ProtectRtcp(
       const_cast<std::vector<char> *>(&vBufReceive));
   if (ret) {
     tylog("downlink protect rtcp ret=%d", ret);
@@ -285,7 +311,7 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
   }
 
   // unvarnished transmission to peer
-  ret = this->belongingPeerConnection_.SendToPeer(vBufReceive);
+  ret = peerPC->SendToClient(vBufReceive);
   if (ret) {
     tylog("send ret=%d", ret);
     return ret;
@@ -712,21 +738,6 @@ uint32_t RtcpHandler::CreateReceiverReport(RTCPData::shared data, char *out,
   return rtcp->Serialize(reinterpret_cast<uint8_t *>(out), max_len);
 }
 
-uint32_t RtcpHandler::CreatePLIReport(RTCPData::shared data, char *out,
-                                      int max_len) {
-  auto p = std::static_pointer_cast<RTCPPLIReportData>(data);
-
-  // Create rtcp sender retpor
-  auto rtcp = RTCPCompoundPacket::Create();
-
-  // Add to rtcp
-  rtcp->CreatePacket<RTCPPayloadFeedback>(
-      RTCPPayloadFeedback::PictureLossIndication, p->local_ssrc_,
-      p->remote_ssrc_);
-
-  return rtcp->Serialize(reinterpret_cast<uint8_t *>(out), max_len);
-}
-
 
 
 uint32_t RtcpHandler::CreateBye(RtcpByeInfo &bye, std::vector<char>&
@@ -852,6 +863,40 @@ int RtcpHandler::CreateNackReportSend(const std::set<int> &lostSeqs,
   ret = SerializeNackSend_(nackBlokVect, localSSRC, remoteSSRC);
   if (ret) {
     tylog("serializeNack ret=%d", ret);
+
+    return ret;
+  }
+
+  return 0;
+}
+
+int RtcpHandler::CreatePLIReportSend(uint32_t localSSRC, uint32_t remoteSSRC) {
+  int ret = 0;
+
+  RtcpHeader pli;
+  pli.setPacketType(RtcpPacketType::kPayloadSpecificFeedback);
+  pli.setBlockCount(static_cast<uint8_t>(RtcpPayloadSpecificFormat::kRtcpPLI));
+  pli.setSSRC(localSSRC);
+  pli.setSourceSSRC(remoteSSRC);
+  pli.setLength(2);
+
+  const char *head = reinterpret_cast<const char *>(&pli);
+  const int len = (pli.getLength() + 1) * 4;
+  assert(len == 12);                            // head len
+  std::vector<char> rtcpBin(head, head + len);  // can use string view
+
+  DumpSendPacket(rtcpBin);
+
+  ret = this->belongingPeerConnection_.srtpHandler_.ProtectRtcp(
+      const_cast<std::vector<char> *>(&rtcpBin));
+  if (ret) {
+    tylog("uplink send to src client, protect rtcp ret=%d", ret);
+    return ret;
+  }
+
+  ret = this->belongingPeerConnection_.SendToClient(rtcpBin);
+  if (ret) {
+    tylog("send to client nack rtcp ret=%d", ret);
 
     return ret;
   }

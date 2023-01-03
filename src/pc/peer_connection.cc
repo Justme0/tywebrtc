@@ -33,18 +33,22 @@ int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {
 
 // vBufSend is crypto data
 int PeerConnection::SendToPeer(const std::vector<char> &vBufSend) const {
-  // maybe not clientip
-  sockaddr_in addr = tylib::ConstructSockAddr(clientIP_, clientPort_);
-  ssize_t sendtoLen =
-      sendto(g_sock_fd, vBufSend.data(), vBufSend.size(), 0,
-             reinterpret_cast<sockaddr *>(&addr), sizeof(struct sockaddr_in));
-  if (-1 == sendtoLen) {
-    tylog("sendto ret=-1 errorno=%d[%s]", errno, strerror(errno));
-    return errno;
-  }
+  assert(!"shit");
+  /*
 
-  tylog("sendto succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
-        clientIP_.data(), clientPort_);
+    sockaddr_in addr = tylib::ConstructSockAddr(peerIP, peerPort);
+    ssize_t sendtoLen =
+        sendto(g_sock_fd, vBufSend.data(), vBufSend.size(), 0,
+               reinterpret_cast<sockaddr *>(&addr), sizeof(struct sockaddr_in));
+    if (-1 == sendtoLen) {
+      tylog("sendto ret=-1 errorno=%d[%s]", errno, strerror(errno));
+
+      return errno;
+    }
+
+    tylog("sendto succ buf size=%ld, ip=%s, port=%d.", sendtoLen, peerIP.data(),
+          peerPort);
+          */
 
   return 0;
 }

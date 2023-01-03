@@ -197,13 +197,13 @@ class RtcpHandler {
 
   uint32_t CreateSenderReport(std::vector<char>& o_rtcpPacketBin);
   uint32_t CreateReceiverReport(std::vector<char>& o_rtcpPacketBin);
-  uint32_t CreatePLIReport(std::vector<char>& o_rtcpPacketBin);
   // uint32_t CreateNackReport(std::vector<char>& o_rtcpPacketBin);
   uint32_t CreateXr(std::vector<char>& o_rtcpPacketBin);
   // uint32_t CreateBye(RtcpByeInfo& bye, std::vector<char>& o_rtcpPacketBin);
 
   int CreateNackReportSend(const std::set<int>& lostSeqs, uint32_t localSSRC,
                            uint32_t remoteSSRC);
+  int CreatePLIReportSend(uint32_t localSSRC, uint32_t remoteSSRC);
 
  private:
   // OPT: use separate file

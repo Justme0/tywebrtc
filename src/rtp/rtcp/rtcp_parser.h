@@ -9,6 +9,24 @@
 
 #include "log/log.h"
 
+// #define RRTR_BT 4
+// #define DLRR_BT 5
+
+// payload type is 205
+enum class RtcpGenericFeedbackFormat {
+  kFeedbackNack = 1,
+  kFeedbackTCC = 15,
+};
+
+// payload type is 206
+enum class RtcpPayloadSpecificFormat {
+  kRtcpPLI = 1,
+  kRtcpSLI = 2,
+  kRtcpRPSI = 3,
+  kRtcpFIR = 4,
+  kRtcpREMB = 15,
+};
+
 // if add new enum, modify ToString and rtcp handler switch case
 // should use polymorphism?
 // https://datatracker.ietf.org/doc/html/rfc5760#section-5
@@ -60,6 +78,10 @@ inline std::string RtcpPacketTypeToString(RtcpPacketType type) {
 }
 
 // @brief check if RTCP
+// same as
+// https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/modules/rtp_rtcp/source/rtp_util.cc;l=32;drc=184005f8792002e29052d653f4846121ee7d1f9a
+// 128 + (64 <= payload_type && payload_type < 96), that is [192, 223]
+//
 // 72 to 76 is reserved for RTP
 // 77 to 79 is not reserver but they are not assigned we will block them
 // for RTCP 200 SR  == marker bit + 72
@@ -98,24 +120,6 @@ inline bool isRtcp(RtcpPacketType packettype) {
   return packettype >= RtcpPacketType::RTCP_MIN_PT &&
          packettype <= RtcpPacketType::RTCP_MAX_PT;
 }
-
-#define RRTR_BT 4
-#define DLRR_BT 5
-
-// payload type is 205
-enum class RtcpFeedbackFormat {
-  kFeedbackNack = 1,
-  kFeedbackTCC = 15,
-};
-
-// payload type is 206
-enum class RtcpPayloadSpecificFormat {
-  kRtcpPLI = 1,
-  kRtcpSLI = 2,
-  kRtcpRPSI = 3,
-  kRtcpFIR = 4,
-  kRtcpREMB = 15,
-};
 
 // Generic NACK RTCP_RTP_FB + (FMT 1)rfc4585
 //  0                   1                   2                   3

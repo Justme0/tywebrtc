@@ -6,15 +6,15 @@
 #include "log/log.h"
 #include "pc/peer_connection.h"
 
-prometheus::Family<prometheus::Gauge> *g_bugShutDown;
+prometheus::Family<prometheus::Gauge> *g_startServer;
 prometheus::Family<prometheus::Gauge> *g_recvPacketNum;
 
 int g_sock_fd;
 int g_dumpRecvSockfd;
 int g_dumpSendSockfd;
 
-int g_UplinkAudioSsrc;  // taylor to make dynamic
-int g_UplinkVideoSsrc;
+uint32_t g_UplinkAudioSsrc;  // taylor to make dynamic
+uint32_t g_UplinkVideoSsrc;
 
 // if construct map's value is expensive
 // https://stackoverflow.com/questions/97050/stdmap-insert-or-stdmap-find

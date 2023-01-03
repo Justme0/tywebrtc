@@ -507,7 +507,7 @@ int InitDumpSock() {
 int InitMonitor() {
   // https://github.com/jupp0r/prometheus-cpp
   // create an http server
-  const int kMonitorPort = 80;
+  const int kMonitorPort = 443;
   tylogAndPrintfln("bind prometheus http port=%d", kMonitorPort);
   // Exporser object should always alive
   // https://github.com/jupp0r/prometheus-cpp/issues/559#issuecomment-1068933850
@@ -534,9 +534,9 @@ int InitMonitor() {
   // add a counter whose dimensional data is not known at compile time
   // nevertheless dimensional values should only occur in low cardinality:
   // https://prometheus.io/docs/practices/naming/#labels
-  g_bugShutDown = &prometheus::BuildGauge()
-                       .Name("bug_shutdown")
-                       .Help("Number of shutdown for bug")
+  g_startServer = &prometheus::BuildGauge()
+                       .Name("start_server")
+                       .Help("Number of server start")
                        .Register(*g_pRegistry);
   g_recvPacketNum = &prometheus::BuildGauge()
                          .Name("recv_packet")
@@ -621,6 +621,8 @@ int main() {
 
   // * init timer
   InitTimer();
+
+  g_startServer->Add({{"dummy", "startServer"}}).Increment();
 
   // step 3: event loop
   CrossPlatformNetworkIO();

@@ -12,25 +12,26 @@
 #include "prometheus/family.h"
 #include "prometheus/gauge.h"
 
-const int kUplossRateMul100 = 1;
-const int kPCDeadTimeoutMs = 30 * 1000;
+const int kUplossRateMul100 = 0;
+const int kPCDeadTimeoutMs = 1 * 1000;
 
+extern prometheus::Family<prometheus::Gauge>* g_startServer;
 extern prometheus::Family<prometheus::Gauge>* g_recvPacketNum;
-extern prometheus::Family<prometheus::Gauge>* g_bugShutDown;
 
 extern int g_sock_fd;
 extern int g_dumpRecvSockfd;
 extern int g_dumpSendSockfd;
 
-extern int g_UplinkAudioSsrc;  // taylor to make dynamic
-// const int kUplinkAudioPayloadType = 111;
-extern int g_UplinkVideoSsrc;
+extern uint32_t g_UplinkAudioSsrc;  // taylor to make dynamic
+// consuint32_tnt kUplinkAudioPayloadType = 111;
+extern uint32_t g_UplinkVideoSsrc;
 // const int kUplinkVideoPayloadType = 125;  // H.264
 
 const int kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
 const int kDownlinkAudioPayloadType = 111;
-const int kDownlinkVideoSsrc = 33697348;    // taylor to make dynamic
-const int kDownlinkVideoPayloadType = 125;  // H.264
+const int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
+const int kDownlinkVideoH264PayloadType = 125;
+const int kDownlinkVideoVp8PayloadType = 96;
 
 class PeerConnection;
 

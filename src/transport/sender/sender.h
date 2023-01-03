@@ -19,7 +19,7 @@ class RtpSender {
 
  private:
   SSRCInfo& belongingSSRCInfo_;
-  std::set<RtpBizPacket> sendQueue_;
+  std::map<PowerSeqT, RtpBizPacket> sendQueue_;
 };
 
 #endif  //   TRANSPORT_SENDER_SENDER_H_

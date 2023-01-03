@@ -22,6 +22,9 @@ enum class PacketType {
   UNKNOWN,
 };
 
+// OPT: return string_view
+// e.g.
+// https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/media/base/rtp_utils.cc;drc=184005f8792002e29052d653f4846121ee7d1f9a;l=163
 inline std::string PacketTypeToString(PacketType p) {
   switch (p) {
     case PacketType::STUN:
@@ -47,6 +50,8 @@ inline PacketType getPacketType(uint8_t cSubCmd) {
   }
 
   if (cSubCmd >= 128 && cSubCmd <= 191) {
+    // RTP/RTCP version is 2 (left two bit), so first char is
+    // 1000 0000 ~ 1011 1111
     return PacketType::RTP;
   }
 

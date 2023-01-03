@@ -7,8 +7,7 @@
 RtpSender::RtpSender(SSRCInfo& ssrcInfo) : belongingSSRCInfo_(ssrcInfo) {}
 
 void RtpSender::Enqueue(RtpBizPacket&& rtpBizPacket) {
-  // fix: power seq is related to ssrc
-  this->sendQueue_.insert(std::move(rtpBizPacket));
+  sendQueue_.emplace(rtpBizPacket.GetPowerSeq(), std::move(rtpBizPacket));
   assert(rtpBizPacket.rtpRawPacket.empty());
 }
 
@@ -21,8 +20,8 @@ std::vector<RtpBizPacket> RtpSender::Dequeue() {
 
   for (auto it = sendQueue_.begin(); it != sendQueue_.end();) {
     // hack: modify set's element, should use C++17 set::extract
-    packets.emplace_back(std::move(const_cast<RtpBizPacket&>(*it)));
-    assert(it->rtpRawPacket.empty());
+    packets.emplace_back(std::move(const_cast<RtpBizPacket&>(it->second)));
+    assert(it->second.rtpRawPacket.empty());
 
     it = sendQueue_.erase(it);
   }

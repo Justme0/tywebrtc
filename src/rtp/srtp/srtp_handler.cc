@@ -159,9 +159,13 @@ int SrtpHandler::UnprotectRtp(std::vector<char> *io_vBufForSrtp) {
   srtp_err_status_t ret =
       srtp_unprotect(receive_session_, io_vBufForSrtp->data(), &len);
   if (ret) {
-    // if return srtp_err_status_replay_old
+    // if return srtp_err_status_replay_old=10
     // https://mp.weixin.qq.com/s/u7eStMiCGxNyEWsYkG8UYg
-    tylog("error srtp_unprotect ret=%d", ret);
+    //
+    // if return srtp_err_status_replay_fail=9,
+    // maybe unordered, nack retransmit, not error
+    tylog("warning: srtp_unprotect ret=%d", ret);
+
     return ret;
   }
 
@@ -219,6 +223,7 @@ int SrtpHandler::UnprotectRtcp(std::vector<char> *io_vBufForSrtp) {
       srtp_unprotect_rtcp(receive_session_, io_vBufForSrtp->data(), &len);
   if (ret) {
     tylog("error srtp_unprotect ret=%d", ret);
+
     return ret;
   }
 

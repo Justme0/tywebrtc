@@ -15,6 +15,33 @@
             margin: 0 0 1em 0;
         }
     </style>
+</head>
+
+<body>
+    <br />
+    <div id="conference">
+        <div id="container">
+            自己 ( self ):
+            <br />
+            <video id="video_container_publish" playsinline controls autoplay muted width="250" height="250"></video>
+            <br />
+            <br />
+            对方 ( friend ):
+            <br />
+            <video id="video_container_subscribe" playsinline controls autoplay width="750" height="750"></video>
+        </div>
+
+    </div>
+
+    <div>
+        <!-- <button onclick="publish()">Publish</button> -->
+        <br />
+
+        <!-- 点击对方画面右下角的喇叭按钮，否则听不到对方声音 -->
+        <br />
+        &nbsp;&nbsp;&nbsp;&nbsp;
+        <button onclick="unpublish()">挂电话 ( close )</button>
+    </div>
 
     <script type='text/javascript'>
         // ref: https://github.com/webrtc/samples/blob/gh-pages/src/content/peerconnection/pc1/js/main.js
@@ -78,7 +105,7 @@
             }
 
             const constraints = {
-                video: { width: { exact: 640 }, height: { exact: 480 } },
+                video: { frameRate: { exact: 15 },  width: { exact: 450 }, height: { exact: 450 } },
                 audio: true
             }
 
@@ -140,7 +167,7 @@ a=rtpmap:111 opus/48000/2
 a=rtcp-fb:111 nack
 a=rtcp-fb:111 rrtr
 a=fmtp:111 minptime=20;sprop-stereo=1;stereo=1
-m=video 9 UDP/TLS/RTP/SAVPF 125
+m=video 9 UDP/TLS/RTP/SAVPF 96
 c=IN IP4 0.0.0.0
 a=rtcp:9 IN IP4 0.0.0.0
 a=candidate:1 1 udp 1686052607 36.155.205.204 8090 typ srflx raddr 36.155.205.204 rport 8090 generation 0
@@ -154,13 +181,12 @@ a=extmap:14 urn:ietf:params:rtp-hdrext:toffset
 a=recvonly
 a=rtcp-mux
 a=rtcp-rsize
-a=rtpmap:125 H264/90000
-a=rtcp-fb:125 ccm fir
-a=rtcp-fb:125 nack
-a=rtcp-fb:125 nack pli
-a=rtcp-fb:125 rrtr
-a=rtcp-fb:125 remb
-a=fmtp:125 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f;x-google-start-bitrate=400
+a=rtpmap:96 VP8/90000
+a=rtcp-fb:96 goog-remb
+a=rtcp-fb:96 ccm fir
+a=rtcp-fb:96 nack
+a=rtcp-fb:96 nack pli
+a=rtcp-fb:96 rrtr
 m=audio 9 UDP/TLS/RTP/SAVPF 111
 c=IN IP4 0.0.0.0
 a=rtcp:9 IN IP4 0.0.0.0
@@ -181,7 +207,7 @@ a=ssrc:16854838 cname:YZcxBwerFFm6GH69
 a=ssrc:16854838 msid:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV 128f4fa0-81dd-4c3a-bbcd-22e71e29d178
 a=ssrc:16854838 mslabel:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV
 a=ssrc:16854838 label:128f4fa0-81dd-4c3a-bbcd-22e71e29d178
-m=video 9 UDP/TLS/RTP/SAVPF 125 96
+m=video 9 UDP/TLS/RTP/SAVPF 96
 c=IN IP4 0.0.0.0
 a=rtcp:9 IN IP4 0.0.0.0
 a=candidate:1 1 udp 1686052607 36.155.205.204 8090 typ srflx raddr 36.155.205.204 rport 8090 generation 0
@@ -195,13 +221,6 @@ a=extmap:5 urn:ietf:params:rtp-hdrext:toffset
 a=sendonly
 a=rtcp-mux
 a=rtcp-rsize
-a=rtpmap:125 H264/90000
-a=rtcp-fb:125 goog-remb
-a=rtcp-fb:125 ccm fir
-a=rtcp-fb:125 nack
-a=rtcp-fb:125 nack pli
-a=rtcp-fb:125 rrtr
-a=fmtp:125 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f;sps-pps-idr-in-keyframe=1
 a=rtpmap:96 VP8/90000
 a=rtcp-fb:96 goog-remb
 a=rtcp-fb:96 ccm fir
@@ -230,36 +249,17 @@ a=ssrc:50472669 label:1d7fc300-9889-4f94-9f35-c0bcc77a260d
             await pc.setRemoteDescription(answer);
         }
 
+
+        /*
+        document.addEventListener("WeixinJSBridgeReady", () => {
+            let videoElement = document.getElementById('video_container_publish');
+            videoElement.play()
+        }, false);
+        */
+
+        publish()
+
     </script>
-
-</head>
-
-<body>
-    <h1>tywebrtc Demo</h1>
-    <br />
-
-    <div>
-        <button onclick="publish()">Publish</button>
-        &nbsp;&nbsp;&nbsp;&nbsp;
-        <button onclick="unpublish()">Unpublish</button>
-    </div>
-
-    <br />
-    <br />
-    <div id="conference">
-        <div id="container">
-            publish:
-            <br />
-            <video id="video_container_publish" playsinline controls autoplay muted width="240" height="160"></video>
-            <br />
-            <br />
-            subscribe:
-            <br />
-            <video id="video_container_subscribe" playsinline controls autoplay muted width="480" height="320"></video>
-        </div>
-        <br />
-
-    </div>
 </body>
 
 </html>
