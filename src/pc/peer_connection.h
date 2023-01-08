@@ -92,6 +92,7 @@ class PeerConnection {
   PeerConnection();
 
   int HandlePacket(const std::vector<char>& vBufReceive);
+  int HandleDownlinkPacket(const std::vector<char>& vBufReceive);
 
   int SendToClient(const std::vector<char>& vBufSend) const;
   int SendToPeer(const std::vector<char>& vBufSend) const;

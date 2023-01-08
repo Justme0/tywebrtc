@@ -6,6 +6,7 @@
 
 RtpSender::RtpSender(SSRCInfo& ssrcInfo) : belongingSSRCInfo_(ssrcInfo) {}
 
+// add protected RTP packet
 void RtpSender::Enqueue(RtpBizPacket&& rtpBizPacket) {
   sendQueue_.emplace(rtpBizPacket.GetPowerSeq(), std::move(rtpBizPacket));
   assert(rtpBizPacket.rtpRawPacket.empty());

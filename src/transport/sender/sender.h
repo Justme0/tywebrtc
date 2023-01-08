@@ -8,17 +8,23 @@
 
 class SSRCInfo;
 
-// audio should not in pacing
 class RtpSender {
  public:
   explicit RtpSender(SSRCInfo& ssrcInfo);
 
-  void Enqueue(RtpBizPacket&& rtpBizPacket);
+  void Enqueue(RtpBizPacket&& rtpBizBuffer);
   std::vector<RtpBizPacket> Dequeue();
   int GetQueueSize() const;
 
+ // origin remote ssrc from server
+  uint32_t remoteSSRC = 0;
  private:
   SSRCInfo& belongingSSRCInfo_;
+
+  const int kMaxSendQueueLen = 5000;
+
+  // for client NACK, store protected data.
+  // OPT: add pacing
   std::map<PowerSeqT, RtpBizPacket> sendQueue_;
 };
 

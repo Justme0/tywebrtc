@@ -605,7 +605,7 @@ struct RtpBizPacket {
     if (this != &other) {
       rtpRawPacket = std::move(other.rtpRawPacket);
       cycle = other.cycle;
-      enterJitterTimeMs = other.enterJitterTimeMs;
+      enterTimeMs = other.enterTimeMs;
     }
 
     return *this;
@@ -627,17 +627,18 @@ struct RtpBizPacket {
         reinterpret_cast<const RtpHeader*>(rtpRawPacket.data())
             ->ToString()
             .data(),
-        cycle, tylib::MilliSecondToLocalTimeString(enterJitterTimeMs).data(),
+        cycle, tylib::MilliSecondToLocalTimeString(enterTimeMs).data(),
         WaitTimeMs());
   }
 
   // from enter jitter to now duration
-  int64_t WaitTimeMs() const { return g_now_ms - enterJitterTimeMs; }
+  int64_t WaitTimeMs() const { return g_now_ms - enterTimeMs; }
 
+ public:  // should be private
   // when add new member, must modify constructor, ToString(), etc.
   std::vector<char> rtpRawPacket;
   int64_t cycle = 0;
-  int64_t enterJitterTimeMs = 0;
+  int64_t enterTimeMs = 0;
 };
 
 // padding (P): 1 bit

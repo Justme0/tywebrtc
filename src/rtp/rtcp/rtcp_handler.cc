@@ -244,6 +244,9 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
         switch (
             static_cast<RtcpGenericFeedbackFormat>(chead->getBlockCount())) {
           case RtcpGenericFeedbackFormat::kFeedbackNack: {
+            // chead->getNackPid();
+            // chead->getNackBlp();
+
             // audio have no nack?
             RtcpHeader *rsphead = const_cast<RtcpHeader *>(chead);
 
@@ -254,6 +257,8 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
               assert(g_UplinkVideoSsrc != 0);
               rsphead->setSourceSSRC(g_UplinkVideoSsrc);
             }
+
+            // 下行重打seq，应当重新填上行的seq
 
             break;
           }
@@ -823,6 +828,7 @@ int RtcpHandler::SerializeNackSend_(const std::vector<NackBlock> &nackBlokVect,
     return ret;
   }
 
+  // 上行服务端发NACK
   ret = this->belongingPeerConnection_.SendToClient(rtcpBin);
   if (ret) {
     tylog("send to client nack rtcp ret=%d", ret);
@@ -894,6 +900,7 @@ int RtcpHandler::CreatePLIReportSend(uint32_t localSSRC, uint32_t remoteSSRC) {
     return ret;
   }
 
+  // 上行服务端发PLI
   ret = this->belongingPeerConnection_.SendToClient(rtcpBin);
   if (ret) {
     tylog("send to client nack rtcp ret=%d", ret);

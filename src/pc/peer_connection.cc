@@ -102,6 +102,103 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
   return 0;
 }
 
+// recv another server's packet
+int HandleDownlinkPacket(const std::vector<char> &vBufReceive) {
+  int ret = 0;
+  RtpHeader &downlinkRtpHeader =
+      *reinterpret_cast<RtpHeader *>(vBufSend.data());
+
+  uint32_t remoteSSRC = downlinkRtpHeader.getSSRC();
+  std::string mediaType = downlinkRtpHeader.GetMediaType();
+  tylog("downlink send media type=%s.", mediaType.data());
+
+  // payload type not changed
+  if (mediaType == kMediaTypeAudio) {
+    // taylor audio not use pacing
+    downlinkRtpHeader.setSSRC(kDownlinkAudioSsrc);
+    // downlinkRtpHeader.setPayloadType(kDownlinkAudioPayloadType);
+  } else if (mediaType == kMediaTypeVideo) {
+    downlinkRtpHeader.setSSRC(kDownlinkVideoSsrc);
+    // downlinkRtpHeader.setPayloadType(kDownlinkVideoVp8PayloadType);
+  } else {
+    tylog("invalid downlink send media type=%s.", mediaType.data());
+    assert(!"invalid media type");
+  }
+
+  // to extract common
+  // Constructing a value SSRCInfo is expensive, so we should not insert
+  // directly. Instead find firstly.
+  // OPT: use lower_bound and emplace with hint (ref to
+  // Singleton::GetPeerConnection). Because hash emplace is amortized O(1), so
+  // we do not use hint currently. Using find is more readable.
+  auto it = rtpHandler_.ssrcInfoMap_.find(downlinkRtpHeader.getSSRC());
+  if (rtpHandler_.ssrcInfoMap_.end() == it) {
+    // second query key, but O(1).
+    // NOTE that SSRCInfo has no default constructor.
+    // What if rehash make original SSRCInfo address changed?
+    // belongingRtpHandler ref to original address.
+    //
+    // ref:
+    // maybe not perfect:
+    // https://stackoverflow.com/questions/1935139/using-stdmapk-v-where-v-has-no-usable-default-constructor
+    // good: https://juejin.cn/post/7029372430397210632
+    auto p = rtpHandler_.ssrcInfoMap_.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(downlinkRtpHeader.getSSRC()),
+        std::forward_as_tuple(rtpHandler_));
+
+ // should be in ssrcInfo constructor
+    ssrcInfo.rtpSender.remoteSSRC = remoteSSRC;
+
+    assert(p.second);
+    it = p.first;
+    assert(&it->second == &it->second.rtpReceiver.belongingSSRCInfo_);
+  }
+  SSRCInfo &ssrcInfo = it->second;
+  assert(&ssrcInfo == &ssrcInfo.rtpReceiver.belongingSSRCInfo_);
+
+  tylog("rtpHandler=%s.", rtpHandler_.ToString().data());
+
+  downlinkRtpHeader.setSeqNumber(ssrcInfo.downlinkSeq++);
+
+  DumpSendPacket(vBufSend);
+
+  ret = srtpHandler_.ProtectRtp(const_cast<std::vector<char> *>(&vBufSend));
+  if (ret) {
+    tylog("downlink protect rtp ret=%d", ret);
+    return ret;
+  }
+
+  if (ssrcInfo.rtpSender.remoteSSRC != remoteSSRC) {
+
+  }
+  ssrcInfo.rtpSender.Enqueue(std::move(packet));
+  std::vector<RtpBizPacket> sendPackets = ssrcInfo.rtpSender.Dequeue();
+
+  // test video loss, should after srtp
+  if (mediaType == kMediaTypeVideo) {
+    int r = rand() % 100;
+    if (r < kDownlossRateMul100) {
+      tylog("down rand=%d lostrate=%d%%, drop! after protect rtp=%s.", r,
+            kDownlossRateMul100,
+            reinterpret_cast<const RtpHeader *>(vBufReceive.data())
+                ->ToString()
+                .data());
+
+      return 0;
+    }
+  }
+
+  ret = SendToClient(vBufSend);
+  if (ret) {
+    tylog("send to peer ret=%d", ret);
+
+    return ret;
+  }
+
+  return 0;
+}
+
 std::string PeerConnection::ToString() const {
   return tylib::format_string(
       "{state=%s, client=%s:%d, initTime=%s, lastLiveTime=%s}",

@@ -17,14 +17,21 @@ struct SSRCInfo {
 
   std::string ToString() const;
 
+ public:  // should be private
   // why define ssrc's unpacketizer: save unpacked frame e.g. FU-A
   // audio don't use h264Unpacketizer
   H264Unpacketizer h264Unpacketizer;
+
+  // receiver and sender should be union
   RtpReceiver rtpReceiver;
   RtpSender rtpSender;
 
+  // receiver seq
   uint16_t biggestSeq = 0;
   int64_t biggestCycle = 0;
+
+  // sender seq
+  uint16_t downlinkSeq = 0;
 
   RtpHandler &belongingRtpHandler;
 };
@@ -39,7 +46,6 @@ class RtpHandler {
 
  private:
   int HandleRtcpPacket_(const std::vector<char> &vBufReceive);
-  int SendToPeer_(std::vector<char> &packet);
 
  public:
   PeerConnection &belongingPeerConnection_;

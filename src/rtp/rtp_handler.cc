@@ -38,7 +38,7 @@ extern int g_sock_fd;
 
 int DumpPacketH264(const std::vector<char> &packet,
                    H264Unpacketizer &unpacker) {
-  // temp return
+  // maybe VP8, now tmp return
   return 0;
 
   int ret = 0;
@@ -99,53 +99,6 @@ inline std::shared_ptr<PeerConnection> getPeerPC(const std::string &selfIP,
   return nullptr;
 }
 
-// to rename
-int RtpHandler::SendToPeer_(std::vector<char> &vBufSend) {
-  int ret = 0;
-  RtpHeader &downlinkRtpHeader =
-      *reinterpret_cast<RtpHeader *>(vBufSend.data());
-
-  std::string mediaType = downlinkRtpHeader.GetMediaType();
-  tylog("downlink send media type=%s.", mediaType.data());
-
-  if (mediaType == kMediaTypeAudio) {
-    // taylor audio not use pacing
-    downlinkRtpHeader.setSSRC(kDownlinkAudioSsrc);
-
-    downlinkRtpHeader.setPayloadType(kDownlinkAudioPayloadType);
-  } else if (mediaType == kMediaTypeVideo) {
-    downlinkRtpHeader.setSSRC(kDownlinkVideoSsrc);
-
-    downlinkRtpHeader.setPayloadType(kDownlinkVideoVp8PayloadType);
-  } else {
-    tylog("invalid downlink send media type=%s.", mediaType.data());
-    assert(!"invalid media type");
-  }
-
-  DumpSendPacket(vBufSend);
-
-  auto peerPC = getPeerPC(belongingPeerConnection_.clientIP_,
-                          belongingPeerConnection_.clientPort_);
-  if (nullptr == peerPC) {
-    return 0;
-  }
-
-  ret = peerPC->srtpHandler_.ProtectRtp(
-      const_cast<std::vector<char> *>(&vBufSend));
-  if (ret) {
-    tylog("downlink protect rtp ret=%d", ret);
-    return ret;
-  }
-
-  ret = peerPC->SendToClient(vBufSend);
-  if (ret) {
-    tylog("send to peer ret=%d", ret);
-    return ret;
-  }
-
-  return 0;
-}
-
 int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   g_recvPacketNum->Add({{"dummy", "recv"}}).Increment();
 
@@ -194,7 +147,8 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     if (mediaType == kMediaTypeVideo) {
       int r = rand() % 100;
       if (r < kUplossRateMul100) {
-        tylog("up rand=%d lostrate=%d%%, drop! rtp=%s.", r, kUplossRateMul100,
+        tylog("up rand=%d lostrate=%d%%, drop! before unprotect rtp=%s.", r,
+              kUplossRateMul100,
               reinterpret_cast<const RtpHeader *>(vBufReceive.data())
                   ->ToString()
                   .data());
@@ -263,8 +217,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     // update 3 var: ssrcInfo.biggestSeq, ssrcInfo.biggestCycle, itemCycle
     if (itemSeq == ssrcInfo.biggestSeq) {
       // todo more logic
-      tylog("recv repeated rtp packet, ignoer it=%s.",
-            rtpHeader.ToString().data());
+      tylog("recv repeated rtp packet=%s.", rtpHeader.ToString().data());
       itemCycle = ssrcInfo.biggestCycle;
     } else if (itemSeq > ssrcInfo.biggestSeq) {
       if (AheadOf(itemSeq, ssrcInfo.biggestSeq)) {
@@ -321,21 +274,22 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       ret = DumpPacketH264(packet.rtpRawPacket, ssrcInfo.h264Unpacketizer);
       if (ret) {
         tylog("dump uplink h264 ret=%d", ret);
+
         return ret;
       }
 
-      ssrcInfo.rtpSender.Enqueue(std::move(packet));
-      assert(packet.rtpRawPacket.empty());
-    }
+      // send to peer using peer's PC
+      std::shared_ptr<PeerConnection> peerPC =
+          getPeerPC(belongingPeerConnection_.clientIP_,
+                    belongingPeerConnection_.clientPort_);
+      if (nullptr == peerPC) {
+        return 0;
+      }
 
-    // downlink, should be in another file
-    std::vector<RtpBizPacket> sendPackets = ssrcInfo.rtpSender.Dequeue();
-
-    tylog("send to peer packets num=%zu", sendPackets.size());
-    for (RtpBizPacket &packet : sendPackets) {
-      ret = SendToPeer_(packet.rtpRawPacket);
+      ret = peerPC->HandleDownlinkPacket(packet.rtpRawPacket);
       if (ret) {
-        tylog("send to peer ret=%d", ret);
+        tylog("handleDownlinkPacket ret=%d", ret);
+
         return ret;
       }
     }
@@ -352,5 +306,5 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
 }
 
 std::string RtpHandler::ToString() const {
-  return tylib::format_string("ssrcMapSize=%zu.", ssrcInfoMap_.size());
+  return tylib::format_string("{ssrcMapSize=%zu}", ssrcInfoMap_.size());
 }

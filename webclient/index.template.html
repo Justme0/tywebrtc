@@ -105,8 +105,8 @@
             }
 
             const constraints = {
-                video: { frameRate: { exact: 15 },  width: { exact: 450 }, height: { exact: 450 } },
-                audio: true
+                audio: {"deviceId":"default","sampleRate":48000,"channelCount":1,"echoCancellation":true,"autoGainControl":true,"noiseSuppression":true},
+                video: { frameRate: { exact: 15 },  width: { exact: 450 }, height: { exact: 450 } }
             }
 
             console.log("to get media")
