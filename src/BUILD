@@ -10,6 +10,7 @@ cc_binary(
     linkopts = ["-l dl -pthread"],
     deps = [
         "@tylib//:tylib",
+        "@sctp//:sctp_package",
         "@openssl//:openssl_package",
         "@srtp//:srtp_package",
         "@com_github_jupp0r_prometheus_cpp//pull",

@@ -34,7 +34,7 @@ static int ParseFrameNalus(const std::vector<char>& stream,
     // Annex-B
     // 00 00 00 01 ab cd ef 00 00 00 01
     int pos = 0;
-    const char* nal = NULL;
+    const char* nal = nullptr;
     while (pos + 3 < len) {
       if (frame[pos] != 0x00 || frame[pos + 1] != 0x00 ||
           frame[pos + 2] != 0x01) {
@@ -42,7 +42,7 @@ static int ParseFrameNalus(const std::vector<char>& stream,
         continue;
       }
 
-      if (nal != NULL) {
+      if (nal != nullptr) {
         Nalu nalu;
         nalu.data = nal;
         nalu.size = frame + pos - nal;
@@ -57,7 +57,7 @@ static int ParseFrameNalus(const std::vector<char>& stream,
       nal = frame + pos;
     }
 
-    if (nal != NULL) {
+    if (nal != nullptr) {
       Nalu nalu;
       nalu.data = nal;
       nalu.size = frame + len - nal;
@@ -200,7 +200,7 @@ int H264Packetizer::PacketFuA(
     const std::vector<std::shared_ptr<Extension>>& extensions,
     std::vector<std::vector<char>>& packets) {
   // WEBRTC_ERROR_CHECK(stream_id_.c_str(), (nullptr == frame), 0,
-  //                    "Chn %" PRIu64 " rtp buf is NULL!", ssrc_);
+  //                    "Chn %" PRIu64 " rtp buf is nullptr!", ssrc_);
   // WEBRTC_ERROR_CHECK(stream_id_.c_str(), (VIDEO_NALU_HEADER_LTH >= len), 0,
   //                    "Chn %" PRIu64 " rtp data len %d error.", ssrc_, len);
 

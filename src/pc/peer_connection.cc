@@ -13,6 +13,7 @@ PeerConnection::PeerConnection()
       rtpHandler_(*this),
       rtcpHandler_(*this),
       srtpHandler_(*this),
+      dataChannelHandler_(*this),
       initTimeMs_(g_now_ms) {}
 
 // vBufSend is crypto data
@@ -32,7 +33,7 @@ int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {
 }
 
 // vBufSend is crypto data
-int PeerConnection::SendToPeer(const std::vector<char> &vBufSend) const {
+int PeerConnection::SendToPeer(const std::vector<char> &) const {
   assert(!"shit");
   /*
 

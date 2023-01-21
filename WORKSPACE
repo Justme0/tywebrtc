@@ -4,6 +4,9 @@ local_repository(
     path = "third_party/tylib",
 )
 
+# depend on non-bazel project
+# https://bazel.build/docs/external?hl=zh-cn#bazel-projects
+
 # 2. openssl
 # https://stackoverflow.com/questions/49937820/include-headers-h-installed-in-non-standard-location
 new_local_repository(
@@ -47,13 +50,14 @@ cc_library(
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
-  name = "com_google_googletest",
-  urls = ["https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip"],
-  strip_prefix = "googletest-609281088cfefc76f9d0ce82e1ff6c30cc3591e5",
+    name = "com_google_googletest",
+    urls = ["https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip"],
+    strip_prefix = "googletest-609281088cfefc76f9d0ce82e1ff6c30cc3591e5",
 )
 
 # 5. prometheus-cpp client
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
+
 http_archive(
     name = "com_github_jupp0r_prometheus_cpp",
     strip_prefix = "prometheus-cpp-master",
@@ -63,3 +67,18 @@ http_archive(
 load("@com_github_jupp0r_prometheus_cpp//bazel:repositories.bzl", "prometheus_cpp_repositories")
 
 prometheus_cpp_repositories()
+
+# 6. sctp
+new_local_repository(
+    name = "sctp",
+    path = "third_party/usrsctp",
+    build_file_content = """
+package(default_visibility = ["//visibility:public"])
+cc_library(
+    name = "sctp_package",
+    srcs = ["usrsctplib/.libs/libusrsctp.a"],
+    hdrs = ["."],
+    includes = ["."],
+)
+"""
+)

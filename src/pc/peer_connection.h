@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include "data_channel/data_channel_handler.h"
 #include "dtls/dtls_handler.h"
 #include "ice/ice_handler.h"
 #include "log/log.h"
@@ -114,6 +115,7 @@ class PeerConnection {
   RtpHandler rtpHandler_;
   RtcpHandler rtcpHandler_;
   SrtpHandler srtpHandler_;
+  DataChannelHandler dataChannelHandler_;
 
   std::string clientIP_;
   int clientPort_ = 0;

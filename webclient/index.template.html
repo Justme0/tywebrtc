@@ -3,7 +3,7 @@
 
 <head>
     <meta http-equiv='Content-Type' content='text/html; charset=UTF-8'>
-    <link rel="shortcut icon" href="#"/>
+    <link rel="shortcut icon" href="#" />
     <title> webrtc test </title>
     <style type="text/css">
         .room {
@@ -41,6 +41,7 @@
         <br />
         &nbsp;&nbsp;&nbsp;&nbsp;
         <button onclick="unpublish()">挂电话 ( close )</button>
+        <button onclick="sendMessage()">sendMessage</button>
     </div>
 
     <script type='text/javascript'>
@@ -75,7 +76,13 @@
             }
         }
 
-        let pc;
+        var pc = null;
+        var sendChannel = null;
+
+        function sendMessage() {
+            sendChannel.send("taylortest")
+        }
+
         async function unpublish() {
             console.log("To unpublish")
             let videoElement = document.getElementById('video_container_publish');
@@ -105,7 +112,7 @@
             }
 
             const constraints = {
-                video: { frameRate: { exact: 15 },  width: { exact: 450 }, height: { exact: 450 } },
+                video: { frameRate: { exact: 15 }, width: { exact: 450 }, height: { exact: 450 } },
                 audio: true
             }
 
@@ -116,6 +123,20 @@
             videoElement.srcObject = stream;
 
             pc = new RTCPeerConnection();
+
+            sendChannel = pc.createDataChannel("sendChannel");
+            sendChannel.onopen = () => {
+                console.log("data channel opened")
+            };
+            sendChannel.onclose = () => {
+                console.log("data channel closed")
+            };
+            sendChannel.onerror = error => {
+                console.log(`data channel error ${error}`)
+            };
+            sendChannel.onmessage = event => {
+                console.log(`data channel onmessage ${event}`)
+            };
 
             // for uplink
             await pc.addTransceiver(stream.getAudioTracks()[0], {
@@ -236,6 +257,16 @@ a=ssrc:50472669 cname:ovaCctnHP9Asci9c
 a=ssrc:50472669 msid:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV 1d7fc300-9889-4f94-9f35-c0bcc77a260d
 a=ssrc:50472669 mslabel:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV
 a=ssrc:50472669 label:1d7fc300-9889-4f94-9f35-c0bcc77a260d
+m=application 9 UDP/DTLS/SCTP webrtc-datachannel
+a=ice-ufrag:144115262675375852
+a=ice-pwd:728c90257276ed9e48aac959
+a=fingerprint:sha-256 55:9B:3E:43:91:2D:66:79:0F:B6:84:45:B3:47:3F:56:D4:4C:9E:10:EA:B4:66:C6:64:42:42:4B:5C:CD:FF:2F
+a=setup:active
+a=sendrecv
+a=mid:4
+a=candidate:1 1 udp 1686052607 36.155.205.204 8090 typ srflx raddr 36.155.205.204 rport 8090 generation 0
+a=sctpmap:5000 webrtc-datachannel 1024
+a=max-message-size:262144
 `
             console.log("=============== answer sdp:");
             console.log(answerSDP)
@@ -257,7 +288,10 @@ a=ssrc:50472669 label:1d7fc300-9889-4f94-9f35-c0bcc77a260d
         }, false);
         */
 
-        publish()
+
+        // Set up an event listener which will run the startup
+        // function once the page is done loading.
+        window.addEventListener('load', publish, false);
 
     </script>
 </body>
