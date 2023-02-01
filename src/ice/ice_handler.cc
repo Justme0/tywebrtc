@@ -99,7 +99,7 @@ int IceHandler::CreatUserFoundation() {
            IceGetTypePrefix(ICE_CAND_TYPE_SRFLX), LocalOuterIP);
 
   iceInfo_.Foundation[63] = '\0';
-  tylog("taylor foundation=0x%s", iceInfo_.Foundation);
+  tylog("foundation=0x%s", iceInfo_.Foundation);
 
   return 0;
 }
@@ -246,7 +246,7 @@ int IceHandler::EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
   pMsgIntergrity->AttributeType = htons(ATTRIBUTE_MESSGAE_INTEGRITY);
   pMsgIntergrity->Len = htons(STUN_MESSGAE_INTEGRITY_LEN);
 
-  tylog("taylor OPENSSL_VERSION_NUMBER=%ld=0x%lx", OPENSSL_VERSION_NUMBER,
+  tylog("OPENSSL_VERSION_NUMBER=%ld=0x%lx", OPENSSL_VERSION_NUMBER,
         OPENSSL_VERSION_NUMBER);
 
   //做HMAC-SHA1加密，生成加密串
@@ -284,7 +284,7 @@ int IceHandler::EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
 #else
   HMAC_CTX ctx;
   HMAC_CTX_init(&ctx);  // old api
-  tylog("taylor iceInfo_.LocalPassWord=%s, strlen=%zu", iceInfo_.LocalPassWord,
+  tylog("iceInfo_.LocalPassWord=%s, strlen=%zu", iceInfo_.LocalPassWord,
         strlen(iceInfo_.LocalPassWord));
   HMAC_Init_ex(&ctx, iceInfo_.LocalPassWord, strlen(iceInfo_.LocalPassWord),
                EVP_sha1(), nullptr);  // should check EVP_sha1() return value

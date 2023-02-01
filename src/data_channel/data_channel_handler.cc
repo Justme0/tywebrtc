@@ -1,12 +1,14 @@
 #include "data_channel/data_channel_handler.h"
 
 #include <fcntl.h>
+#include <cassert>
 #include <cstdarg>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
 
 #include "log/log.h"
+#include "pc/peer_connection.h"
 
 enum DataChannelMessageType {
   DataChannelMessageTypeAck = 2,
@@ -28,10 +30,10 @@ enum DataChannelPPID {
   DataChannelPPIDBinary = 53,
 };
 
-uint16_t event_types[] = {SCTP_ADAPTATION_INDICATION, SCTP_ASSOC_CHANGE,
-                          SCTP_ASSOC_RESET_EVENT,     SCTP_REMOTE_ERROR,
-                          SCTP_SHUTDOWN_EVENT,        SCTP_SEND_FAILED_EVENT,
-                          SCTP_STREAM_RESET_EVENT,    SCTP_STREAM_CHANGE_EVENT};
+// uint16_t event_types[] = {SCTP_ADAPTATION_INDICATION, SCTP_ASSOC_CHANGE,
+//                           SCTP_ASSOC_RESET_EVENT,     SCTP_REMOTE_ERROR,
+//                           SCTP_SHUTDOWN_EVENT,        SCTP_SEND_FAILED_EVENT,
+//                           SCTP_STREAM_RESET_EVENT, SCTP_STREAM_CHANGE_EVENT};
 
 SctpGlobalEnv* g_sctp_env = nullptr;
 
@@ -119,7 +121,9 @@ static int SendSctpDataCallback(void* addr, void* data, size_t len,
     return -1;
   }
 
-  sctp->OnSendSctpData(reinterpret_cast<const uint8_t*>(data), len);
+  tylog("callback send write data=%p, len=%zu.", data, len);
+
+  sctp->belongingPeerConnection_.dtlsHandler_.SendToDtls(data, len);
 
   return 0;
 }
@@ -190,7 +194,29 @@ bool SctpGlobalEnv::UnRegister(uintptr_t id) {
 }
 
 DataChannelHandler::DataChannelHandler(PeerConnection& pc)
-    : belongingPeerConnection_(pc) {
+    : belongingPeerConnection_(pc) {}
+
+DataChannelHandler::~DataChannelHandler() {
+  tylog("destroy datachannel sctp_socket_=%p, id=%lu.", sctp_socket_, id_);
+
+  std::unique_lock<std::mutex> lock_guard(sctp_mutex_);
+  if (sctp_socket_) {
+    usrsctp_close(sctp_socket_);
+    usrsctp_deregister_address(reinterpret_cast<void*>(id_));
+    g_sctp_env->UnRegister(id_);
+  }
+}
+
+// NOTE, check if init already, but not best
+int DataChannelHandler::InitSocket() {
+  if (nullptr != this->sctp_socket_) {
+    tylog("already init sctp socket=%p, no need again", sctp_socket_);
+
+    return 0;
+  }
+
+  int ret = 0;
+
   if (g_sctp_env == nullptr) {
     g_sctp_env = new SctpGlobalEnv();
   }
@@ -201,72 +227,99 @@ DataChannelHandler::DataChannelHandler(PeerConnection& pc)
 
   send_blocking_ = false;
 
-  tylog("taylor");
+  tylog("sctp id %lu, register it", id_);
 
   usrsctp_register_address(reinterpret_cast<void*>(id_));
+
+  // ref: https://github.com/sctplab/usrsctp/blob/master/Manual.md
   sctp_socket_ =
       usrsctp_socket(AF_CONN, SOCK_STREAM, IPPROTO_SCTP, RecvSctpDataCallback,
                      SendThresholdCallback, 0, this);
+  if (nullptr == sctp_socket_) {
+    tylog("create sctp socket fail, errno=%d[%s]", errno, strerror(errno));
 
-  int ret = usrsctp_set_non_blocking(sctp_socket_, 1);
+    return -1;
+  }
+
+  ret = usrsctp_set_non_blocking(sctp_socket_, 1);
   if (ret < 0) {
     tylog("usrrsctp set non blocking failed, ret=%d, err=%d(%s)", ret, errno,
           strerror(errno));
+
+    return ret;
   }
 
   struct sctp_assoc_value av;
 
   av.assoc_value = SCTP_ENABLE_RESET_STREAM_REQ | SCTP_ENABLE_RESET_ASSOC_REQ |
                    SCTP_ENABLE_CHANGE_ASSOC_REQ;
+  // ref:
+  // https://github.com/sctplab/usrsctp/blob/master/Manual.md#socket-options
   ret = usrsctp_setsockopt(sctp_socket_, IPPROTO_SCTP, SCTP_ENABLE_STREAM_RESET,
                            &av, sizeof(av));
-  if (ret < 0) {
+  if (ret) {
     tylog("usrrsctp set SCTP_ENABLE_STREAM_RESET failed, ret=%d, err=%d(%s)",
           ret, errno, strerror(errno));
+
+    return ret;
   }
 
   uint32_t no_delay = 1;
   ret = usrsctp_setsockopt(sctp_socket_, IPPROTO_SCTP, SCTP_NODELAY, &no_delay,
                            sizeof(no_delay));
-  if (ret < 0) {
+  if (ret) {
     tylog("usrrsctp set SCTP_NODELAY failed, ret=%d, err=%d(%s)", ret, errno,
           strerror(errno));
+    return ret;
   }
 
   uint32_t eor = 1;
-  if (usrsctp_setsockopt(sctp_socket_, IPPROTO_SCTP, SCTP_EXPLICIT_EOR, &eor,
-                         sizeof(eor))) {
+  ret = usrsctp_setsockopt(sctp_socket_, IPPROTO_SCTP, SCTP_EXPLICIT_EOR, &eor,
+                           sizeof(eor));
+
+  if (ret) {
     tylog("usrrsctp set SCTP_EXPLICIT_EOR failed, ret=%d, err=%d(%s)", ret,
           errno, strerror(errno));
+
+    return ret;
   }
 
+  // Subscribe to SCTP event notifications.
+  // TODO(crbug.com/1137936): Subscribe to SCTP_SEND_FAILED_EVENT once deadlock
+  // is fixed upstream, or we switch to the upcall API:
+  // https://github.com/sctplab/usrsctp/issues/537
+  int event_types[] = {SCTP_ASSOC_CHANGE, SCTP_PEER_ADDR_CHANGE,
+                       SCTP_SENDER_DRY_EVENT, SCTP_STREAM_RESET_EVENT};
   struct sctp_event event;
-  memset(&event, 0, sizeof(event));
+  memset(&event, 0, sizeof event);
+  event.se_assoc_id = SCTP_ALL_ASSOC;
   event.se_on = 1;
 
-  for (size_t i = 0; i < sizeof(event_types) / sizeof(uint16_t); ++i) {
+  for (size_t i = 0; i < sizeof(event_types) / sizeof(*event_types); ++i) {
     event.se_type = event_types[i];
     ret = usrsctp_setsockopt(sctp_socket_, IPPROTO_SCTP, SCTP_EVENT, &event,
                              sizeof(event));
-    if (ret < 0) {
+    if (ret) {
       tylog("usrrsctp set SCTP_NODELAY failed, ret=%d, err=%d(%s)", ret, errno,
             strerror(errno));
+
+      return ret;
     }
   }
 
-  tylog("taylor");
   // Init message.
   struct sctp_initmsg initmsg;
   memset(&initmsg, 0, sizeof(initmsg));
   initmsg.sinit_num_ostreams = kMaxStream;
   initmsg.sinit_max_instreams = kMaxStream;
 
-  tylog("taylor");
   ret = usrsctp_setsockopt(sctp_socket_, IPPROTO_SCTP, SCTP_INITMSG, &initmsg,
                            sizeof(initmsg));
-  if (ret < 0) {
+  if (ret) {
     tylog("usrrsctp set SCTP_INITMSG failed, ret=%d, err=%d(%s)", ret, errno,
           strerror(errno));
+
+    return ret;
   }
 
   struct sockaddr_conn sconn;
@@ -281,32 +334,16 @@ DataChannelHandler::DataChannelHandler(PeerConnection& pc)
     tylog("usrrsctp bind failed, ret=%d, err=%d(%s), this=%p", ret, errno,
           strerror(errno), this);
   }
-  tylog("taylor");
 
-  // taylor
-  ConnectToClass();
-}
+  // To connect
 
-DataChannelHandler::~DataChannelHandler() {
-  std::unique_lock<std::mutex> lock_guard(sctp_mutex_);
-  tylog("taylor");
-  if (sctp_socket_) {
-    usrsctp_close(sctp_socket_);
-    usrsctp_deregister_address(reinterpret_cast<void*>(id_));
-    g_sctp_env->UnRegister(id_);
-  }
-  tylog("taylor");
-}
-
-// only called by constructor, no need use lock
-int DataChannelHandler::ConnectToClass() {
   struct sockaddr_conn rconn;
   memset(&rconn, 0, sizeof(rconn));
   rconn.sconn_family = AF_CONN;
   rconn.sconn_port = htons(kSctpPort);
   rconn.sconn_addr = reinterpret_cast<void*>(id_);
 
-  int ret = usrsctp_connect(
+  ret = usrsctp_connect(
       sctp_socket_, reinterpret_cast<struct sockaddr*>(&rconn), sizeof(rconn));
   if (ret < 0 && errno != EINPROGRESS) {
     tylog("usrrsctp connect failed, ret=%d, err=%d(%s)", ret, errno,
@@ -322,10 +359,11 @@ int DataChannelHandler::ConnectToClass() {
 
   ret = usrsctp_setsockopt(sctp_socket_, IPPROTO_SCTP, SCTP_PEER_ADDR_PARAMS,
                            &peer_addr_param, sizeof(peer_addr_param));
-  if (ret < 0) {
+  if (ret) {
     tylog("usrrsctp set SCTP_PEER_ADDR_PARAMS failed, ret=%d, err=%d(%s)", ret,
           errno, strerror(errno));
-    return -1;
+
+    return ret;
   }
 
   tylog("usrsctp connect peer success.");
@@ -333,10 +371,14 @@ int DataChannelHandler::ConnectToClass() {
   return 0;
 }
 
-void DataChannelHandler::Feed(const uint8_t* buf, const int nb_buf) {
+// passive recv data
+void DataChannelHandler::Feed(const char* buf, const int nb_buf) {
+  assert(nullptr != this->sctp_socket_);
+
   usrsctp_conninput(reinterpret_cast<void*>(id_), buf, nb_buf, 0);
 }
 
+// active create
 int DataChannelHandler::CreateDataChannel(const std::string& label) {
   DataChannel data_channel;
   data_channel.label_ = label;
@@ -349,6 +391,8 @@ int DataChannelHandler::CreateDataChannel(const std::string& label) {
   data_channels_.insert(std::make_pair(data_channel.sid_, data_channel));
 
   int reqlen = sizeof(struct DcepOpenMessage) + label.size();
+
+  // OPT: not use calloc
   struct DcepOpenMessage* req = (struct DcepOpenMessage*)calloc(1, reqlen);
   struct sctp_sndinfo sndinfo;
   req->message_type = DataChannelMessageTypeOpen;
@@ -373,6 +417,7 @@ int DataChannelHandler::CreateDataChannel(const std::string& label) {
     return -1;
   }
 
+  tylog("sctp_sendv open request succ.");
   free(req);
 
   return 0;
@@ -439,11 +484,6 @@ void DataChannelHandler::OnSendThresholdCallback() {
       send_blocking_ = false;
     }
   }
-}
-
-void DataChannelHandler::OnSendSctpData(const uint8_t* data, size_t len) {
-  tylog("send sctp data=%p, len=%zu.", data, len);
-  // OnSendToDtlsChannel
 }
 
 int DataChannelHandler::OnSctpData(const struct sctp_rcvinfo& rcv, void* data,
@@ -570,6 +610,8 @@ int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
       tylog("log datachannel open: label:%s, sid : %u", label.c_str(),
             rcv.rcv_sid);
 
+      // may callback OnDataChannelOpen
+
       break;
     }
     case DataChannelMessageTypeAck: {
@@ -583,7 +625,6 @@ int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
 
 int DataChannelHandler::OnDataChannelMsg(const struct sctp_rcvinfo& rcv,
                                          char* data, int len) {
-  std::string label = "";
   std::unique_lock<std::mutex> lock_guard(channel_mutex_);
   std::map<uint16_t, DataChannel>::iterator iter =
       data_channels_.find(rcv.rcv_sid);
@@ -591,12 +632,13 @@ int DataChannelHandler::OnDataChannelMsg(const struct sctp_rcvinfo& rcv,
     tylog("can not found sid=%d", rcv.rcv_sid);
     return -1;
   }
-  label = iter->second.label_;
+  const std::string label = iter->second.label_;
   lock_guard.unlock();
 
   tylog("on recv data=%p, len=%d", data, len);
+  tylog("on recv data=%.*s", len, data);
 
-  // callback OnRecvDataChannelMsg
+  // may callback OnRecvDataChannelMsg
 
   return 0;
 }

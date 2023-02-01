@@ -91,18 +91,19 @@ class DataChannelHandler {
 
   DataChannelHandler(const DataChannelHandler&) = delete;
   DataChannelHandler& operator=(const DataChannelHandler&) = delete;
+
   ~DataChannelHandler();
 
  public:
-  int ConnectToClass();
+  int InitSocket();
   int Send(const std::string& label, const uint8_t* buf, const int len);
   void OnSendThresholdCallback();
-  void OnSendSctpData(const uint8_t* data, size_t len);
+  // void OnSendSctpData(const uint8_t* data, size_t len);
 
   int OnSctpEvent(const struct sctp_rcvinfo& rcv, void* data, size_t len);
   int OnSctpData(const struct sctp_rcvinfo& rcv, void* data, size_t len);
 
-  void Feed(const uint8_t* buf, const int nb_buf);
+  void Feed(const char* buf, const int nb_buf);
 
   const std::string& GetStreamId() const { return stream_id_; }
   int CreateDataChannel(const std::string& label);
@@ -123,15 +124,15 @@ class DataChannelHandler {
   std::map<uint16_t, DataChannel> data_channels_;
   std::map<std::string, uint16_t> label_sid_;
   std::vector<std::pair<uint16_t, std::string> > out_buffered_msg_;
-
   std::atomic<bool> send_blocking_;
-  uintptr_t id_;
-
-  uint16_t data_channel_id_;
+  uintptr_t id_ = 0;
+  uint16_t data_channel_id_ = 0;
 
   std::mutex sctp_mutex_;
-  struct socket* sctp_socket_;
+  struct socket* sctp_socket_ = nullptr;
 
+  // tmp
+ public:
   PeerConnection& belongingPeerConnection_;
 };
 

@@ -118,12 +118,12 @@ void SSLInfoCallback(const SSL* s, int where, int callbackRet) {
   int ret = 0;
 
   if (where & SSL_CB_HANDSHAKE_DONE) {
-    ret = SSL_get_verify_result(s);  // 0 is X509_V_OK
+    ret = SSL_get_verify_result(s);  // 0 is X509_V_OK, means ok
     if (ret) {
       tylog("SSL_get_verify_result fail, ret=%d", ret);
+      // not return ?
     } else {
-      tylog("SSL_get_verify_result: callbackRet[%d]", callbackRet);
-      tylog("SSL_CB_HANDSHAKE_DONE callbackRet=%d, ssl state=%d[%s]",
+      tylog("SSL_CB_HANDSHAKE_DONE ok, callbackRet=%d, ssl state=%d[%s]",
             callbackRet, SSL_get_state(s), SSL_state_string_long(s));
     }
   }
@@ -335,13 +335,13 @@ int DtlsHandler::OnHandshakeCompleted_() {
 }
 
 // 目前实参都是true，再次确认why？
-// TODO taylor 调用处判断返回值
+// TODO 调用处判断返回值
 int DtlsHandler::HandshakeCompleted(bool bSessionCompleted) {
   int ret = 0;
 
   if (mGetKeyFlag) {
-    // tylog("We get Key, no need to do it, bSessionCompleted=%d, %s",
-    // bSessionCompleted, ToString().data());
+    tylog("We get Key, no need to do it, bSessionCompleted=%d, %s",
+          bSessionCompleted, ToString().data());
     mHandshakeCompleted = bSessionCompleted;
 
     return 0;
@@ -401,7 +401,7 @@ int DtlsHandler::HandshakeCompleted(bool bSessionCompleted) {
   offset += SRTP_MASTER_KEY_SALT_LEN;
 
   // check len with MAX_SRTP_KEY_LEN
-  // taylor to escape copy string
+  // OPT escape copy string
   std::string rawClientKey(cKey,
                            SRTP_MASTER_KEY_KEY_LEN + SRTP_MASTER_KEY_SALT_LEN);
   sendingRtpKey_ = tylib::Base64Encode(rawClientKey);
@@ -444,6 +444,7 @@ int DtlsHandler::HandshakeCompleted(bool bSessionCompleted) {
 void DtlsHandler::CheckHandshakeComplete_() {
   if (mHandshakeCompleted) {
     tylog("handshake completed, no need check %s", ToString().data());
+
     return;
   }
 
@@ -461,9 +462,13 @@ void DtlsHandler::CheckHandshakeComplete_() {
     }
   }
 
+  tylog("as client, %s", ToString().data());
+
   if (m_isServer) {
     return;
   }
+
+  // as DTLS client:
 
   if (!m_IsHandshakeCanComplete) {
 #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
@@ -475,24 +480,64 @@ void DtlsHandler::CheckHandshakeComplete_() {
 #endif
   }
 
-  tylog("as client, %s", ToString().data());
-  if (m_IsHandshakeCanComplete) {
-    tylog("Do handshakeCompleted CW_FINISHED");
-    const bool kSessionCompleted = true;
-    int ret = HandshakeCompleted(kSessionCompleted);
-    if (ret) {
-      tylog("handshakeCompleted fail, ret=%d", ret);
-    }
+  if (!m_IsHandshakeCanComplete) {
+    return;
   }
+
+  // TODO
+  tylog("Do handshakeCompleted CW_FINISHED");
+  // const bool kSessionCompleted = true;
+  // int ret = HandshakeCompleted(kSessionCompleted); // or false ?
+  // if (ret) {
+  //   tylog("handshakeCompleted fail, ret=%d", ret);
+  // }
+}
+
+int DtlsHandler::DoDataChannel_(const std::vector<char>& vBufReceive) {
+  int ret = 0;
+
+  tylog("recv data size=%zu.", vBufReceive.size());
+  ret = this->belongingPeerConnection_.dataChannelHandler_.InitSocket();
+  if (ret) {
+    tylog("init sctp socket ret=%d.", ret);
+    assert(!"init sctp socket fail");  // tmp
+
+    return ret;
+  }
+
+  BIO_reset(mInBio);
+  BIO_reset(mOutBio);
+  BIO_write(mInBio, vBufReceive.data(), vBufReceive.size());
+  while (BIO_ctrl_pending(mInBio) > 0) {
+    char sctp_read_buf[8092];
+    int size = SSL_read(mSsl, sctp_read_buf, sizeof(sctp_read_buf));
+    if (size <= 0) {
+      m_SSl_BuffState = SSL_get_error(mSsl, size);
+      tylog("SSL_read Error State: %s,m_SSl_BuffState %d",
+            SSL_state_string(mSsl), m_SSl_BuffState);
+
+      break;
+    }
+
+    this->belongingPeerConnection_.dataChannelHandler_.Feed(sctp_read_buf,
+                                                            size);
+  }
+
+  return 0;
 }
 
 // @brief 收到DTLS包处理
 // @param [in] vBufReceive DTLS包
-// @return 获取到秘钥返true，否则返false
+// @return 处理成功返0
 int DtlsHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
   int ret = 0;
 
   tylog("read Dtls message len:%zu %s", vBufReceive.size(), ToString().data());
+
+  // do data channel
+  if (this->mHandshakeCompleted) {
+    return DoDataChannel_(vBufReceive);
+  }
 
   if (!m_startFlag && m_isServer) {
     tylog("as DTLS server, recv DTLS packet before user-candidate STUN");
@@ -559,7 +604,7 @@ int DtlsHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
   if (r != static_cast<int>(vBufReceive.size())) {
     tylog("error BIO_write() r=%d, len=%zu, should be equal, %s", r,
           vBufReceive.size(), ToString().data());
-    // taylor error handle ?
+    // error handle ?
   }
   assert(r == static_cast<int>(vBufReceive.size()));  // 是否返回
   CheckHandshakeComplete_();
@@ -648,7 +693,8 @@ int DtlsHandler::StartDTLS() {
 
     ret = SSL_do_handshake(mSsl);
     if (ret) {
-      // taylor
+      tylog("SSL do_handshake ret=%d.", ret);
+
       return ret;
     }
 
@@ -692,6 +738,10 @@ void DtlsHandler::SetStreamDirect(StreamDirection direct) {
 bool DtlsHandler::GetHandshakeCompleted() const { return mHandshakeCompleted; }
 
 extern int g_sock_fd;
+
+void DtlsHandler::SendToDtls(const void* data, int len) {
+  SSL_write(mSsl, data, len);
+}
 
 void DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
   m_CheckTime = g_now_ms;

@@ -1,3 +1,6 @@
 [submodule "third_party/tylib"]
 	path = third_party/tylib
 	url = git@github.com:justme0/tylib
+[submodule "third_party/usrsctp"]
+	path = third_party/usrsctp
+	url = https://github.com/sctplab/usrsctp

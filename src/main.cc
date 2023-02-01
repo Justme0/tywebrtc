@@ -198,7 +198,7 @@ int HandleRequest() {
       "==================================",
       ip.data(), port, vBufReceive.size());
 
-  // get some pc according to clientip, port or ICE username (taylor FIX)
+  // get some pc according to clientip, port or ICE username (FIX)
   std::shared_ptr<PeerConnection> pc = Singleton::Instance().GetPeerConnection(
       ip, port, "");  // have bug, ufrag is ""
   // pc->StoreClientIPPort(ip, port);  // should be in GetPeerConnection()
@@ -219,7 +219,7 @@ const int kMultiplexIOMaxEventNum = 1024;
 
 // ref:
 // https://stackoverflow.com/questions/142508/how-do-i-check-os-with-a-preprocessor-directive
-// taylor todo implement for windows and other OS
+// todo implement for windows and other OS
 #if _WIN32
 // _WIN32 is also defined for _WIN64
 
