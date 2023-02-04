@@ -15,6 +15,7 @@
 #include "rtp/rtp_handler.h"
 #include "rtp/srtp/srtp_handler.h"
 #include "sdp/sdp_handler.h"
+#include "timer/timer.h"
 
 enum class PacketType {
   STUN,
@@ -91,6 +92,7 @@ inline std::string StateMachineToString(EnumStateMachine s) {
 class PeerConnection {
  public:
   PeerConnection();
+  ~PeerConnection();
 
   int HandlePacket(const std::vector<char>& vBufReceive);
 
@@ -122,6 +124,8 @@ class PeerConnection {
 
   int64_t initTimeMs_ = 0;        // construct *this obj time
   int64_t lastActiveTimeMs_ = 0;  // last receive data time
+
+  PeerConnectionTimer pcTimer_;
 };
 
 #endif  // PC_PEER_CONNECTION_H_

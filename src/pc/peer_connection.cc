@@ -14,10 +14,26 @@ PeerConnection::PeerConnection()
       rtcpHandler_(*this),
       srtpHandler_(*this),
       dataChannelHandler_(*this),
-      initTimeMs_(g_now_ms) {}
+      initTimeMs_(g_now_ms),
+      pcTimer_(*this) {}
+
+PeerConnection::~PeerConnection() {
+  TimerManager::Instance()->KillTimer(&this->pcTimer_);
+}
 
 // vBufSend is crypto data
 int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {
+  int r = rand() % 100;
+  if (r < kDownlossRateMul100) {
+    tylog("down rand=%d lostrate=%d%%, drop! rtp/rtcp=%s.", r,
+          kDownlossRateMul100,
+          reinterpret_cast<const RtpHeader *>(vBufSend.data())
+              ->ToString()
+              .data());
+
+    return 0;
+  }
+
   sockaddr_in addr = tylib::ConstructSockAddr(clientIP_, clientPort_);
   ssize_t sendtoLen =
       sendto(g_sock_fd, vBufSend.data(), vBufSend.size(), 0,

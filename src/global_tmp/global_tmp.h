@@ -13,6 +13,7 @@
 #include "prometheus/gauge.h"
 
 const int kUplossRateMul100 = 0;
+const int kDownlossRateMul100 = 5;
 const int kPCDeadTimeoutMs = 1 * 1000;
 
 extern prometheus::Family<prometheus::Gauge>* g_startServer;

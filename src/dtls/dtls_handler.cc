@@ -582,7 +582,7 @@ int DtlsHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
     ++m_ReSendTime;
 
     if (0 == m_SendBuffNum) {
-      tylog("warning: handshake completed, last sent package not exist, %s",
+      tylog("why: handshake completed, last sent package not exist, %s",
             ToString().data());
     }
     assert(0 != m_SendBuffNum);

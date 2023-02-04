@@ -15,6 +15,7 @@
 #include "rtp/pack_unpack/rtp_to_h264.h"
 #include "rtp/rtcp/rtcp_parser.h"
 #include "rtp/rtp_parser.h"
+#include "timer/timer.h"
 
 // string enum, for print convenience
 const std::string kMediaTypeRtcp = "rtcp";
@@ -163,7 +164,14 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         ret);
   }
 
-  belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_RTP;
+  if (belongingPeerConnection_.stateMachine_ < EnumStateMachine::GOT_RTP) {
+    belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_RTP;
+
+    // 收到RTP后定时请求I帧
+    TimerManager::Instance()->AddTimer(
+        &this->belongingPeerConnection_.pcTimer_);
+  }
+
   std::string mediaType =
       reinterpret_cast<const RtpHeader *>(vBufReceive.data())->GetMediaType();
   tylog("receive %s", mediaType.data());

@@ -117,12 +117,7 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
         assert(rtpHeader.GetMediaType() == kMediaTypeVideo);
 
         const uint32_t kSelfRtcpSSRC = 1;
-        const uint32_t kMediaSrcSSRC =
-            reinterpret_cast<const RtpHeader*>(firstPacket.rtpRawPacket.data())
-                        ->GetMediaType() == kMediaTypeAudio
-                ? g_UplinkAudioSsrc
-                : g_UplinkVideoSsrc;
-
+        const uint32_t kMediaSrcSSRC = g_UplinkVideoSsrc;
         int ret =
             belongingSSRCInfo_.belongingRtpHandler.belongingPeerConnection_
                 .rtcpHandler_.CreatePLIReportSend(kSelfRtcpSSRC, kMediaSrcSSRC);

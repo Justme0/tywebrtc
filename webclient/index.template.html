@@ -108,14 +108,18 @@
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 console.error('the getUserMedia is not supported')
+
                 return;
             }
 
+            // ref https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
+            // NOT https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints/facingMode
             const constraints = {
                 video: {
-                    frameRate: { max: 15, ideal: 15 },
-                    width: { max: 600, ideal: 600 },
-                    height: { max: 600, ideal: 600 },
+                    facingMode: { ideal: 'user' },
+                    frameRate: { max: 13, ideal: 13 },
+                    width: { max: 500, ideal: 500 },
+                    height: { max: 500, ideal: 500 },
                     aspectRatio: 1,
                 },
                 audio: true

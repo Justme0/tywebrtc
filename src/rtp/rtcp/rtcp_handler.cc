@@ -215,8 +215,9 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
   int rtcpLen = 0;
   size_t totalLen = 0;
   int index = 0;
-  while (true)  //可能是rtcp组合包
-  {
+
+  //可能是rtcp组合包
+  while (true) {
     if (totalLen >= vBufReceive.size()) break;
 
     movingBuf += rtcpLen;
@@ -873,6 +874,8 @@ int RtcpHandler::CreateNackReportSend(const std::set<int> &lostSeqs,
 int RtcpHandler::CreatePLIReportSend(uint32_t localSSRC, uint32_t remoteSSRC) {
   int ret = 0;
 
+  tylog("create PLI, localSSRC=%u, remoteSSRC=%u.", localSSRC, remoteSSRC);
+
   RtcpHeader pli;
   pli.setPacketType(RtcpPacketType::kPayloadSpecificFeedback);
   pli.setBlockCount(static_cast<uint8_t>(RtcpPayloadSpecificFormat::kRtcpPLI));
@@ -891,6 +894,7 @@ int RtcpHandler::CreatePLIReportSend(uint32_t localSSRC, uint32_t remoteSSRC) {
       const_cast<std::vector<char> *>(&rtcpBin));
   if (ret) {
     tylog("uplink send to src client, protect rtcp ret=%d", ret);
+
     return ret;
   }
 
@@ -900,6 +904,8 @@ int RtcpHandler::CreatePLIReportSend(uint32_t localSSRC, uint32_t remoteSSRC) {
 
     return ret;
   }
+
+  tylog("send PLI succ, localSSRC=%u, remoteSSRC=%u.", localSSRC, remoteSSRC);
 
   return 0;
 }
