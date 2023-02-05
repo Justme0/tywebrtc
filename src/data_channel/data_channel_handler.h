@@ -29,8 +29,6 @@ enum DataChannelStatus {
   DataChannelStatusOpen = 2,
 };
 
-#define DATA_CHANNEL_RELIABLE 0x00
-
 struct DcepOpenMessage {
   uint8_t message_type;
   uint8_t channel_type;
@@ -46,15 +44,13 @@ struct DcepAckMessage {
 } __attribute__((packed, aligned(1)));
 
 struct DataChannel {
-  DataChannel();
-
   std::string label_;
-  uint16_t sid_;
+  uint16_t sid_ = 0;
 
-  uint8_t channel_type_;
-  uint32_t reliability_params_;
-  DataChannelStatus status_;
-  uint32_t lifetime;
+  uint8_t channel_type_ = 0;
+  uint32_t reliability_params_ = 0;
+  DataChannelStatus status_ = DataChannelStatusClosed;
+  uint32_t lifetime = 0;
 };
 
 class SctpGlobalEnv {
@@ -70,7 +66,7 @@ class SctpGlobalEnv {
  private:
   std::mutex sctp_map_mutex_;
   std::map<uintptr_t, DataChannelHandler*> sctp_map_;
-  uintptr_t id_;
+  uintptr_t id_;  // self increase
 };
 
 class DataChannelHandler {
@@ -105,7 +101,6 @@ class DataChannelHandler {
 
   void Feed(const char* buf, const int nb_buf);
 
-  const std::string& GetStreamId() const { return stream_id_; }
   int CreateDataChannel(const std::string& label);
 
  private:
@@ -120,16 +115,18 @@ class DataChannelHandler {
 
  private:
   std::mutex channel_mutex_;
-  std::string stream_id_;
   std::map<uint16_t, DataChannel> data_channels_;
   std::map<std::string, uint16_t> label_sid_;
   std::vector<std::pair<uint16_t, std::string> > out_buffered_msg_;
-  std::atomic<bool> send_blocking_;
-  uintptr_t id_ = 0;
-  uint16_t data_channel_id_ = 0;
 
   std::mutex sctp_mutex_;
   struct socket* sctp_socket_ = nullptr;
+
+  std::atomic<bool> send_blocking_;
+
+  // equal to SctpGlobalEnv id_ after register to global env
+  uintptr_t id_ = 0;
+  uint16_t data_channel_id_ = 0;  // self increase
 
   // tmp
  public:

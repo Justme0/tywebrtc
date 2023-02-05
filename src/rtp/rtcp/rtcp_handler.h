@@ -195,6 +195,10 @@ class RtcpHandler {
   int HandlePayloadFeedbackReport();
   int HandleXrExtendReport();
 
+  int SendReqNackPkt(const std::vector<uint16_t>& seqVect, uint32_t sourceSSRC,
+                     std::vector<uint16_t>& failedSeqs);
+  int HandleNack(const RtcpHeader& chead);
+
   uint32_t CreateSenderReport(std::vector<char>& o_rtcpPacketBin);
   uint32_t CreateReceiverReport(std::vector<char>& o_rtcpPacketBin);
   // uint32_t CreateNackReport(std::vector<char>& o_rtcpPacketBin);

@@ -100,47 +100,70 @@ inline std::shared_ptr<PeerConnection> getPeerPC(const std::string &selfIP,
   return nullptr;
 }
 
-// to rename
-int RtpHandler::SendToPeer_(std::vector<char> &vBufSend) {
+// to rename, now called in only one position
+int RtpHandler::SendToPeer_(RtpBizPacket &rtpBizPacket) {
   int ret = 0;
+
   RtpHeader &downlinkRtpHeader =
-      *reinterpret_cast<RtpHeader *>(vBufSend.data());
+      *reinterpret_cast<RtpHeader *>(rtpBizPacket.rtpRawPacket.data());
 
   std::string mediaType = downlinkRtpHeader.GetMediaType();
   tylog("downlink send media type=%s.", mediaType.data());
 
   if (mediaType == kMediaTypeAudio) {
-    // taylor audio not use pacing
+    // audio not use pacing
     downlinkRtpHeader.setSSRC(kDownlinkAudioSsrc);
-
     downlinkRtpHeader.setPayloadType(kDownlinkAudioPayloadType);
   } else if (mediaType == kMediaTypeVideo) {
     downlinkRtpHeader.setSSRC(kDownlinkVideoSsrc);
-
     downlinkRtpHeader.setPayloadType(kDownlinkVideoVp8PayloadType);
   } else {
     tylog("invalid downlink send media type=%s.", mediaType.data());
     assert(!"invalid media type");
   }
 
-  DumpSendPacket(vBufSend);
+  DumpSendPacket(rtpBizPacket.rtpRawPacket);
 
   auto peerPC = getPeerPC(belongingPeerConnection_.clientIP_,
                           belongingPeerConnection_.clientPort_);
   if (nullptr == peerPC) {
+    tylog("found no other peer");
+
     return 0;
   }
 
+  tylog("found other peer=%s.", peerPC->ToString().data());
+
   ret = peerPC->srtpHandler_.ProtectRtp(
-      const_cast<std::vector<char> *>(&vBufSend));
+      const_cast<std::vector<char> *>(&rtpBizPacket.rtpRawPacket));
   if (ret) {
     tylog("downlink protect rtp ret=%d", ret);
+
     return ret;
   }
 
-  ret = peerPC->SendToClient(vBufSend);
+  // OPT: cancle string copy
+  std::vector<char> tmpbuf(rtpBizPacket.rtpRawPacket);
+
+  tylog("downlink rtp=%s", downlinkRtpHeader.ToString().data());
+
+  auto it = peerPC->rtpHandler_.ssrcInfoMap_.find(downlinkRtpHeader.getSSRC());
+  if (peerPC->rtpHandler_.ssrcInfoMap_.end() == it) {
+    auto p = peerPC->rtpHandler_.ssrcInfoMap_.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(downlinkRtpHeader.getSSRC()),
+        std::forward_as_tuple(peerPC->rtpHandler_));
+    assert(p.second);
+    it = p.first;
+    assert(&it->second == &it->second.rtpReceiver.belongingSSRCInfo_);
+  }
+  SSRCInfo &ssrcInfo = it->second;
+  ssrcInfo.rtpSender.Enqueue(std::move(rtpBizPacket));
+
+  ret = peerPC->SendToClient(tmpbuf);
   if (ret) {
     tylog("send to peer ret=%d", ret);
+
     return ret;
   }
 
@@ -332,16 +355,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         return ret;
       }
 
-      ssrcInfo.rtpSender.Enqueue(std::move(packet));
-      assert(packet.rtpRawPacket.empty());
-    }
-
-    // downlink, should be in another file
-    std::vector<RtpBizPacket> sendPackets = ssrcInfo.rtpSender.Dequeue();
-
-    tylog("send to peer packets num=%zu", sendPackets.size());
-    for (RtpBizPacket &packet : sendPackets) {
-      ret = SendToPeer_(packet.rtpRawPacket);
+      ret = SendToPeer_(packet);
       if (ret) {
         tylog("send to peer ret=%d", ret);
         return ret;

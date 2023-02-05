@@ -39,12 +39,11 @@ class RtpHandler {
 
  private:
   int HandleRtcpPacket_(const std::vector<char> &vBufReceive);
-  int SendToPeer_(std::vector<char> &packet);
+  int SendToPeer_(RtpBizPacket &rtpBizPacket);
 
  public:
   PeerConnection &belongingPeerConnection_;
 
- private:
   std::unordered_map<uint32_t, SSRCInfo> ssrcInfoMap_;
 };
 

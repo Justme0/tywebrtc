@@ -8,6 +8,7 @@
 #include "log/log.h"
 #include "pc/peer_connection.h"
 #include "rtp/rtcp/rtcp_parser.h"
+#include "rtp/rtp_parser.h"
 
 extern int g_sock_fd;
 
@@ -29,6 +30,128 @@ inline std::shared_ptr<PeerConnection> getPeerPC(const std::string &selfIP,
   }
 
   return nullptr;
+}
+
+int RtcpHandler::SendReqNackPkt(const std::vector<uint16_t> &seqVect,
+                                uint32_t sourceSSRC,
+                                std::vector<uint16_t> &failedSeqs) {
+  int ret = 0;
+
+  auto it = belongingPeerConnection_.rtpHandler_.ssrcInfoMap_.find(sourceSSRC);
+
+  // we send to client firstly, SSRC already in queue
+  assert(it != belongingPeerConnection_.rtpHandler_.ssrcInfoMap_.end());
+
+  const SSRCInfo &ssrcInfo = it->second;
+
+  for (uint16_t itemSeq : seqVect) {
+    int64_t itemCycle = 0;
+
+    if (itemSeq == ssrcInfo.biggestSeq) {
+      itemCycle = ssrcInfo.biggestCycle;
+    } else if (itemSeq > ssrcInfo.biggestSeq) {
+      if (AheadOf(itemSeq, ssrcInfo.biggestSeq)) {
+        tylog("should not recv, itemSeq=%u too newer, %s.", itemSeq,
+              ssrcInfo.ToString().data());
+        assert(!"nack should not recv newer seq");
+      } else {
+        if (ssrcInfo.biggestCycle <= 0) {
+          tylog("should not reach here, itemSeq=%u, %s.", itemSeq,
+                ssrcInfo.ToString().data());
+          assert(!"should not reach here");
+        } else {
+          itemCycle = ssrcInfo.biggestCycle - 1;  // notice
+        }
+      }
+    } else {
+      if (AheadOf(itemSeq, ssrcInfo.biggestSeq)) {
+        tylog("should not recv, itemSeq=%u too newer, %s.", itemSeq,
+              ssrcInfo.ToString().data());
+        assert(!"nack should not recv newer seq");
+      } else {
+        itemCycle = ssrcInfo.biggestCycle;
+      }
+    }
+
+    PowerSeqT itemPowerSeq = itemCycle << 16 | itemSeq;
+    tylog("itemCycle=%ld, itemSeq=%u, itemPowerSeq=%ld.", itemCycle, itemSeq,
+          itemPowerSeq);
+
+    const std::vector<char> *rawPacket =
+        ssrcInfo.rtpSender.GetSeqPacket(itemPowerSeq);
+    if (nullptr == rawPacket) {
+      tylog("warning: nack not found packet, seq=%u, %s.", itemSeq,
+            ssrcInfo.ToString().data());
+
+      failedSeqs.push_back(itemSeq);
+
+      continue;
+    }
+
+    assert(!rawPacket->empty());
+    DumpSendPacket(*rawPacket);
+
+    ret = belongingPeerConnection_.SendToClient(*rawPacket);
+    if (ret) {
+      tylog("send to peer ret=%d, seq=%u, continue handle other nack seq", ret,
+            itemSeq);
+
+      continue;
+      // return ret;
+    }
+
+    tylog("send nack packet seq=%u succ", itemSeq);
+  }
+
+  return 0;
+}
+
+int RtcpHandler::HandleNack(const RtcpHeader &chead) {
+  int ret = 0;
+
+  uint32_t rtcpLen = (chead.getLength() + 1) * 4;
+  std::vector<uint16_t> seqVect;
+
+  uint32_t currPos = 12;  // 调过NACK包头12个字节的长度
+  const uint8_t *nackMovPointer = reinterpret_cast<const uint8_t *>(&chead);
+  const RtcpHeader *pnackHead = nullptr;
+
+  while (currPos < rtcpLen) {
+    pnackHead = reinterpret_cast<const RtcpHeader *>(nackMovPointer);
+    uint16_t pid = pnackHead->getNackPid();
+    uint16_t blp = pnackHead->getNackBlp();
+
+    for (int i = -1; i <= 16; i++) {
+      uint16_t seqNum = pid + i + 1;
+      if (i == -1 || (blp >> i) & 0x0001) {
+        seqVect.push_back(seqNum);
+      }
+    }
+
+    currPos += 4;
+    // pid以及blp总的4个字节，读完就调过，读下一个pid以及blp
+    nackMovPointer += 4;
+  }
+
+  tylog("sourceSSRC=%u(0x%X), %s, nack seqs=%s.", chead.getSourceSSRC(),
+        chead.getSourceSSRC(), chead.ToString().data(),
+        tylib::AnyToString(seqVect).data());
+
+  std::vector<uint16_t> failedSeqs;
+  ret = SendReqNackPkt(seqVect, chead.getSourceSSRC(), failedSeqs);
+  if (ret) {
+    tylog("sendReqNackPkt ret=%d", ret);
+
+    return ret;
+  }
+
+  if (!failedSeqs.empty()) {
+    tylog("warning: downlink queue not found nack seqs=%s.",
+          tylib::AnyToString(failedSeqs).data());
+    // should nack remote uplink client
+  }
+
+  return 0;
 }
 
 // 处理解密后的 RTCP 包
@@ -218,11 +341,13 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
 
   //可能是rtcp组合包
   while (true) {
-    if (totalLen >= vBufReceive.size()) break;
+    if (totalLen >= vBufReceive.size()) {
+      break;
+    }
 
     movingBuf += rtcpLen;
     const RtcpHeader *chead = reinterpret_cast<const RtcpHeader *>(movingBuf);
-    tylog("recv number %d rtcp=%s", index++, chead->ToString().data());
+    tylog("recv number #%d rtcp=%s", index++, chead->ToString().data());
     rtcpLen = (chead->getLength() + 1) * 4;
     totalLen += rtcpLen;
 
@@ -234,11 +359,13 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
     switch (chead->packettype) {
       case RtcpPacketType::kSenderReport: {
         tylog("[RTCP_SenderReport_PT]");
+
         break;
       }
 
       case RtcpPacketType::kReceiverReport: {
         tylog("[RTCP_ReceiverReport_PT]");
+
         break;
       }
       case RtcpPacketType::kGenericRtpFeedback: {
@@ -246,15 +373,24 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
             static_cast<RtcpGenericFeedbackFormat>(chead->getBlockCount())) {
           case RtcpGenericFeedbackFormat::kFeedbackNack: {
             // audio have no nack?
-            RtcpHeader *rsphead = const_cast<RtcpHeader *>(chead);
+            // RtcpHeader *rsphead = const_cast<RtcpHeader *>(chead);
 
-            if (rsphead->getSourceSSRC() == kDownlinkAudioSsrc) {
-              assert(g_UplinkAudioSsrc != 0);
-              rsphead->setSourceSSRC(g_UplinkAudioSsrc);
-            } else if (rsphead->getSourceSSRC() == kDownlinkVideoSsrc) {
-              assert(g_UplinkVideoSsrc != 0);
-              rsphead->setSourceSSRC(g_UplinkVideoSsrc);
+            ret = HandleNack(*chead);
+            if (ret) {
+              tylog("handleNack ret=%d", ret);
+
+              return ret;
             }
+
+            return 0;
+
+            // if (rsphead->getSourceSSRC() == kDownlinkAudioSsrc) {
+            //   assert(g_UplinkAudioSsrc != 0);
+            //   rsphead->setSourceSSRC(g_UplinkAudioSsrc);
+            // } else if (rsphead->getSourceSSRC() == kDownlinkVideoSsrc) {
+            //   assert(g_UplinkVideoSsrc != 0);
+            //   rsphead->setSourceSSRC(g_UplinkVideoSsrc);
+            // }
 
             break;
           }
@@ -297,6 +433,7 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
 
   DumpSendPacket(vBufReceive);
 
+  // send to remote uplink client
   auto peerPC = getPeerPC(belongingPeerConnection_.clientIP_,
                           belongingPeerConnection_.clientPort_);
 

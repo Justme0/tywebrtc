@@ -144,7 +144,8 @@ void SSLInfoCallback(const SSL* s, int where, int callbackRet) {
   } else if (where & SSL_CB_ALERT) {
     str = (where & SSL_CB_READ) ? "read" : "write";
     tylog(
-        "SSL3[State %s] where=%#x, callbackRet=%d, %s, alert type=%s, alert "
+        "SSL3[State %s] where=%#x, callbackRet=%d, r/w=%s, alert type=%s, "
+        "alert "
         "desc=%s",
         strState, where, callbackRet, str,
         SSL_alert_type_string_long(callbackRet),
@@ -175,7 +176,7 @@ int SSLVerifyCallback(int ok, X509_STORE_CTX* store) {
   if (!ok) {
     int err = X509_STORE_CTX_get_error(store);
 
-    tylog("Error: %d", X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT);
+    tylog("ssl verify error: %d", err);
 
     // peer-to-peer mode: allow the certificate to be self-signed,
     // assuming it matches the digest that was specified.
@@ -496,7 +497,6 @@ void DtlsHandler::CheckHandshakeComplete_() {
 int DtlsHandler::DoDataChannel_(const std::vector<char>& vBufReceive) {
   int ret = 0;
 
-  tylog("recv data size=%zu.", vBufReceive.size());
   ret = this->belongingPeerConnection_.dataChannelHandler_.InitSocket();
   if (ret) {
     tylog("init sctp socket ret=%d.", ret);
@@ -513,8 +513,7 @@ int DtlsHandler::DoDataChannel_(const std::vector<char>& vBufReceive) {
     int size = SSL_read(mSsl, sctp_read_buf, sizeof(sctp_read_buf));
     if (size <= 0) {
       m_SSl_BuffState = SSL_get_error(mSsl, size);
-      tylog("SSL_read Error State: %s,m_SSl_BuffState %d",
-            SSL_state_string(mSsl), m_SSl_BuffState);
+      tylog("SSL_read Error, %s", ToString().data());
 
       break;
     }
@@ -536,6 +535,8 @@ int DtlsHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
 
   // do data channel
   if (this->mHandshakeCompleted) {
+    tylog("data channel recv data size=%zu.", vBufReceive.size());
+
     return DoDataChannel_(vBufReceive);
   }
 
@@ -752,7 +753,7 @@ void DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
     m_ReSendTime = 0;
   }
 
-  if ((MAX_BUFF_NUM > m_SendBuffNum) && (MAX_DTLS_PKG_LEN > len)) {
+  if (MAX_BUFF_NUM > m_SendBuffNum && MAX_DTLS_PKG_LEN > len) {
     m_SendBuff[m_SendBuffNum].len = len;
     memcpy(m_SendBuff[m_SendBuffNum].buff, data, len);
     m_SendBuffNum++;
@@ -766,15 +767,9 @@ void DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
   tylog("write Dtls message len %zu, MTU %u %s", len, DTLS_MTU,
         ToString().data());
 
-  //    WebRtcDumpVideoPkg((char*)data,len,WEB_RTC_DUMP_ICE_OUT);
+  // to dump
 
-  // if (DropDownPkgRand())
-  // {
-  //     tylog("drop WRITE dtls pkg len:%d", len);
-  //     return;
-  // }
-  // pUser->SendDtlsPacketToClient((const char*)data, len);
-
+  // can use SendToClient
   sockaddr_in addr =
       tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
                                this->belongingPeerConnection_.clientPort_);
@@ -800,14 +795,9 @@ void DtlsHandler::rewriteDtlsPacket(const void* data, size_t len) {
           ToString().data());
   }
 
-  //    WebRtcDumpVideoPkg((char*)data,len,WEB_RTC_DUMP_ICE_OUT);
+  // to dump
 
-  // if (DropDownPkgRand())
-  // {
-  //     tylog("drop WRITE dtls pkg len:%d", len);
-  //     return;
-  // }
-  // pUser->SendDtlsPacketToClient((const char*)data, len);
+  // can use SendToClient
   sockaddr_in addr =
       tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
                                this->belongingPeerConnection_.clientPort_);
@@ -886,8 +876,8 @@ void DtlsHandler::OnTime() {
   }
 
   if (m_IsHandshakeCanComplete &&
-      (MAX_CLIENT_KEY_RESEND_TIME <= m_ClientKeySendTime)) {
-    tylog("Do handshakeCompleted time out %s", ToString().data());
+      MAX_CLIENT_KEY_RESEND_TIME <= m_ClientKeySendTime) {
+    tylog("Do handshakeCompleted time out, %s", ToString().data());
 
     const bool kSessionCompleted = true;
     int ret = HandshakeCompleted(kSessionCompleted);

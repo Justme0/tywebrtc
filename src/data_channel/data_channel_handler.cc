@@ -144,15 +144,6 @@ static int SendThresholdCallback(struct socket* sock, uint32_t sb_free,
   return 0;
 }
 
-DataChannel::DataChannel() {
-  label_ = "";
-  sid_ = 0;
-
-  channel_type_ = 0;
-  reliability_params_ = 0;
-  status_ = DataChannelStatusClosed;
-};
-
 SctpGlobalEnv::SctpGlobalEnv() {
   id_ = 0;
   tylog("sctp global env init");
@@ -429,10 +420,11 @@ int DataChannelHandler::OnSctpEvent(const struct sctp_rcvinfo&, void* data,
       reinterpret_cast<union sctp_notification*>(data);
   if (sctp_notify->sn_header.sn_length != len) {
     tylog("sctp notify header");
+
     return -1;
   }
 
-  tylog("sctp event type=%d", (int)sctp_notify->sn_header.sn_type);
+  tylog("sctp event type=%d", sctp_notify->sn_header.sn_type);
 
   switch (sctp_notify->sn_header.sn_type) {
     case SCTP_ASSOC_CHANGE:
@@ -478,6 +470,7 @@ void DataChannelHandler::OnSendThresholdCallback() {
   if (send_blocking_) {
     if (SendBufferedMsg() != 0) {
       tylog("send still blocking");
+
       return;
     } else {
       tylog("buffered msg sended");
@@ -571,7 +564,7 @@ int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
         }
       }
 
-      std::string label = "";
+      std::string label;
       if (label_length > 0) {
         if (label_length > byte_left) {
           tylog("sctp data length invalid");
@@ -607,7 +600,7 @@ int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
       label_sid_.insert(std::make_pair(data_channel.label_, data_channel.sid_));
       data_channels_.insert(std::make_pair(data_channel.sid_, data_channel));
 
-      tylog("log datachannel open: label:%s, sid : %u", label.c_str(),
+      tylog("key: datachannel open: label:%s, sid: %u", label.c_str(),
             rcv.rcv_sid);
 
       // may callback OnDataChannelOpen
@@ -617,7 +610,11 @@ int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
     case DataChannelMessageTypeAck: {
       break;
     }
-    default: { tylog("unknown data channel control msg type"); }
+    default: {
+      tylog("unknown data channel control msg type=%d", msg_type);
+
+      assert(!"unknown data channel control msg type, shouldn't use assert :)");
+    }
   }
 
   return 0;
@@ -626,6 +623,7 @@ int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
 int DataChannelHandler::OnDataChannelMsg(const struct sctp_rcvinfo& rcv,
                                          char* data, int len) {
   std::unique_lock<std::mutex> lock_guard(channel_mutex_);
+
   std::map<uint16_t, DataChannel>::iterator iter =
       data_channels_.find(rcv.rcv_sid);
   if (iter == data_channels_.end()) {
@@ -633,10 +631,10 @@ int DataChannelHandler::OnDataChannelMsg(const struct sctp_rcvinfo& rcv,
     return -1;
   }
   const std::string label = iter->second.label_;
+
   lock_guard.unlock();
 
-  tylog("on recv data=%p, len=%d", data, len);
-  tylog("on recv data=%.*s", len, data);
+  tylog("on recv data len=%d, data=%p %.*s.", len, data, len, data);
 
   // may callback OnRecvDataChannelMsg
 
@@ -647,12 +645,14 @@ int DataChannelHandler::Send(const std::string& label, const uint8_t* buf,
                              const int len) {
   uint16_t sid = 0;
   std::unique_lock<std::mutex> lock_guard(channel_mutex_);
+
   std::map<std::string, uint16_t>::iterator iter = label_sid_.find(label);
   if (iter == label_sid_.end()) {
     tylog("can not found label=%s", label.c_str());
     return kChannelNotFound;
   }
   sid = iter->second;
+
   lock_guard.unlock();
 
   return Send(sid, buf, len);
