@@ -41,7 +41,7 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
   }
 
   // OPT: move constant to config
-  if (jitterBuffer_.size() > 10000) {
+  if (jitterBuffer_.size() >= 10000) {
     std::string err = tylib::format_string(
         "bug, jitterBuffer_ size too large=%zu.", jitterBuffer_.size());
     tylog("%s", err.data());
@@ -50,86 +50,99 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
 
   tylog("orderedPackets size=%zu, jitter size=%zu.", orderedPackets.size(),
         jitterBuffer_.size());
-  if (orderedPackets.empty() && !jitterBuffer_.empty()) {
-    const RtpBizPacket& firstPacket = jitterBuffer_.begin()->second;
-    tylog(
-        "jitter detect out-of-order or lost, cannot out packets, last out "
-        "packet powerSeq=%ld[%s], jitter.size=%zu, jitter first rtp=%s.",
-        lastPowerSeq_, PowerSeqToString(lastPowerSeq_).data(),
-        jitterBuffer_.size(), firstPacket.ToString().data());
-
-    const int64_t waitMs = firstPacket.WaitTimeMs();
-
-    // const int64_t kRtcpRoundTripTimeMs = 40;
-
-    // OPT: move constant to config, related to RTT
-    const int64_t kNackTimeMs = 0;
-    // const int64_t kPLITimeMs = kRtcpRoundTripTimeMs + 5;
-    const int64_t kPLITimeMs = 500;
-    if (waitMs < kNackTimeMs) {
-      tylog(
-          "We wait short time %ldms, do nothing. Sometime not real lost, just "
-          "out-of-order.",
-          waitMs);
-    } else if (kNackTimeMs <= waitMs && waitMs < kPLITimeMs) {
-      tylog("wait %ldms, to nack", waitMs);
-      std::set<int> nackSeqs;
-      for (int i = lastPowerSeq_ + 1; i < firstPacket.GetPowerSeq(); ++i) {
-        nackSeqs.insert(SplitPowerSeq(i).second);
-      }
-
-      const uint32_t kSelfRtcpSSRC = 1;
-      const uint32_t kMediaSrcSSRC =
-          reinterpret_cast<const RtpHeader*>(firstPacket.rtpRawPacket.data())
-                      ->GetMediaType() == kMediaTypeAudio
-              ? g_UplinkAudioSsrc
-              : g_UplinkVideoSsrc;
-
-      int ret = this->belongingSSRCInfo_.belongingRtpHandler
-                    .belongingPeerConnection_.rtcpHandler_.CreateNackReportSend(
-                        nackSeqs, kSelfRtcpSSRC, kMediaSrcSSRC);
-
-      if (ret) {
-        tylog("createNackReportSend ret=%d", ret);
-        // not return error
-        // should monitor
-      }
-    } else {
-      const RtpHeader& rtpHeader =
-          *reinterpret_cast<const RtpHeader*>(firstPacket.rtpRawPacket.data());
-
-      if (rtpHeader.GetMediaType() == kMediaTypeAudio) {
-        tylog("audio wait %ldms, not wait, pop all", waitMs);
-        for (auto it = jitterBuffer_.begin(); it != jitterBuffer_.end();) {
-          tylog("pop from jitter rtp=%s.", it->second.ToString().data());
-          lastPowerSeq_ = it->first;
-
-          orderedPackets.emplace_back(std::move(it->second));
-          assert(it->second.rtpRawPacket.empty());
-
-          it = jitterBuffer_.erase(it);
-        }
-      } else {
-        tylog("PLI, first packet waitMs=%ld too long, packet=%s.", waitMs,
-              firstPacket.ToString().data());
-
-        // video PLI
-        assert(rtpHeader.GetMediaType() == kMediaTypeVideo);
-
-        const uint32_t kSelfRtcpSSRC = 1;
-        const uint32_t kMediaSrcSSRC = g_UplinkVideoSsrc;
-        int ret =
-            belongingSSRCInfo_.belongingRtpHandler.belongingPeerConnection_
-                .rtcpHandler_.CreatePLIReportSend(kSelfRtcpSSRC, kMediaSrcSSRC);
-        if (ret) {
-          tylog("createPLIReportSend ret=%d", ret);
-        }
-
-        jitterBuffer_.clear();
-        lastPowerSeq_ = kShitRecvPowerSeqInitValue;
-      }
-    }
+  if (!orderedPackets.empty()) {
+    return orderedPackets;
   }
 
-  return orderedPackets;
+  assert(!jitterBuffer_.empty());  // already push to jitter
+
+  const RtpBizPacket& firstPacket = jitterBuffer_.begin()->second;
+  const bool bAudioType =
+      reinterpret_cast<const RtpHeader*>(firstPacket.rtpRawPacket.data())
+          ->GetMediaType() == kMediaTypeAudio;
+  tylog(
+      "jitter detect out-of-order or lost, cannot out packets, last out "
+      "packet powerSeq=%ld[%s], jitter.size=%zu, jitter first rtp=%s.",
+      lastPowerSeq_, PowerSeqToString(lastPowerSeq_).data(),
+      jitterBuffer_.size(), firstPacket.ToString().data());
+
+  const int64_t waitMs = firstPacket.WaitTimeMs();
+
+  // const int64_t kRtcpRoundTripTimeMs = 40;
+
+  // OPT: move constant to config, related to RTT
+  const int64_t kNackTimeMs = 0;
+  // const int64_t kPLITimeMs = kRtcpRoundTripTimeMs + 5;
+  const int64_t kPLITimeMs = 300;
+  // buffer packet len, OPT: distinguish audio and video
+  const size_t kJitterMaxSize = 15;
+
+  if (waitMs < kNackTimeMs) {
+    tylog(
+        "We wait short time %ldms, do nothing. Sometime not real lost, just "
+        "out-of-order.",
+        waitMs);
+
+    return {};
+  }
+
+  if (kNackTimeMs <= waitMs && waitMs < kPLITimeMs &&
+      jitterBuffer_.size() <= kJitterMaxSize) {
+    tylog("wait %ldms, to nack", waitMs);
+    std::set<int> nackSeqs;
+    // should req all not received packets in jitter
+    for (int i = lastPowerSeq_ + 1; i < firstPacket.GetPowerSeq(); ++i) {
+      nackSeqs.insert(SplitPowerSeq(i).second);
+    }
+
+    const uint32_t kSelfRtcpSSRC = 1;
+    const uint32_t kMediaSrcSSRC =
+        bAudioType ? g_UplinkAudioSsrc : g_UplinkVideoSsrc;
+
+    int ret = this->belongingSSRCInfo_.belongingRtpHandler
+                  .belongingPeerConnection_.rtcpHandler_.CreateNackReportSend(
+                      nackSeqs, kSelfRtcpSSRC, kMediaSrcSSRC);
+
+    if (ret) {
+      tylog("createNackReportSend ret=%d", ret);
+
+      return {};
+    }
+
+    return {};
+  }
+
+  // wait too long for audio, pop all
+  if (bAudioType) {
+    tylog("audio wait too long %ldms, not wait, pop all", waitMs);
+    // OPT: should pop only first, and pop remaining in normal way
+    for (auto it = jitterBuffer_.begin(); it != jitterBuffer_.end();) {
+      tylog("pop from jitter rtp=%s.", it->second.ToString().data());
+      lastPowerSeq_ = it->first;
+
+      orderedPackets.emplace_back(std::move(it->second));
+      assert(it->second.rtpRawPacket.empty());
+
+      it = jitterBuffer_.erase(it);
+    }
+    return orderedPackets;
+  }
+
+  // wait too long for video, clear and do PLI
+  tylog("PLI, first packet waitMs=%ld too long, packet=%s.", waitMs,
+        firstPacket.ToString().data());
+
+  const uint32_t kSelfRtcpSSRC = 1;
+  const uint32_t kMediaSrcSSRC = g_UplinkVideoSsrc;
+  int ret = belongingSSRCInfo_.belongingRtpHandler.belongingPeerConnection_
+                .rtcpHandler_.CreatePLIReportSend(kSelfRtcpSSRC, kMediaSrcSSRC);
+  if (ret) {
+    tylog("createPLIReportSend ret=%d", ret);
+    // not return
+  }
+
+  jitterBuffer_.clear();
+  lastPowerSeq_ = kShitRecvPowerSeqInitValue;
+
+  return {};
 }

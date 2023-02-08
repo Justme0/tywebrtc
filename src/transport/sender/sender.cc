@@ -39,7 +39,7 @@ const std::vector<char>* RtpSender::GetSeqPacket(PowerSeqT powerSeq) const {
 
     tylog("not found powerSeq=%ld, queue size=%zu: %s.", powerSeq,
           sendQueue_.size(), ss.str().data());
-    assert(!"shit");
+
     return nullptr;
   }
 

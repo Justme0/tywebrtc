@@ -80,8 +80,8 @@ int RtcpHandler::SendReqNackPkt(const std::vector<uint16_t> &seqVect,
     const std::vector<char> *rawPacket =
         ssrcInfo.rtpSender.GetSeqPacket(itemPowerSeq);
     if (nullptr == rawPacket) {
-      tylog("warning: nack not found packet, seq=%u, %s.", itemSeq,
-            ssrcInfo.ToString().data());
+      tylog("NOTE: nack not found packet, powerseq=%s, %s.",
+            PowerSeqToString(itemPowerSeq).data(), ssrcInfo.ToString().data());
 
       failedSeqs.push_back(itemSeq);
 
@@ -347,14 +347,17 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
 
     movingBuf += rtcpLen;
     const RtcpHeader *chead = reinterpret_cast<const RtcpHeader *>(movingBuf);
-    tylog("recv number #%d rtcp=%s", index++, chead->ToString().data());
+    tylog("recv number #%d rtcp=%s.", index++, chead->ToString().data());
     rtcpLen = (chead->getLength() + 1) * 4;
     totalLen += rtcpLen;
 
     tylog("rtcpLen[%u], totalLen[%zu], input buf len[%zu]", rtcpLen, totalLen,
           vBufReceive.size());
 
-    if (totalLen > vBufReceive.size()) break;
+    if (totalLen > vBufReceive.size()) {
+      // should check why
+      break;
+    }
 
     switch (chead->packettype) {
       case RtcpPacketType::kSenderReport: {
@@ -382,6 +385,8 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
               return ret;
             }
 
+            // taylor OPT: should not return, should transfer other type of
+            // packet
             return 0;
 
             // if (rsphead->getSourceSSRC() == kDownlinkAudioSsrc) {

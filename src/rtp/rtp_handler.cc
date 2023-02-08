@@ -219,19 +219,16 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       return ret;
     }
   } else if (mediaType == kMediaTypeAudio || mediaType == kMediaTypeVideo) {
-    // test video loss,
     // must before srtp, otherwise srtp_err_status_replay_fail
     // https://segmentfault.com/a/1190000040211375
-    if (mediaType == kMediaTypeVideo) {
-      int r = rand() % 100;
-      if (r < kUplossRateMul100) {
-        tylog("up rand=%d lostrate=%d%%, drop! rtp=%s.", r, kUplossRateMul100,
-              reinterpret_cast<const RtpHeader *>(vBufReceive.data())
-                  ->ToString()
-                  .data());
+    int r = rand() % 100;
+    if (r < kUplossRateMul100) {
+      tylog("up rand=%d lostrate=%d%%, drop! rtp=%s.", r, kUplossRateMul100,
+            reinterpret_cast<const RtpHeader *>(vBufReceive.data())
+                ->ToString()
+                .data());
 
-        return 0;
-      }
+      return 0;
     }
 
     tylog("before unprotect, paddinglen=%d", getRtpPaddingLength(vBufReceive));
