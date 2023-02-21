@@ -26,8 +26,7 @@ class RtpReceiver {
   // must be ordered, cannot be hashmap
   std::map<PowerSeqT, RtpBizPacket> jitterBuffer_;
 
-  // mark last popped one, should reserve rtp for nack,
-  PowerSeqT lastPowerSeq_ = kShitRecvPowerSeqInitValue;
+  PowerSeqT lastPoppedPowerSeq_ = kShitRecvPowerSeqInitValue;
 };
 
 #endif  //   TRANSPORT_RECEIVER_RECEIVER_H_

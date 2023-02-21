@@ -208,7 +208,11 @@ long DtlsOutBIOCallback(BIO* bio, int cmd, const char* argp, int argi,
   if (BIO_CB_WRITE == cmd) {
     DtlsHandler* d = reinterpret_cast<DtlsHandler*>(BIO_get_callback_arg(bio));
     if (argp && 0 < argi && d) {
-      d->WriteDtlsPacket(argp, argi);
+      int errCode = d->WriteDtlsPacket(argp, argi);
+      if (errCode) {
+        tylog("writeDtlsPacket ret=%d", errCode);
+        // return ret ?
+      }
     }
   }
 
@@ -513,13 +517,13 @@ int DtlsHandler::DoDataChannel_(const std::vector<char>& vBufReceive) {
     int size = SSL_read(mSsl, sctp_read_buf, sizeof(sctp_read_buf));
     if (size <= 0) {
       m_SSl_BuffState = SSL_get_error(mSsl, size);
-      tylog("SSL_read Error, %s", ToString().data());
+      tylog("SSL_read ret=%d, %s", ret, ToString().data());
 
       break;
     }
 
-    this->belongingPeerConnection_.dataChannelHandler_.Feed(sctp_read_buf,
-                                                            size);
+    this->belongingPeerConnection_.dataChannelHandler_.HandleDataChannelPacket(
+        sctp_read_buf, size);
   }
 
   return 0;
@@ -589,9 +593,12 @@ int DtlsHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
     assert(0 != m_SendBuffNum);
 
     for (int i = 0; i < m_SendBuffNum; ++i) {
-      tylog("already complete, rewriteDtlsPacket i=%d, buffer len=%d", i,
+      tylog("already complete, rewrite DtlsPacket i=%d, buffer len=%d", i,
             m_SendBuff[i].len);
-      rewriteDtlsPacket(m_SendBuff[i].buff, m_SendBuff[i].len);
+      ret = rewriteDtlsPacket(m_SendBuff[i].buff, m_SendBuff[i].len);
+      if (ret) {
+        tylog("rewrite ret=%d", ret);
+      }
     }
 
     return 0;
@@ -744,7 +751,9 @@ void DtlsHandler::SendToDtls(const void* data, int len) {
   SSL_write(mSsl, data, len);
 }
 
-void DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
+int DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
+  int ret = 0;
+
   m_CheckTime = g_now_ms;
 
   if (m_ResetFlag) {
@@ -769,23 +778,22 @@ void DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
 
   // to dump
 
-  // can use SendToClient
-  sockaddr_in addr =
-      tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
-                               this->belongingPeerConnection_.clientPort_);
-  ssize_t sendtoLen =
-      sendto(g_sock_fd, data, len, 0, reinterpret_cast<sockaddr*>(&addr),
-             sizeof(struct sockaddr_in));
-  if (-1 == sendtoLen) {
-    tylog("sendto errorno=%d[%s]", errno, strerror(errno));
-    return;
+  // to avoid copy
+  std::vector<char> bufToSend(static_cast<const char*>(data),
+                              static_cast<const char*>(data) + len);
+  ret = belongingPeerConnection_.SendToClient(bufToSend);
+  if (ret) {
+    tylog("send to client ret=%d.", ret);
+
+    return ret;
   }
-  tylog("sendto reply succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
-        belongingPeerConnection_.clientIP_.data(),
-        belongingPeerConnection_.clientPort_);
+
+  return 0;
 }
 
-void DtlsHandler::rewriteDtlsPacket(const void* data, size_t len) {
+int DtlsHandler::rewriteDtlsPacket(const void* data, size_t len) {
+  int ret = 0;
+
   m_CheckTime = g_now_ms;
 
   if (nullptr != mSsl) {
@@ -797,20 +805,17 @@ void DtlsHandler::rewriteDtlsPacket(const void* data, size_t len) {
 
   // to dump
 
-  // can use SendToClient
-  sockaddr_in addr =
-      tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
-                               this->belongingPeerConnection_.clientPort_);
-  ssize_t sendtoLen =
-      sendto(g_sock_fd, data, len, 0, reinterpret_cast<sockaddr*>(&addr),
-             sizeof(struct sockaddr_in));
-  if (-1 == sendtoLen) {
-    tylog("sendto errorno=%d[%s]", errno, strerror(errno));
-    return;
+  // to avoid copy
+  std::vector<char> bufToSend(static_cast<const char*>(data),
+                              static_cast<const char*>(data) + len);
+  ret = belongingPeerConnection_.SendToClient(bufToSend);
+  if (ret) {
+    tylog("send to client ret=%d.", ret);
+
+    return ret;
   }
-  tylog("sendto reply succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
-        belongingPeerConnection_.clientIP_.data(),
-        belongingPeerConnection_.clientPort_);
+
+  return 0;
 }
 
 // 在我方SDP中提供
@@ -834,9 +839,11 @@ int64_t DtlsHandler::GetCheckIntervalMs() const {
                         MIN_RESEND_INTERVAL, MAX_RESEND_INTERVAL);
 }
 
-void DtlsHandler::OnTime() {
+int DtlsHandler::OnTime() {
+  int ret = 0;
+
   if (mHandshakeCompleted || mHandshakeFail) {
-    return;
+    return 0;
   }
 
   if (MAX_RESEND_TIME <= m_ReSendTime) {
@@ -846,7 +853,7 @@ void DtlsHandler::OnTime() {
     mHandshakeFail = true;
     tylog("max resend time reach max, dtls timeout, failed");
 
-    return;
+    return -1;
   }
 
   const int64_t TimePassMs = g_now_ms - m_CheckTime;
@@ -867,7 +874,12 @@ void DtlsHandler::OnTime() {
       tylog("OnTime rewriteDtlsPacket, i=%d buffer len=%d", i,
             m_SendBuff[i].len);
 
-      rewriteDtlsPacket(m_SendBuff[i].buff, m_SendBuff[i].len);
+      ret = rewriteDtlsPacket(m_SendBuff[i].buff, m_SendBuff[i].len);
+      if (ret) {
+        tylog("rewrite ret=%d", ret);
+
+        return ret;
+      }
     }
 
     tylog("after onTime rewrite, Now:%" PRId64 " %s passMs:%" PRId64 " %s",
@@ -880,11 +892,15 @@ void DtlsHandler::OnTime() {
     tylog("Do handshakeCompleted time out, %s", ToString().data());
 
     const bool kSessionCompleted = true;
-    int ret = HandshakeCompleted(kSessionCompleted);
+    ret = HandshakeCompleted(kSessionCompleted);
     if (ret) {
       tylog("handshakeCompleted fail, ret=%d", ret);
+
+      return ret;
     }
   }
+
+  return 0;
 }
 
 std::string DtlsHandler::ToString() const {

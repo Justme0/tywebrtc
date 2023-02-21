@@ -199,14 +199,20 @@ int HandleRequest() {
       "==================================",
       ip.data(), port, vBufReceive.size());
 
-  // get some pc according to clientip, port or ICE username (FIX)
-  std::shared_ptr<PeerConnection> pc = Singleton::Instance().GetPeerConnection(
-      ip, port, "");  // have bug, ufrag is ""
-  // pc->StoreClientIPPort(ip, port);  // should be in GetPeerConnection()
-  // if (ret) {
-  //   tylog("pc storeClientIPPort fail, ret=%d", ret);
-  //   return ret;
-  // }
+  // get some pc according to clientip, port or ICE username (to FIX),
+  // cannot handle ICE connection change
+  std::shared_ptr<PeerConnection> pc =
+      Singleton::Instance().GetPeerConnection(ip, port, "");
+
+  // must before srtp if it's rtp, otherwise srtp_err_status_replay_fail
+  // https://segmentfault.com/a/1190000040211375
+  int r = rand() % 100;
+  if (r < kUplossRateMul100) {
+    tylog("up rand=%d lostrate=%d%%, drop!", r, kUplossRateMul100);
+
+    return 0;
+  }
+
   ret = pc->HandlePacket(vBufReceive);
   if (ret) {
     tylog("pc handlePacket fail, ret=%d", ret);

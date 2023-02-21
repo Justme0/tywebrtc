@@ -15,22 +15,6 @@ extern int g_sock_fd;
 RtcpHandler::RtcpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {}
 
 // tmp
-inline std::shared_ptr<PeerConnection> getPeerPC(const std::string &selfIP,
-                                                 int selfPort) {
-  for (const auto &p : Singleton::Instance().client2PC_) {
-    if (selfIP == p.first.ip && selfPort == p.first.port) {
-      continue;
-    }
-
-    if (p.second->stateMachine_ < EnumStateMachine::GOT_RTP) {
-      continue;
-    }
-
-    return p.second;
-  }
-
-  return nullptr;
-}
 
 int RtcpHandler::SendReqNackPkt(const std::vector<uint16_t> &seqVect,
                                 uint32_t sourceSSRC,
@@ -53,12 +37,14 @@ int RtcpHandler::SendReqNackPkt(const std::vector<uint16_t> &seqVect,
       if (AheadOf(itemSeq, ssrcInfo.biggestSeq)) {
         tylog("should not recv, itemSeq=%u too newer, %s.", itemSeq,
               ssrcInfo.ToString().data());
-        assert(!"nack should not recv newer seq");
+        // assert(!"nack should not recv newer seq");
+        continue;
       } else {
         if (ssrcInfo.biggestCycle <= 0) {
           tylog("should not reach here, itemSeq=%u, %s.", itemSeq,
                 ssrcInfo.ToString().data());
-          assert(!"should not reach here");
+          // assert(!"should not reach here");
+          continue;
         } else {
           itemCycle = ssrcInfo.biggestCycle - 1;  // notice
         }
@@ -67,7 +53,8 @@ int RtcpHandler::SendReqNackPkt(const std::vector<uint16_t> &seqVect,
       if (AheadOf(itemSeq, ssrcInfo.biggestSeq)) {
         tylog("should not recv, itemSeq=%u too newer, %s.", itemSeq,
               ssrcInfo.ToString().data());
-        assert(!"nack should not recv newer seq");
+        // assert(!"nack should not recv newer seq");
+        continue;
       } else {
         itemCycle = ssrcInfo.biggestCycle;
       }
@@ -89,6 +76,7 @@ int RtcpHandler::SendReqNackPkt(const std::vector<uint16_t> &seqVect,
     }
 
     assert(!rawPacket->empty());
+    // rawPacket is encrypted data
     DumpSendPacket(*rawPacket);
 
     ret = belongingPeerConnection_.SendToClient(*rawPacket);
@@ -146,7 +134,7 @@ int RtcpHandler::HandleNack(const RtcpHeader &chead) {
   }
 
   if (!failedSeqs.empty()) {
-    tylog("warning: downlink queue not found nack seqs=%s.",
+    tylog("warning: downlink queue not found nack req, failed seqs=%s.",
           tylib::AnyToString(failedSeqs).data());
     // should nack remote uplink client
   }
@@ -156,183 +144,14 @@ int RtcpHandler::HandleNack(const RtcpHeader &chead) {
 
 // 处理解密后的 RTCP 包
 int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
+  // if peer doesn't exist, not handle it.
+  // OPT: handle RRTR, RR, SR ...
+  auto peerPC = belongingPeerConnection_.FindPeerPC();
+  if (nullptr == peerPC) {
+    return 0;
+  }
+
   int ret = 0;
-
-  // const RtcpHeader &rtcpHeader =
-  //     *reinterpret_cast<const RtcpHeader *>(vBufReceive.data());
-
-  /*
-    RtcpHeader *chead = reinterpret_cast<RtcpHeader *>(pPackage);
-    if (!chead->isRtcp()) {
-      tylog("pkg is not rtcp, pt=%d", chead->packettype);
-      return -1;
-    }
-
-    unsigned int subType = 0;
-    STVideoUserInfo *pWatcherUser = nullptr;
-
-    // 行使用远端ssrc判断
-    if (m_pTWebRTCUserInfo->ullTinyId == m_pc->ullTinyId) {
-      if (chead->getSSRC() == m_pc->tVideoUserInfo[0].uiRemoteSsrc)  //视频SR包
-      {
-        pWatcherUser = &m_pc->tVideoUserInfo[0];
-        subType = DT_BIGVIDIO;
-      } else if (chead->getSSRC() == m_pc->tVideoUserInfo[1].uiRemoteSsrc) {
-        pWatcherUser = &m_pc->tVideoUserInfo[1];
-      } else if (chead->getSSRC() == m_pc->tAudioInfo.uiRemoteSsrc)  //音频SR包
-      {
-        subType = DT_AUDIO;
-      }
-    } else {
-      if (chead->getSourceSSRC() == m_pc->tVideoUserInfo[0].uiLocalSsrc) {
-        subType = DT_BIGVIDIO;
-        pWatcherUser = &m_pc->tVideoUserInfo[0];
-      } else if (chead->getSourceSSRC() == m_pc->tVideoUserInfo[1].uiLocalSsrc)
-    { pWatcherUser = &m_pc->tVideoUserInfo[1]; } else if (chead->getSourceSSRC()
-    == m_pc->tAudioInfo.uiLocalSsrc) { subType = DT_AUDIO;
-      }
-    }
-
-    if (0 == subType) {
-      tylog(
-          "Rtcp packettype:%u BlockCount:%u subType:%u\r\n Rtcp[SSrc:%u "
-          "SrcSSRC:%u] \r\nVid[RemSsrc:%u LocSsrc:%u] \r\nAud[RemSsrc:%u "
-          "LocSsrc:%u]",
-          chead->packettype, chead->getBlockCount(), subType, chead->getSSRC(),
-          chead->getSourceSSRC(), m_pc->tVideoUserInfo[0].uiRemoteSsrc,
-          m_pc->tVideoUserInfo[0].uiLocalSsrc, m_pc->tAudioInfo.uiRemoteSsrc,
-          m_pc->tAudioInfo.uiLocalSsrc);
-    }
-
-    char *movingBuf = pPackage;
-    int rtcpLen = 0;
-    int totalLen = 0;
-    while (true)  //可能是rtcp组合包
-    {
-      if (totalLen >= iLen) break;
-
-      movingBuf += rtcpLen;
-      chead = reinterpret_cast<RtcpHeader *>(movingBuf);
-      rtcpLen = (chead->getLength() + 1) * 4;
-      totalLen += rtcpLen;
-
-      tylog("rtcpLen[%u], totalLen[%u], iLen[%u]", rtcpLen, totalLen,
-                         iLen);
-
-      if (totalLen > iLen) break;
-
-      if (chead->packettype == RTCP_RTP_Feedback_PT)  // NACK  RFC3550
-      {
-        if (chead->getBlockCount() == 1) {
-          HandleNack(chead);
-        } else if (chead->getBlockCount() == RTCP_AFB) {
-          // REMB只会有在房间只有两个web的时候透传
-          if (IsByPassMod()) {
-            RelayRtcpReq(movingBuf, rtcpLen, subType);
-          }
-
-          tylog(
-              "REMB[Recv]:  BitRate[%lu] packettype:%u BlockCount:%u "
-              "subType:%u\r\n Rtcp[SSrc:%u SrcSSRC:%u] \r\nVid[RemSsrc:%u "
-              "LocSsrc:%u] \r\nAud[RemSsrc:%u LocSsrc:%u]",
-              chead->getREMBBitRate(), chead->packettype,
-    chead->getBlockCount(), subType, chead->getSSRC(), chead->getSourceSSRC(),
-              m_pc->tVideoUserInfo[0].uiRemoteSsrc,
-              m_pc->tVideoUserInfo[0].uiLocalSsrc,
-    m_pc->tAudioInfo.uiRemoteSsrc, m_pc->tAudioInfo.uiLocalSsrc);
-        }
-
-      } else if (chead->packettype == RTCP_PS_Feedback_PT) {
-        // I帧申请透传
-        if ((RTCP_PLI_FMT == chead->getBlockCount()) ||
-            (RTCP_SLI_FMT == chead->getBlockCount()) ||
-            (RTCP_FIR_FMT == chead->getBlockCount())) {
-          if (m_pTWebRTCUserInfo->ullTinyId == m_pc->ullTinyId) {
-            continue;
-          }
-
-          tylog(
-              "PLI: MediaMode:%u ClientType:%u Rtcp packettype:%u BlockCount:%u
-    " "subType:%u\r\n Rtcp[SSrc:%u SrcSSRC:%u] \r\nVid[RemSsrc:%u " "LocSsrc:%u]
-    \r\nAud[RemSsrc:%u LocSsrc:%u]", m_pTWebRTCUserInfo->MediaMode,
-    m_pc->ClientType, chead->packettype, chead->getBlockCount(), subType,
-    chead->getSSRC(), chead->getSourceSSRC(),
-    m_pc->tVideoUserInfo[0].uiRemoteSsrc, m_pc->tVideoUserInfo[0].uiLocalSsrc,
-    m_pc->tAudioInfo.uiRemoteSsrc, m_pc->tAudioInfo.uiLocalSsrc);
-
-          if (!pWatcherUser) {
-            continue;
-          }
-
-          // TODO 位置修改
-          pWatcherUser->PLICnt++;
-          if (m_pc->ClientType != USER_TYPE_WEBRTC) {
-            // TODO 位置修改 急速模式下sdk
-            tylog("rtcp from web call RequestPeerIDRFrame");
-            pWatcherUser->ReqSdkIFrFlag++;
-            if (pWatcherUser->ReqSdkIFrFlag == 0) {
-              pWatcherUser->ReqSdkIFrFlag = 1;
-            }
-            m_pTWebRTCUserInfo->RequestPeerIDRFrame(m_pc, pWatcherUser);
-          } else if (m_pc->ClientType == USER_TYPE_WEBRTC) {
-            // TODO 位置修改 急速模式下的web，非急速模式下的web
-            pWatcherUser->ReqICnt++;
-            // RelayRtcpReq(movingBuf,rtcpLen, subType);
-            tylog("rtcp from web call RequestPeerIDRFrame");
-            m_pTWebRTCUserInfo->RequestPeerIDRFrame(m_pc, pWatcherUser, true);
-          }
-        }
-      } else if (chead->packettype == RTCP_Sender_PT)  // SR
-      {
-        //广播发送报告广播
-        if (IsByPassMod()) {
-          BroadcastRtcpReq(movingBuf, rtcpLen, subType);
-        }
-
-        tylog("[RTCP_Sender_PT]");
-        HandleSR(chead);
-      } else if (chead->packettype == RTCP_Receiver_PT)  // RR
-      {
-        //接收报告只会有在房间只有两个web的时候透传
-        if (IsByPassMod()) {
-          RelayRtcpReq(movingBuf, rtcpLen, subType);
-        }
-
-        tylog("[RTCP_Receiver_PT]");
-        HandleRR(chead);
-      } else if (chead->packettype == RTCP_XR_PT)  // XR  rfc3611
-      {
-        tylog("[ExtendedReport]");
-        //广播发送报告广播
-        if (IsByPassMod()) {
-          BroadcastRtcpReq(movingBuf, rtcpLen, subType);
-        }
-        HandleXR(chead);
-      }
-    }
-    */
-
-  // taylor origin:
-
-  // downlink
-
-  // RtcpHeader &downlinkRtcpHeader = const_cast<RtcpHeader &>(rtcpHeader);
-
-  /*
-    if (mediaType == kMediaTypeAudio) {
-      const int kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
-      downlinkRtpHeader.setSSRC(kDownlinkAudioSsrc);
-
-      const int kDownlinkAudioPayloadType = 111;
-      downlinkRtpHeader.setPayloadType(kDownlinkAudioPayloadType);
-    } else {
-      const int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
-      downlinkRtpHeader.setSSRC(kDownlinkVideoSsrc);
-
-      const int kDownlinkVideoPayloadType = 125;  // H.264
-      downlinkRtpHeader.setPayloadType(kDownlinkVideoPayloadType);
-    }
-    */
 
   const char *movingBuf = vBufReceive.data();
   int rtcpLen = 0;
@@ -371,13 +190,11 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
 
         break;
       }
+
       case RtcpPacketType::kGenericRtpFeedback: {
         switch (
             static_cast<RtcpGenericFeedbackFormat>(chead->getBlockCount())) {
           case RtcpGenericFeedbackFormat::kFeedbackNack: {
-            // audio have no nack?
-            // RtcpHeader *rsphead = const_cast<RtcpHeader *>(chead);
-
             ret = HandleNack(*chead);
             if (ret) {
               tylog("handleNack ret=%d", ret);
@@ -389,19 +206,17 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
             // packet
             return 0;
 
-            // if (rsphead->getSourceSSRC() == kDownlinkAudioSsrc) {
-            //   assert(g_UplinkAudioSsrc != 0);
-            //   rsphead->setSourceSSRC(g_UplinkAudioSsrc);
-            // } else if (rsphead->getSourceSSRC() == kDownlinkVideoSsrc) {
-            //   assert(g_UplinkVideoSsrc != 0);
-            //   rsphead->setSourceSSRC(g_UplinkVideoSsrc);
-            // }
-
             break;
           }
           case RtcpGenericFeedbackFormat::kFeedbackTCC: {
+            tylog("TCC feedback rtcp pkt.");
+
             break;
           }
+          default:
+            // should only log
+            assert(!"unknown rtcp");
+            break;
         }
         break;
       }
@@ -413,8 +228,17 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
           case RtcpPayloadSpecificFormat::kRtcpSLI:
           case RtcpPayloadSpecificFormat::kRtcpFIR: {
             RtcpHeader *rsphead = const_cast<RtcpHeader *>(chead);
-            assert(g_UplinkVideoSsrc != 0);
-            rsphead->setSourceSSRC(g_UplinkVideoSsrc);
+            assert(peerPC->rtpHandler_.upVideoSSRC != 0);
+            rsphead->setSourceSSRC(peerPC->rtpHandler_.upVideoSSRC);
+
+            // OPT: handle other type of RTCP source ssrc
+            // if (rsphead->getSourceSSRC() == kDownlinkAudioSsrc) {
+            //   assert(peerPC->rtpHandler_.upAudioSSRC != 0);
+            //   rsphead->setSourceSSRC(peerPC->rtpHandler_.upAudioSSRC);
+            // } else if (rsphead->getSourceSSRC() == kDownlinkVideoSsrc) {
+            //   assert(peerPC->rtpHandler_.upVideoSSRC != 0);
+            //   rsphead->setSourceSSRC(peerPC->rtpHandler_.upVideoSSRC);
+            // }
 
             break;
           }
@@ -422,6 +246,10 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
           case RtcpPayloadSpecificFormat::kRtcpRPSI:
             break;
           case RtcpPayloadSpecificFormat::kRtcpREMB:
+            break;
+          default:
+            // should only log
+            assert(!"unknown rtcp");
             break;
         }
         break;
@@ -432,20 +260,12 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
       }
 
       default:
+        tylog("recv unknown %d rtcp type", static_cast<int>(chead->packettype));
         break;
     }
   }
 
   DumpSendPacket(vBufReceive);
-
-  // send to remote uplink client
-  auto peerPC = getPeerPC(belongingPeerConnection_.clientIP_,
-                          belongingPeerConnection_.clientPort_);
-
-  if (nullptr == peerPC) {
-    return 0;
-  }
-
   ret = peerPC->srtpHandler_.ProtectRtcp(
       const_cast<std::vector<char> *>(&vBufReceive));
   if (ret) {
@@ -460,57 +280,6 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
     return ret;
   }
 
-  return 0;
-  /*
-    for (uint32_t i = 0; i < rtcp->GetPacketCount(); i++) {
-      auto packet = rtcp->GetPacket(i);
-      packet->Dump();
-      switch (packet->GetType()) {
-        case RtcpPacketType::kFullIntraRequest: {
-          break;
-        }
-        case RtcpPacketType::kExtendedJitterReport: {
-          break;
-        }
-        case RtcpPacketType::kSenderReport: {
-          HandleSenderReport();
-          break;
-        }
-        case RtcpPacketType::kReceiverReport: {
-          HandleReceiverReport();
-          break;
-        }
-        case RtcpPacketType::kSDES: {
-          break;
-        }
-        case RtcpPacketType::kBye: {
-          rtcp_observer_->OnHandleBye();
-          break;
-        }
-        case RtcpPacketType::kApp: {
-          break;
-        }
-        case RtcpPacketType::kGenericRtpFeedback: {
-          HandleRtpFeedbackReport();
-          break;
-        }
-        case RtcpPacketType::kPayloadSpecificFeedback: {
-          HandlePayloadFeedbackReport();
-          break;
-        }
-        case RtcpPacketType::kXrExtend: {
-          HandleXrExtendReport();
-          break;
-        }
-
-        default: {
-          tylog("unknown rtcp packet type=%d", packet->GetType());
-          // should not assert if hacker sends a packet
-          assert(!"unknown rtcp packet type");
-        }
-      }
-    }
-    */
   return 0;
 }
 
@@ -1013,16 +782,16 @@ int RtcpHandler::CreateNackReportSend(const std::set<int> &lostSeqs,
   return 0;
 }
 
-int RtcpHandler::CreatePLIReportSend(uint32_t localSSRC, uint32_t remoteSSRC) {
+int RtcpHandler::CreatePLIReportSend(uint32_t ssrc, uint32_t sourceSSRC) {
   int ret = 0;
 
-  tylog("create PLI, localSSRC=%u, remoteSSRC=%u.", localSSRC, remoteSSRC);
+  tylog("create PLI, localSSRC=%u, remoteSSRC=%u.", ssrc, sourceSSRC);
 
   RtcpHeader pli;
   pli.setPacketType(RtcpPacketType::kPayloadSpecificFeedback);
   pli.setBlockCount(static_cast<uint8_t>(RtcpPayloadSpecificFormat::kRtcpPLI));
-  pli.setSSRC(localSSRC);
-  pli.setSourceSSRC(remoteSSRC);
+  pli.setSSRC(ssrc);
+  pli.setSourceSSRC(sourceSSRC);
   pli.setLength(2);
 
   const char *head = reinterpret_cast<const char *>(&pli);
@@ -1047,7 +816,7 @@ int RtcpHandler::CreatePLIReportSend(uint32_t localSSRC, uint32_t remoteSSRC) {
     return ret;
   }
 
-  tylog("send PLI succ, localSSRC=%u, remoteSSRC=%u.", localSSRC, remoteSSRC);
+  tylog("send PLI succ, ssrc=%u, source ssrc=%u.", ssrc, sourceSSRC);
 
   return 0;
 }

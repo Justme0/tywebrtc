@@ -207,7 +207,7 @@ class RtcpHandler {
 
   int CreateNackReportSend(const std::set<int>& lostSeqs, uint32_t localSSRC,
                            uint32_t remoteSSRC);
-  int CreatePLIReportSend(uint32_t localSSRC, uint32_t remoteSSRC);
+  int CreatePLIReportSend(uint32_t ssrc, uint32_t sourceSSRC);
 
  private:
   // OPT: use separate file

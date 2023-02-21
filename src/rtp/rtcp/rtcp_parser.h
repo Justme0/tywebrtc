@@ -77,7 +77,7 @@ inline std::string RtcpPacketTypeToString(RtcpPacketType type) {
   }
 }
 
-// @brief check if RTCP
+// @brief check if RTCP,
 // same as
 // https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/modules/rtp_rtcp/source/rtp_util.cc;l=32;drc=184005f8792002e29052d653f4846121ee7d1f9a
 // 128 + (64 <= payload_type && payload_type < 96), that is [192, 223]
@@ -329,7 +329,7 @@ class RtcpHeader {
   RtcpPacketType getPacketType() const { return packettype; }
   void setPacketType(RtcpPacketType pt) { packettype = pt; }
 
-  // maybe FMT for payload specific feedback
+  // maybe FMT for RtcpPayloadSpecificFormat or RtcpGenericFeedbackFormat
   uint8_t getBlockCount() const { return (uint8_t)blockcount; }
   void setBlockCount(uint8_t count) { blockcount = count; }
 

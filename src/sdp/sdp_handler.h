@@ -7,6 +7,11 @@ class SdpHandler {
  public:
   explicit SdpHandler(PeerConnection &pc);
 
+ public:
+  // should be private,
+  // chrome default value
+  int vp8PayloadType = 96;
+
  private:
   PeerConnection &belongingPeerConnection_;
 };

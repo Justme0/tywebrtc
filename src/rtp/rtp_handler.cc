@@ -82,31 +82,21 @@ std::string SSRCInfo::ToString() const {
                               biggestCycle);
 }
 
-// tmp
-inline std::shared_ptr<PeerConnection> getPeerPC(const std::string &selfIP,
-                                                 int selfPort) {
-  for (const auto &p : Singleton::Instance().client2PC_) {
-    if (selfIP == p.first.ip && selfPort == p.first.port) {
-      continue;
-    }
-
-    if (p.second->stateMachine_ < EnumStateMachine::GOT_RTP) {
-      continue;
-    }
-
-    return p.second;
-  }
-
-  return nullptr;
-}
-
 // to rename, now called in only one position
 int RtpHandler::SendToPeer_(RtpBizPacket &rtpBizPacket) {
+  auto peerPC = belongingPeerConnection_.FindPeerPC();
+  if (nullptr == peerPC) {
+    tylog("found no other peer");
+
+    return 0;
+  }
+
+  tylog("found other peer=%s.", peerPC->ToString().data());
+
   int ret = 0;
 
   RtpHeader &downlinkRtpHeader =
       *reinterpret_cast<RtpHeader *>(rtpBizPacket.rtpRawPacket.data());
-
   std::string mediaType = downlinkRtpHeader.GetMediaType();
   tylog("downlink send media type=%s.", mediaType.data());
 
@@ -116,23 +106,13 @@ int RtpHandler::SendToPeer_(RtpBizPacket &rtpBizPacket) {
     downlinkRtpHeader.setPayloadType(kDownlinkAudioPayloadType);
   } else if (mediaType == kMediaTypeVideo) {
     downlinkRtpHeader.setSSRC(kDownlinkVideoSsrc);
-    downlinkRtpHeader.setPayloadType(kDownlinkVideoVp8PayloadType);
+    downlinkRtpHeader.setPayloadType(peerPC->sdpHandler_.vp8PayloadType);
   } else {
     tylog("invalid downlink send media type=%s.", mediaType.data());
     assert(!"invalid media type");
   }
 
   DumpSendPacket(rtpBizPacket.rtpRawPacket);
-
-  auto peerPC = getPeerPC(belongingPeerConnection_.clientIP_,
-                          belongingPeerConnection_.clientPort_);
-  if (nullptr == peerPC) {
-    tylog("found no other peer");
-
-    return 0;
-  }
-
-  tylog("found other peer=%s.", peerPC->ToString().data());
 
   ret = peerPC->srtpHandler_.ProtectRtp(
       const_cast<std::vector<char> *>(&rtpBizPacket.rtpRawPacket));
@@ -187,13 +167,20 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         ret);
   }
 
-  if (belongingPeerConnection_.stateMachine_ < EnumStateMachine::GOT_RTP) {
+  if (belongingPeerConnection_.stateMachine_ < EnumStateMachine::DTLS_DONE) {
+    tylog("warning: recv rtp, but now state=%s, should be DTLS_DONE!!!",
+          StateMachineToString(belongingPeerConnection_.stateMachine_).data());
+    return -1;
+  } else if (belongingPeerConnection_.stateMachine_ ==
+             EnumStateMachine::DTLS_DONE) {
     belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_RTP;
 
     // 收到RTP后定时请求I帧
     TimerManager::Instance()->AddTimer(
-        &this->belongingPeerConnection_.pcTimer_);
+        &this->belongingPeerConnection_.pliTimer_);
   }
+
+  assert(belongingPeerConnection_.stateMachine_ == EnumStateMachine::GOT_RTP);
 
   std::string mediaType =
       reinterpret_cast<const RtpHeader *>(vBufReceive.data())->GetMediaType();
@@ -219,18 +206,6 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       return ret;
     }
   } else if (mediaType == kMediaTypeAudio || mediaType == kMediaTypeVideo) {
-    // must before srtp, otherwise srtp_err_status_replay_fail
-    // https://segmentfault.com/a/1190000040211375
-    int r = rand() % 100;
-    if (r < kUplossRateMul100) {
-      tylog("up rand=%d lostrate=%d%%, drop! rtp=%s.", r, kUplossRateMul100,
-            reinterpret_cast<const RtpHeader *>(vBufReceive.data())
-                ->ToString()
-                .data());
-
-      return 0;
-    }
-
     tylog("before unprotect, paddinglen=%d", getRtpPaddingLength(vBufReceive));
     // reuse original buffer
     // taylor consider restart svr
@@ -249,9 +224,9 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     tylog("recv rtp=%s.", rtpHeader.ToString().data());
 
     if (mediaType == kMediaTypeAudio) {
-      g_UplinkAudioSsrc = rtpHeader.getSSRC();
+      this->upAudioSSRC = rtpHeader.getSSRC();
     } else if (mediaType == kMediaTypeVideo) {
-      g_UplinkVideoSsrc = rtpHeader.getSSRC();
+      this->upVideoSSRC = rtpHeader.getSSRC();
     }
 
     // Constructing a value SSRCInfo is expensive, so we should not insert
@@ -335,7 +310,14 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         std::move(const_cast<std::vector<char> &>(vBufReceive)), itemCycle);
     assert(vBufReceive.empty());
 
-    // hack
+    if (rtpBizPacket.GetPowerSeq() < ssrcInfo.rtpReceiver.lastPoppedPowerSeq_) {
+      tylog("current=%s < lastPop=%s, ignore current pkt.",
+            PowerSeqToString(rtpBizPacket.GetPowerSeq()).data(),
+            PowerSeqToString(ssrcInfo.rtpReceiver.lastPoppedPowerSeq_).data());
+
+      return 0;
+    }
+
     ssrcInfo.rtpReceiver.PushToJitter(std::move(rtpBizPacket));
 
     assert(rtpBizPacket.rtpRawPacket.empty());

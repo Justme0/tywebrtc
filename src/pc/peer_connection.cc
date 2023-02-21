@@ -15,21 +15,21 @@ PeerConnection::PeerConnection()
       srtpHandler_(*this),
       dataChannelHandler_(*this),
       initTimeMs_(g_now_ms),
-      pcTimer_(*this) {}
+      pliTimer_(*this),
+      dtlsTimer_(*this) {}
 
 PeerConnection::~PeerConnection() {
-  TimerManager::Instance()->KillTimer(&this->pcTimer_);
+  TimerManager::Instance()->KillTimer(&this->pliTimer_);
+
+  // OPT: when dtls completes kill timer
+  TimerManager::Instance()->KillTimer(&this->dtlsTimer_);
 }
 
-// vBufSend is crypto data
+// vBufSend is encrypted data
 int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {
   int r = rand() % 100;
   if (r < kDownlossRateMul100) {
-    tylog("down rand=%d lostrate=%d%%, drop! rtp/rtcp=%s.", r,
-          kDownlossRateMul100,
-          reinterpret_cast<const RtpHeader *>(vBufSend.data())
-              ->ToString()
-              .data());
+    tylog("down rand=%d lostrate=%d%%, drop!", r, kDownlossRateMul100);
 
     return 0;
   }
@@ -44,28 +44,6 @@ int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {
   }
   tylog("sendto succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
         clientIP_.data(), clientPort_);
-
-  return 0;
-}
-
-// vBufSend is crypto data
-int PeerConnection::SendToPeer(const std::vector<char> &) const {
-  assert(!"shit");
-  /*
-
-    sockaddr_in addr = tylib::ConstructSockAddr(peerIP, peerPort);
-    ssize_t sendtoLen =
-        sendto(g_sock_fd, vBufSend.data(), vBufSend.size(), 0,
-               reinterpret_cast<sockaddr *>(&addr), sizeof(struct sockaddr_in));
-    if (-1 == sendtoLen) {
-      tylog("sendto ret=-1 errorno=%d[%s]", errno, strerror(errno));
-
-      return errno;
-    }
-
-    tylog("sendto succ buf size=%ld, ip=%s, port=%d.", sendtoLen, peerIP.data(),
-          peerPort);
-          */
 
   return 0;
 }
@@ -125,4 +103,22 @@ std::string PeerConnection::ToString() const {
       StateMachineToString(stateMachine_).data(), clientIP_.data(), clientPort_,
       tylib::MilliSecondToLocalTimeString(initTimeMs_).data(),
       tylib::MilliSecondToLocalTimeString(lastActiveTimeMs_).data());
+}
+
+std::shared_ptr<PeerConnection> PeerConnection::FindPeerPC() const {
+  for (const auto &p : Singleton::Instance().client2PC_) {
+    if (clientIP_ == p.first.ip && clientPort_ == p.first.port) {
+      continue;
+    }
+
+    if (p.second->stateMachine_ < EnumStateMachine::GOT_RTP) {
+      continue;
+    }
+
+    tylog("found peer=%s.", p.second->ToString().data());
+    return p.second;
+  }
+
+  tylog("not found peer");
+  return nullptr;
 }

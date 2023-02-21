@@ -442,6 +442,9 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
 
       return ret;
     }
+
+    TimerManager::Instance()->AddTimer(
+        &this->belongingPeerConnection_.dtlsTimer_);
   } else if (EnumStateMachine::GOT_FIRST_ICE >
              belongingPeerConnection_.stateMachine_) {
     belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_FIRST_ICE;
@@ -496,19 +499,14 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   LeftLen -= EncLen;
   int SndLen = (int)(pOffset - SndBuff);
 
-  sockaddr_in addr =
-      tylib::ConstructSockAddr(this->belongingPeerConnection_.clientIP_,
-                               this->belongingPeerConnection_.clientPort_);
-  ssize_t sendtoLen = sendto(g_sock_fd, SndBuff, SndLen, 0,
-                             reinterpret_cast<struct sockaddr *>(&addr),
-                             sizeof(struct sockaddr_in));
-  if (-1 == sendtoLen) {
-    tylog("sendto errorno=%d[%s]", errno, strerror(errno));
-    return -4;
+  // to avoid copy
+  std::vector<char> bufToSend(SndBuff, SndBuff + SndLen);
+  ret = belongingPeerConnection_.SendToClient(bufToSend);
+  if (ret) {
+    tylog("send to client ret=%d.", ret);
+
+    return ret;
   }
-  tylog("sendto reply succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
-        belongingPeerConnection_.clientIP_.data(),
-        belongingPeerConnection_.clientPort_);
 
   return 0;
 }

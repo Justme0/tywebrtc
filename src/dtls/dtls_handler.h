@@ -77,10 +77,10 @@ class DtlsHandler {
   int HandleDtlsPacket(const std::vector<char>& vBufReceive);
 
   void SetStreamDirect(StreamDirection direct);
-  void OnTime();
+  int OnTime();
   std::string GetMyFingerprint();  // the fingerprint of the user cert
   void SendToDtls(const void* data, int len);
-  void WriteDtlsPacket(const void* data, size_t len);
+  int WriteDtlsPacket(const void* data, size_t len);
   bool GetHandshakeCompleted() const;
   std::string ToString() const;
   int HandshakeCompleted(bool bSessionComplete);
@@ -91,7 +91,7 @@ class DtlsHandler {
   bool GetRemoteFingerprint(char* fprint) const;
   void computeFingerprint(const X509* cert, char* fingerprint) const;
   void InitOpensslAndCert();
-  void rewriteDtlsPacket(const void* data, size_t len);
+  int rewriteDtlsPacket(const void* data, size_t len);
   void CheckHandshakeComplete_();
   int64_t GetCheckIntervalMs() const;
   int DoDataChannel_(const std::vector<char>& vBufReceive);

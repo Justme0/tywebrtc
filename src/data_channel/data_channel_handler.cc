@@ -24,6 +24,25 @@ enum DataChannelChannelType {
   DataChannelChannelTypePartialReliableTimedUnordered = 0x82,
 };
 
+// DataMessageType is used for the SCTP "Payload Protocol Identifier", as
+// defined in http://tools.ietf.org/html/rfc4960#section-14.4
+//
+// For the list of IANA approved values see:
+// https://tools.ietf.org/html/rfc8831 Sec. 8
+// http://www.iana.org/assignments/sctp-parameters/sctp-parameters.xml
+// The value is not used by SCTP itself. It indicates the protocol running
+// on top of SCTP.
+// enum {
+//     PPID_NONE = 0,  // No protocol is specified.
+//     PPID_CONTROL = 50,
+//     PPID_TEXT_LAST = 51,
+//     PPID_BINARY_PARTIAL = 52,  // Deprecated
+//     PPID_BINARY_LAST = 53,
+//     PPID_TEXT_PARTIAL = 54,  // Deprecated
+//     PPID_TEXT_EMPTY = 56,
+//     PPID_BINARY_EMPTY = 57,
+// };
+
 enum DataChannelPPID {
   DataChannelPPIDControl = 50,
   DataChannelPPIDString = 51,
@@ -79,6 +98,10 @@ static DataChannelHandler* GetSctpFromSocket(struct socket* sock) {
   return sctp;
 }
 
+// This is the callback called from usrsctp when data has been received, after
+// a packet has been interpreted and parsed by usrsctp and found to contain
+// payload data. It is called by a usrsctp thread. It is assumed this function
+// will free the memory used by 'data'.
 static int RecvSctpDataCallback(struct socket* sock,
                                 union sctp_sockstore /*addr*/, void* data,
                                 size_t len, struct sctp_rcvinfo rcv, int flags,
@@ -88,7 +111,7 @@ static int RecvSctpDataCallback(struct socket* sock,
   if (sctp == nullptr) {
     tylog("no found sctp");
     if (data) {
-      free(data);
+      free(data);  // to use RAII
     }
     return -1;
   }
@@ -112,24 +135,13 @@ static int RecvSctpDataCallback(struct socket* sock,
   return kSctpSuccess;
 }
 
-static int SendSctpDataCallback(void* addr, void* data, size_t len,
-                                uint8_t /*tos*/, uint8_t /*set_df*/) {
-  DataChannelHandler* sctp = g_sctp_env->Get(reinterpret_cast<uintptr_t>(addr));
-
-  if (sctp == nullptr) {
-    tylog("no found sctp");
-    return -1;
-  }
-
-  tylog("callback send write data=%p, len=%zu.", data, len);
-
-  sctp->belongingPeerConnection_.dtlsHandler_.SendToDtls(data, len);
-
-  return 0;
-}
-
+// as create socket `usrsctp_socket()` callback param.
+// Fired on our I/O thread. UsrsctpTransport::OnPacketReceived() gets
+// a packet containing acknowledgments, which goes into usrsctp_conninput,
+// and then back here.
 static int SendThresholdCallback(struct socket* sock, uint32_t sb_free,
                                  void* /*ulp_info*/) {
+  int ret = 0;
   DataChannelHandler* sctp = GetSctpFromSocket(sock);
 
   if (sctp == nullptr) {
@@ -139,13 +151,35 @@ static int SendThresholdCallback(struct socket* sock, uint32_t sb_free,
 
   tylog("sb_free=%u", sb_free);
 
-  sctp->OnSendThresholdCallback();
+  ret = sctp->SendBufferedMsg();
+  if (ret) {
+    tylog("sendBufferedMsg ret=%d.", ret);
+
+    return ret;
+  }
 
   return 0;
 }
 
-SctpGlobalEnv::SctpGlobalEnv() {
-  id_ = 0;
+static int SendSctpDataCallback(void* addr, void* data, size_t len,
+                                uint8_t /*tos*/, uint8_t /*set_df*/) {
+  tylog("callback send write data=%p, len=%zu.", data, len);
+
+  DataChannelHandler* sctp = g_sctp_env->Get(reinterpret_cast<uintptr_t>(addr));
+
+  if (sctp == nullptr) {
+    tylog("no found sctp addr=%p, sctpEnvMap=%s.", addr,
+          g_sctp_env->ToString().data());
+
+    return -1;
+  }
+
+  sctp->belongingPeerConnection_.dtlsHandler_.SendToDtls(data, len);
+
+  return 0;
+}
+
+SctpGlobalEnv::SctpGlobalEnv() : id_(0) {
   tylog("sctp global env init");
   usrsctp_init(0, SendSctpDataCallback, SctpDebugLog);
 
@@ -157,13 +191,20 @@ SctpGlobalEnv::SctpGlobalEnv() {
   // usrsctp_sysctl_set_sctp_debug_on(SCTP_DEBUG_ALL);
 }
 
+std::string SctpGlobalEnv::ToString() const {
+  return tylib::format_string("{id=%lu, map=%s}", id_,
+                              tylib::AnyToString(sctp_map_).data());
+}
+
 SctpGlobalEnv::~SctpGlobalEnv() { usrsctp_finish(); }
 
+//
 uintptr_t SctpGlobalEnv::Register(DataChannelHandler* sctp) {
   std::unique_lock<std::mutex> lock_guard(sctp_map_mutex_);
 
   auto id = ++id_;
-  sctp_map_.insert(std::make_pair(id, sctp));
+
+  sctp_map_[id] = sctp;
 
   return id;
 }
@@ -362,14 +403,17 @@ int DataChannelHandler::InitSocket() {
   return 0;
 }
 
-// passive recv data
-void DataChannelHandler::Feed(const char* buf, const int nb_buf) {
+// Passive received packet to SCTP stack. Once processed by usrsctp, the data
+// will be will be given to the global OnSctpInboundData, and then, marshalled
+// by the AsyncInvoker.
+// then SendThresholdCallback()
+void DataChannelHandler::HandleDataChannelPacket(const char* buf,
+                                                 const int nb_buf) {
   assert(nullptr != this->sctp_socket_);
 
   usrsctp_conninput(reinterpret_cast<void*>(id_), buf, nb_buf, 0);
 }
 
-// active create
 int DataChannelHandler::CreateDataChannel(const std::string& label) {
   DataChannel data_channel;
   data_channel.label_ = label;
@@ -378,14 +422,13 @@ int DataChannelHandler::CreateDataChannel(const std::string& label) {
   data_channel.reliability_params_ = 0;
   data_channel.status_ = DataChannelStatusOpen;
 
-  label_sid_.insert(std::make_pair(data_channel.label_, data_channel.sid_));
-  data_channels_.insert(std::make_pair(data_channel.sid_, data_channel));
+  label_sid_[data_channel.label_] = data_channel.sid_;
+  data_channels_[data_channel.sid_] = data_channel;
 
   int reqlen = sizeof(struct DcepOpenMessage) + label.size();
 
   // OPT: not use calloc
-  struct DcepOpenMessage* req = (struct DcepOpenMessage*)calloc(1, reqlen);
-  struct sctp_sndinfo sndinfo;
+  DcepOpenMessage* req = (struct DcepOpenMessage*)calloc(1, reqlen);
   req->message_type = DataChannelMessageTypeOpen;
   req->channel_type = DataChannelChannelTypeReliable;
   req->priority = htons(0);                     /* XXX: add support */
@@ -395,23 +438,65 @@ int DataChannelHandler::CreateDataChannel(const std::string& label) {
     memcpy(req->label_and_protocol, label.c_str(), label.size());
   }
 
+  sctp_sndinfo sndinfo;
   memset(&sndinfo, 0, sizeof(struct sctp_sndinfo));
   sndinfo.snd_sid = data_channel.sid_;
   sndinfo.snd_flags = SCTP_EOR;
   sndinfo.snd_ppid = htonl(DataChannelPPIDControl);
 
-  if (usrsctp_sendv(sctp_socket_, req, reqlen, nullptr, 0, &sndinfo,
-                    (socklen_t)sizeof(struct sctp_sndinfo), SCTP_SENDV_SNDINFO,
-                    0) < 0) {
-    tylog("sctp_sendv open request failed.");
+  ssize_t send_res =
+      usrsctp_sendv(sctp_socket_, req, reqlen, nullptr, 0, &sndinfo,
+                    sizeof sndinfo, SCTP_SENDV_SNDINFO, 0);
+  if (send_res == -1) {
+    tylog("sctp_sendv open request failed, errno=%d[%s]", errno,
+          strerror(errno));
     free(req);
+
     return -1;
   }
+
+  // what if send partial ?
+  assert(send_res == reqlen);
 
   tylog("sctp_sendv open request succ.");
   free(req);
 
   return 0;
+}
+
+const std::string SctpNotifyToString(uint16_t notifyType) {
+  switch (notifyType) {
+    case SCTP_ASSOC_CHANGE:
+      return "SCTP_ASSOC_CHANGE";
+    case SCTP_PEER_ADDR_CHANGE:
+      return "SCTP_PEER_ADDR_CHANGE";
+    case SCTP_REMOTE_ERROR:
+      return "SCTP_REMOTE_ERROR";
+    case SCTP_SEND_FAILED:
+      return "SCTP_SEND_FAILED";
+    case SCTP_SHUTDOWN_EVENT:
+      return "SCTP_SHUTDOWN_EVENT";
+    case SCTP_ADAPTATION_INDICATION:
+      return "SCTP_ADAPTATION_INDICATION";
+    case SCTP_PARTIAL_DELIVERY_EVENT:
+      return "SCTP_PARTIAL_DELIVERY_EVENT";
+    case SCTP_AUTHENTICATION_EVENT:
+      return "SCTP_AUTHENTICATION_EVENT";
+    case SCTP_STREAM_RESET_EVENT:
+      return "SCTP_STREAM_RESET_EVENT";
+    case SCTP_SENDER_DRY_EVENT:
+      return "SCTP_SENDER_DRY_EVENT";
+    case SCTP_NOTIFICATIONS_STOPPED_EVENT:
+      return "SCTP_NOTIFICATIONS_STOPPED_EVENT";
+    case SCTP_ASSOC_RESET_EVENT:
+      return "SCTP_ASSOC_RESET_EVENT";
+    case SCTP_STREAM_CHANGE_EVENT:
+      return "SCTP_STREAM_CHANGE_EVENT";
+    case SCTP_SEND_FAILED_EVENT:
+      return "SCTP_SEND_FAILED_EVENT";
+    default:
+      return tylib::format_string("UnknownNotifyType[%d]", notifyType);
+  }
 }
 
 int DataChannelHandler::OnSctpEvent(const struct sctp_rcvinfo&, void* data,
@@ -424,59 +509,25 @@ int DataChannelHandler::OnSctpEvent(const struct sctp_rcvinfo&, void* data,
     return -1;
   }
 
-  tylog("sctp event type=%d", sctp_notify->sn_header.sn_type);
+  tylog("recv sctp event type=%s.",
+        SctpNotifyToString(sctp_notify->sn_header.sn_type).data());
 
+  // notify is union, handle according to sn_type
   switch (sctp_notify->sn_header.sn_type) {
-    case SCTP_ASSOC_CHANGE:
-      break;
-    case SCTP_REMOTE_ERROR:
-      break;
-    case SCTP_SHUTDOWN_EVENT:
-      break;
-    case SCTP_ADAPTATION_INDICATION:
-      break;
-    case SCTP_PARTIAL_DELIVERY_EVENT:
-      break;
-    case SCTP_AUTHENTICATION_EVENT:
-      break;
-    case SCTP_SENDER_DRY_EVENT:
-      break;
-    case SCTP_NOTIFICATIONS_STOPPED_EVENT:
-      break;
+    // should handle other enum ?
     case SCTP_SEND_FAILED_EVENT: {
-      const struct sctp_send_failed_event& ssfe =
-          sctp_notify->sn_send_failed_event;
+      const sctp_send_failed_event& ssfe = sctp_notify->sn_send_failed_event;
       tylog("SCTP_SEND_FAILED_EVENT, ppid=%u, sid=%u, flags=0x%04x, err=0x%08x",
             ntohl(ssfe.ssfe_info.snd_ppid), ssfe.ssfe_info.snd_sid,
             ssfe.ssfe_info.snd_flags, ssfe.ssfe_error);
       break;
     }
-    case SCTP_STREAM_RESET_EVENT:
-      break;
-    case SCTP_ASSOC_RESET_EVENT:
-      break;
-    case SCTP_STREAM_CHANGE_EVENT:
-      break;
-    case SCTP_PEER_ADDR_CHANGE:
-      break;
+
     default:
       break;
   }
 
   return kSctpSuccess;
-}
-
-void DataChannelHandler::OnSendThresholdCallback() {
-  if (send_blocking_) {
-    if (SendBufferedMsg() != 0) {
-      tylog("send still blocking");
-
-      return;
-    } else {
-      tylog("buffered msg sended");
-      send_blocking_ = false;
-    }
-  }
 }
 
 int DataChannelHandler::OnSctpData(const struct sctp_rcvinfo& rcv, void* data,
@@ -528,13 +579,6 @@ int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
       uint16_t protocol_length = ((data[pos] << 8) | (data[pos + 1]));
       pos += 2;
 
-      tylog(
-          "channel_type=%u, priority=%u, "
-          "reliability_params=%u, label_length=%u, "
-          "protocol_length=%u",
-          channel_type, priority, reliability_params, label_length,
-          protocol_length);
-
       byte_left -= 12;
 
       switch (channel_type) {
@@ -562,6 +606,10 @@ int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
           tylog("unordered channel with max life time %u", reliability_params);
           break;
         }
+
+        default:
+          tylog("unknown channel_type=%d", channel_type);
+          break;
       }
 
       std::string label;
@@ -584,11 +632,11 @@ int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
       }
 
       tylog(
-          "channel_type=%u, priority=%u, reliability_params=%u, "
+          "key: channel_type=%u, priority=%u, reliability_params=%u, "
           "label_length=%u, "
-          "protocol_length=%u, label=%s",
+          "protocol_length=%u, label=%s, rcv_sid=%d.",
           channel_type, priority, reliability_params, label_length,
-          protocol_length, label.c_str());
+          protocol_length, label.c_str(), rcv.rcv_sid);
 
       DataChannel data_channel;
       data_channel.label_ = label;
@@ -597,11 +645,8 @@ int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
       data_channel.reliability_params_ = reliability_params;
       data_channel.status_ = DataChannelStatusOpen;
 
-      label_sid_.insert(std::make_pair(data_channel.label_, data_channel.sid_));
-      data_channels_.insert(std::make_pair(data_channel.sid_, data_channel));
-
-      tylog("key: datachannel open: label:%s, sid: %u", label.c_str(),
-            rcv.rcv_sid);
+      label_sid_[data_channel.label_] = data_channel.sid_;
+      data_channels_[data_channel.sid_] = data_channel;
 
       // may callback OnDataChannelOpen
 
@@ -622,6 +667,8 @@ int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
 
 int DataChannelHandler::OnDataChannelMsg(const struct sctp_rcvinfo& rcv,
                                          char* data, int len) {
+  int ret = 0;
+
   std::unique_lock<std::mutex> lock_guard(channel_mutex_);
 
   std::map<uint16_t, DataChannel>::iterator iter =
@@ -636,13 +683,40 @@ int DataChannelHandler::OnDataChannelMsg(const struct sctp_rcvinfo& rcv,
 
   tylog("on recv data len=%d, data=%p %.*s.", len, data, len, data);
 
-  // may callback OnRecvDataChannelMsg
+  // to use string view
+  std::string s(data, len);
+  auto i = s.find("g_vp8Payload=");
+  size_t size = strlen("g_vp8Payload=");
+  if (i != std::string::npos) {
+    assert(i == 0);
+    int payload = atoi(s.substr(size).data());
+    tylog("taylor payload=%d.", payload);
+    this->belongingPeerConnection_.sdpHandler_.vp8PayloadType = payload;
+
+    // not send to peer
+    return 0;
+  }
+
+  auto peerPC = belongingPeerConnection_.FindPeerPC();
+  if (nullptr == peerPC) {
+    return 0;
+  }
+
+  // OPT: use string_view
+  ret = peerPC->dataChannelHandler_.SendSctpDataForLable(
+      "sendChannel", std::string(data, len));
+  if (ret) {
+    tylog("sendSctpDataForLable ret=%d.", ret);
+
+    return ret;
+  }
 
   return 0;
 }
 
-int DataChannelHandler::Send(const std::string& label, const uint8_t* buf,
-                             const int len) {
+// key
+int DataChannelHandler::SendSctpDataForLable(const std::string& label,
+                                             const std::string& bufferToSend) {
   uint16_t sid = 0;
   std::unique_lock<std::mutex> lock_guard(channel_mutex_);
 
@@ -655,7 +729,7 @@ int DataChannelHandler::Send(const std::string& label, const uint8_t* buf,
 
   lock_guard.unlock();
 
-  return Send(sid, buf, len);
+  return SendSctpDataForSid(sid, bufferToSend);
 }
 
 sctp_sendv_spa DataChannelHandler::CreateSendParam(
@@ -693,13 +767,19 @@ sctp_sendv_spa DataChannelHandler::CreateSendParam(
   return spa;
 }
 
-int DataChannelHandler::SendInternal(const uint16_t sid, const uint8_t* buf,
-                                     const int len) {
+// NOTE: return is same as usrsctp_sendv.
+// returns the number of bytes sent, or -1 if an error occurred. The variable
+// errno is then set appropriately.
+ssize_t DataChannelHandler::SendInternal(const uint16_t sid,
+                                         const std::string& bufferToSend) {
+  // DataChannelHandler* sctp = GetSctpFromSocket(sock);
+
   DataChannel data_channel;
   std::unique_lock<std::mutex> lock_guard(channel_mutex_);
   std::map<uint16_t, DataChannel>::iterator iter = data_channels_.find(sid);
   if (iter == data_channels_.end()) {
     tylog("can not found sid=%d", sid);
+
     return -1;
   }
 
@@ -708,87 +788,118 @@ int DataChannelHandler::SendInternal(const uint16_t sid, const uint8_t* buf,
 
   if (data_channel.status_ != DataChannelStatusOpen) {
     tylog("data channel %d no opened", sid);
+
     return -1;
   }
 
   sctp_sendv_spa spa = CreateSendParam(data_channel);
 
   std::unique_lock<std::mutex> sctp_lock_guard(sctp_mutex_);
-  ssize_t send_res = usrsctp_sendv(sctp_socket_, buf, len, nullptr, 0, &spa,
-                                   sizeof(spa), SCTP_SENDV_SPA, 0);
 
-  tylog("stcp send %d, ret=%ld", len, send_res);
+  // already connected, so no need to specify dst address
+  // https://github.com/sctplab/usrsctp/blob/master/Manual.md#usrsctp_sendv
+  ssize_t send_res =
+      usrsctp_sendv(sctp_socket_, bufferToSend.data(), bufferToSend.size(),
+                    nullptr, 0, &spa, sizeof spa, SCTP_SENDV_SPA, 0);
+  if (-1 == send_res) {
+    tylog("sctp sendv return -1, errno=%d[%s].", errno, strerror(errno));
+  } else if (send_res != static_cast<int>(bufferToSend.size())) {
+    tylog("send partial, all len=%zu, only send=%ld.", bufferToSend.size(),
+          send_res);
+  }
+
   return send_res;
 }
 
+// send the first one in buffered queue
 int DataChannelHandler::SendBufferedMsg() {
-  int ret = kSuccess;
+  if (!send_blocking_) {
+    return 0;
+  }
+
   std::unique_lock<std::mutex> lock_guard(channel_mutex_);
   if (out_buffered_msg_.empty()) {
-    return ret;
+    tylog("outbound buf queue empty, no need send");
+
+    send_blocking_ = false;
+
+    return 0;
   }
+
   auto sid = out_buffered_msg_.front().first;
   auto msg = out_buffered_msg_.front().second;
   lock_guard.unlock();
 
-  int send_res = SendInternal(sid, (const uint8_t*)msg.data(), msg.size());
+  ssize_t send_res = SendInternal(sid, msg);
   if (send_res < 0) {
     if (errno == EWOULDBLOCK) {
       tylog("sctp send block");
       send_blocking_ = true;
-      ret = kSctpSendBlock;
-    } else {
-      tylog("sctp send failed, ret=%d, err=%s", send_res, strerror(errno));
-      ret = kSctpSendError;
+
+      return kSctpSendBlock;
     }
-  } else {
-    lock_guard.lock();
-    auto& front_msg = out_buffered_msg_.front().second;
-    front_msg.erase(0, send_res);
-    tylog("buffered msg size=%zu", front_msg.size());
-    if (front_msg.empty()) {
-      out_buffered_msg_.erase(out_buffered_msg_.begin());
-      tylog("buffered partial msg sended");
-      ret = kSuccess;
-    } else {
-      ret = kSctpSendBlock;
-    }
+
+    tylog("sctp send failed, ret=%ld, err=%s", send_res, strerror(errno));
+
+    return kSctpSendError;
   }
 
-  return ret;
+  lock_guard.lock();
+
+  assert(send_res <= static_cast<int>(msg.size()));
+  if (send_res != static_cast<int>(msg.size())) {
+    tylog("send partial data, all=%zu, send=%ld, remaining=%ld.", msg.size(),
+          send_res, msg.size() - send_res);
+    msg.erase(0, send_res);
+
+    return kSctpSendBlock;
+  }
+
+  tylog("first buffered msg all sended");
+  out_buffered_msg_.erase(out_buffered_msg_.begin());
+
+  send_blocking_ = false;
+  return 0;
 }
 
-int DataChannelHandler::Send(const uint16_t sid, const uint8_t* buf,
-                             const int len) {
-  int ret = 0;
+// only called by SendSctpDataForLable
+int DataChannelHandler::SendSctpDataForSid(const uint16_t sid,
+                                           const std::string& bufferToSend) {
   std::unique_lock<std::mutex> lock_guard(channel_mutex_);
   if (!out_buffered_msg_.empty()) {
     tylog("have buffered msg, send will blocking, discard msg");
     send_blocking_ = true;
+
     return kSctpSendBlock;
   }
   lock_guard.unlock();
 
-  int send_res = SendInternal(sid, buf, len);
+  tylog("taylor send=%s.", bufferToSend.data());
+  ssize_t send_res = SendInternal(sid, bufferToSend);
   if (send_res < 0) {
     if (errno == EWOULDBLOCK) {
       tylog("sctp send block");
       send_blocking_ = true;
-      ret = kSctpSendBlock;
-    } else {
-      tylog("sctp send failed, ret=%d, err=%s", send_res, strerror(errno));
-      ret = kSctpSendError;
+      return kSctpSendBlock;
     }
-  } else {
-    if (send_res < len) {
-      tylog("sctp partial send, len=%d, sent=%d", len, send_res);
-      send_blocking_ = true;
-      lock_guard.lock();
-      out_buffered_msg_.push_back(std::make_pair(
-          sid, std::string((const char*)buf + send_res, len - send_res)));
-      ret = kSctpSendPartial;
-    }
+
+    tylog("sctp send failed, ret=%ld, errno=%d[%s]", send_res, errno,
+          strerror(errno));
+
+    return kSctpSendError;
   }
 
-  return ret;
+  if (send_res < static_cast<int>(bufferToSend.size())) {
+    tylog("sctp partial send, len=%zu, sent=%ld", bufferToSend.size(),
+          send_res);
+    send_blocking_ = true;
+    lock_guard.lock();
+    out_buffered_msg_.push_back(
+        std::make_pair(sid, std::string(bufferToSend.data() + send_res,
+                                        bufferToSend.size() - send_res)));
+
+    return kSctpSendPartial;
+  }
+
+  return 0;
 }

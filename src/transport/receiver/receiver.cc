@@ -20,19 +20,19 @@ int RtpReceiver::GetJitterSize() const { return jitterBuffer_.size(); }
 std::string RtpReceiver::ToString() const {
   return tylib::format_string("{jitterSize=%zu, lastPowerSeq=%s}",
                               jitterBuffer_.size(),
-                              PowerSeqToString(lastPowerSeq_).data());
+                              PowerSeqToString(lastPoppedPowerSeq_).data());
 }
 
-// OPT: not wait stategy
+// OPT: use not wait stategy
 std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
   std::vector<RtpBizPacket> orderedPackets;
 
   for (auto it = jitterBuffer_.begin();
        it != jitterBuffer_.end() &&
-       (kShitRecvPowerSeqInitValue == lastPowerSeq_ ||
-        it->first == lastPowerSeq_ + 1);) {
+       (kShitRecvPowerSeqInitValue == lastPoppedPowerSeq_ ||
+        it->first == lastPoppedPowerSeq_ + 1);) {
     tylog("pop from jitter rtp=%s.", it->second.ToString().data());
-    lastPowerSeq_ = it->first;
+    lastPoppedPowerSeq_ = it->first;
 
     orderedPackets.emplace_back(std::move(it->second));
     assert(it->second.rtpRawPacket.empty());
@@ -50,6 +50,7 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
 
   tylog("orderedPackets size=%zu, jitter size=%zu.", orderedPackets.size(),
         jitterBuffer_.size());
+
   if (!orderedPackets.empty()) {
     return orderedPackets;
   }
@@ -57,13 +58,13 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
   assert(!jitterBuffer_.empty());  // already push to jitter
 
   const RtpBizPacket& firstPacket = jitterBuffer_.begin()->second;
-  const bool bAudioType =
-      reinterpret_cast<const RtpHeader*>(firstPacket.rtpRawPacket.data())
-          ->GetMediaType() == kMediaTypeAudio;
+  const RtpHeader& firstRtpHeader =
+      *reinterpret_cast<const RtpHeader*>(firstPacket.rtpRawPacket.data());
+  const bool bAudioType = firstRtpHeader.GetMediaType() == kMediaTypeAudio;
   tylog(
       "jitter detect out-of-order or lost, cannot out packets, last out "
       "packet powerSeq=%ld[%s], jitter.size=%zu, jitter first rtp=%s.",
-      lastPowerSeq_, PowerSeqToString(lastPowerSeq_).data(),
+      lastPoppedPowerSeq_, PowerSeqToString(lastPoppedPowerSeq_).data(),
       jitterBuffer_.size(), firstPacket.ToString().data());
 
   const int64_t waitMs = firstPacket.WaitTimeMs();
@@ -91,13 +92,19 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
     tylog("wait %ldms, to nack", waitMs);
     std::set<int> nackSeqs;
     // should req all not received packets in jitter
-    for (int i = lastPowerSeq_ + 1; i < firstPacket.GetPowerSeq(); ++i) {
+    for (int i = lastPoppedPowerSeq_ + 1; i < firstPacket.GetPowerSeq(); ++i) {
       nackSeqs.insert(SplitPowerSeq(i).second);
     }
+    tylog("uplink this=%s, firstPacket=%s, nack seqs=%s.", ToString().data(),
+          firstPacket.ToString().data(), tylib::AnyToString(nackSeqs).data());
+    assert(!nackSeqs.empty());
 
     const uint32_t kSelfRtcpSSRC = 1;
     const uint32_t kMediaSrcSSRC =
-        bAudioType ? g_UplinkAudioSsrc : g_UplinkVideoSsrc;
+        bAudioType ? this->belongingSSRCInfo_.belongingRtpHandler.upAudioSSRC
+                   : this->belongingSSRCInfo_.belongingRtpHandler.upVideoSSRC;
+    assert(0 != kMediaSrcSSRC &&
+           kMediaSrcSSRC == firstRtpHeader.getSSRC());  // already recv
 
     int ret = this->belongingSSRCInfo_.belongingRtpHandler
                   .belongingPeerConnection_.rtcpHandler_.CreateNackReportSend(
@@ -118,7 +125,7 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
     // OPT: should pop only first, and pop remaining in normal way
     for (auto it = jitterBuffer_.begin(); it != jitterBuffer_.end();) {
       tylog("pop from jitter rtp=%s.", it->second.ToString().data());
-      lastPowerSeq_ = it->first;
+      lastPoppedPowerSeq_ = it->first;
 
       orderedPackets.emplace_back(std::move(it->second));
       assert(it->second.rtpRawPacket.empty());
@@ -133,7 +140,9 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
         firstPacket.ToString().data());
 
   const uint32_t kSelfRtcpSSRC = 1;
-  const uint32_t kMediaSrcSSRC = g_UplinkVideoSsrc;
+  const uint32_t kMediaSrcSSRC =
+      belongingSSRCInfo_.belongingRtpHandler.upVideoSSRC;
+  assert(0 != kMediaSrcSSRC);
   int ret = belongingSSRCInfo_.belongingRtpHandler.belongingPeerConnection_
                 .rtcpHandler_.CreatePLIReportSend(kSelfRtcpSSRC, kMediaSrcSSRC);
   if (ret) {
@@ -142,7 +151,7 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
   }
 
   jitterBuffer_.clear();
-  lastPowerSeq_ = kShitRecvPowerSeqInitValue;
+  lastPoppedPowerSeq_ = kShitRecvPowerSeqInitValue;
 
   return {};
 }

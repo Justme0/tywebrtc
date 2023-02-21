@@ -23,16 +23,9 @@ extern int g_sock_fd;
 extern int g_dumpRecvSockfd;
 extern int g_dumpSendSockfd;
 
-extern uint32_t g_UplinkAudioSsrc;  // taylor to make dynamic
-// consuint32_tnt kUplinkAudioPayloadType = 111;
-extern uint32_t g_UplinkVideoSsrc;
-// const int kUplinkVideoPayloadType = 125;  // H.264
-
 const int kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
 const int kDownlinkAudioPayloadType = 111;
 const int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
-const int kDownlinkVideoH264PayloadType = 125;
-const int kDownlinkVideoVp8PayloadType = 96;
 
 class PeerConnection;
 

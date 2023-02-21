@@ -6,6 +6,7 @@
 
 bool MonitorStateTimer::_OnTimer() {
   Singleton::Instance().CleanTimeoutPeerConnection();
+
   const int size = Singleton::Instance().GetPeerConnectionSize();
   tylog("client2pc size=%d.", size);
 
@@ -30,11 +31,20 @@ bool MonitorStateTimer::_OnTimer() {
   return true;
 }
 
-bool PeerConnectionTimer::_OnTimer() {
+bool PLITimer::_OnTimer() {
   const uint32_t kSelfRtcpSSRC = 1;
-  const uint32_t kMediaSrcSSRC = g_UplinkVideoSsrc;
+  const uint32_t kMediaSrcSSRC = this->belongingPC_.rtpHandler_.upVideoSSRC;
   int ret = this->belongingPC_.rtcpHandler_.CreatePLIReportSend(kSelfRtcpSSRC,
                                                                 kMediaSrcSSRC);
+  if (ret) {
+    tylog("createPLIReportSend ret=%d", ret);
+  }
+
+  return true;
+}
+
+bool DTLSTimer::_OnTimer() {
+  int ret = belongingPC_.dtlsHandler_.OnTime();
   if (ret) {
     tylog("createPLIReportSend ret=%d", ret);
   }

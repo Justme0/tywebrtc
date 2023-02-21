@@ -13,9 +13,6 @@ int g_sock_fd;
 int g_dumpRecvSockfd;
 int g_dumpSendSockfd;
 
-uint32_t g_UplinkAudioSsrc;  // taylor to make dynamic
-uint32_t g_UplinkVideoSsrc;
-
 // if construct map's value is expensive
 // https://stackoverflow.com/questions/97050/stdmap-insert-or-stdmap-find
 // here we can also use insert and update, but lower_bound is more general

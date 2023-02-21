@@ -23,6 +23,7 @@ struct SSRCInfo {
   RtpReceiver rtpReceiver;
   RtpSender rtpSender;
 
+  // received biggest pkt
   uint16_t biggestSeq = 0;
   int64_t biggestCycle = 0;
 
@@ -34,6 +35,8 @@ class RtpHandler {
   explicit RtpHandler(PeerConnection &pc);
 
   int HandleRtpPacket(const std::vector<char> &vBufReceive);
+  // int GetUpAudioSSRC(uint32_t& ssrc) const;
+  // int GetUpVideoSSRC(uint32_t& ssrc) const;
 
   std::string ToString() const;
 
@@ -43,6 +46,8 @@ class RtpHandler {
 
  public:
   PeerConnection &belongingPeerConnection_;
+  uint32_t upAudioSSRC = 0;
+  uint32_t upVideoSSRC = 0;
 
   std::unordered_map<uint32_t, SSRCInfo> ssrcInfoMap_;
 };

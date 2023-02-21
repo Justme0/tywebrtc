@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "usrsctplib/usrsctp.h"
-// #include "api/webrtc_core_interface.h"
 
 class PeerConnection;
 class DataChannelHandler;
@@ -58,15 +57,17 @@ class SctpGlobalEnv {
   SctpGlobalEnv();
   ~SctpGlobalEnv();
 
- public:
   uintptr_t Register(DataChannelHandler* sctp);
-  DataChannelHandler* Get(uintptr_t id);
   bool UnRegister(uintptr_t id);
+  DataChannelHandler* Get(uintptr_t id);
+
+  std::string ToString() const;
 
  private:
+  uintptr_t id_;  // self increase
+
   std::mutex sctp_map_mutex_;
   std::map<uintptr_t, DataChannelHandler*> sctp_map_;
-  uintptr_t id_;  // self increase
 };
 
 class DataChannelHandler {
@@ -92,23 +93,31 @@ class DataChannelHandler {
 
  public:
   int InitSocket();
-  int Send(const std::string& label, const uint8_t* buf, const int len);
-  void OnSendThresholdCallback();
-  // void OnSendSctpData(const uint8_t* data, size_t len);
 
+  // active create
+  int CreateDataChannel(const std::string& label);
+
+  // handle received packet
+  void HandleDataChannelPacket(const char* buf, const int nb_buf);
+
+  // on recv
   int OnSctpEvent(const struct sctp_rcvinfo& rcv, void* data, size_t len);
   int OnSctpData(const struct sctp_rcvinfo& rcv, void* data, size_t len);
 
-  void Feed(const char* buf, const int nb_buf);
+  // on send
+  int SendBufferedMsg();
 
-  int CreateDataChannel(const std::string& label);
+  // active send data
+  int SendSctpDataForLable(const std::string& label,
+                           const std::string& bufferToSend);
+  // void OnSendThresholdCallback();
+  // void OnSendSctpData(const uint8_t* data, size_t len);
 
  private:
   sctp_sendv_spa CreateSendParam(const DataChannel& data_channel);
-  int SendBufferedMsg();
-  int SendInternal(const uint16_t sid, const uint8_t* buf, const int len);
+  ssize_t SendInternal(const uint16_t sid, const std::string& bufferToSend);
 
-  int Send(const uint16_t sid, const uint8_t* buf, const int len);
+  int SendSctpDataForSid(const uint16_t sid, const std::string& bufferToSend);
 
   int OnDataChannelControl(const struct sctp_rcvinfo& rcv, char* data, int len);
   int OnDataChannelMsg(const struct sctp_rcvinfo& rcv, char* data, int len);
@@ -117,7 +126,7 @@ class DataChannelHandler {
   std::mutex channel_mutex_;
   std::map<uint16_t, DataChannel> data_channels_;
   std::map<std::string, uint16_t> label_sid_;
-  std::vector<std::pair<uint16_t, std::string> > out_buffered_msg_;
+  std::vector<std::pair<uint16_t, std::string>> out_buffered_msg_;
 
   std::mutex sctp_mutex_;
   struct socket* sctp_socket_ = nullptr;

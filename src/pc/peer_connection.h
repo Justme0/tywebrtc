@@ -97,13 +97,14 @@ class PeerConnection {
   int HandlePacket(const std::vector<char>& vBufReceive);
 
   int SendToClient(const std::vector<char>& vBufSend) const;
-  int SendToPeer(const std::vector<char>& vBufSend) const;
 
   void StoreClientIPPort(const std::string& ip, int port) {
     clientIP_ = ip;
     clientPort_ = port;
     tylog("src ip=%s, port=%d", clientIP_.data(), clientPort_);
   }
+
+  std::shared_ptr<PeerConnection> FindPeerPC() const;
 
   std::string ToString() const;
 
@@ -125,7 +126,8 @@ class PeerConnection {
   int64_t initTimeMs_ = 0;        // construct *this obj time
   int64_t lastActiveTimeMs_ = 0;  // last receive data time
 
-  PeerConnectionTimer pcTimer_;
+  PLITimer pliTimer_;
+  DTLSTimer dtlsTimer_;
 };
 
 #endif  // PC_PEER_CONNECTION_H_

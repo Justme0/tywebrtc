@@ -15,10 +15,21 @@ class MonitorStateTimer : public Timer {
   bool _OnTimer() override;
 };
 
-class PeerConnectionTimer : public Timer {
+class PLITimer : public Timer {
  public:
-  PeerConnectionTimer(PeerConnection& belongingPC)
+  PLITimer(PeerConnection& belongingPC)
       : Timer(4000, -1), belongingPC_(belongingPC) {}
+
+ private:
+  bool _OnTimer() override;
+
+  PeerConnection& belongingPC_;
+};
+
+class DTLSTimer : public Timer {
+ public:
+  DTLSTimer(PeerConnection& belongingPC)
+      : Timer(10, -1), belongingPC_(belongingPC) {}
 
  private:
   bool _OnTimer() override;
