@@ -174,6 +174,10 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   } else if (belongingPeerConnection_.stateMachine_ ==
              EnumStateMachine::DTLS_DONE) {
     belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_RTP;
+    auto peerPC = belongingPeerConnection_.FindPeerPC();
+    if (nullptr != peerPC) {
+      peerPC->dataChannelHandler_.SendSctpDataForLable("another user enter");
+    }
 
     // 收到RTP后定时请求I帧
     TimerManager::Instance()->AddTimer(

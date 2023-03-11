@@ -125,9 +125,9 @@ static int RecvSctpDataCallback(struct socket* sock,
   }
 
   if (flags & MSG_NOTIFICATION) {
-    sctp->OnSctpEvent(rcv, data, len);
+    sctp->OnSctpEvent(rcv, std::string(static_cast<const char*>(data), len));
   } else {
-    sctp->OnSctpData(rcv, data, len);
+    sctp->OnSctpData(rcv, std::string(static_cast<const char*>(data), len));
   }
   if (data) {
     free(data);
@@ -499,11 +499,11 @@ const std::string SctpNotifyToString(uint16_t notifyType) {
   }
 }
 
-int DataChannelHandler::OnSctpEvent(const struct sctp_rcvinfo&, void* data,
-                                    size_t len) {
-  union sctp_notification* sctp_notify =
-      reinterpret_cast<union sctp_notification*>(data);
-  if (sctp_notify->sn_header.sn_length != len) {
+int DataChannelHandler::OnSctpEvent(const struct sctp_rcvinfo&,
+                                    const std::string& receivedBuffer) {
+  const union sctp_notification* sctp_notify =
+      reinterpret_cast<const union sctp_notification*>(receivedBuffer.data());
+  if (sctp_notify->sn_header.sn_length != receivedBuffer.size()) {
     tylog("sctp notify header");
 
     return -1;
@@ -530,18 +530,18 @@ int DataChannelHandler::OnSctpEvent(const struct sctp_rcvinfo&, void* data,
   return kSctpSuccess;
 }
 
-int DataChannelHandler::OnSctpData(const struct sctp_rcvinfo& rcv, void* data,
-                                   size_t len) {
+int DataChannelHandler::OnSctpData(const struct sctp_rcvinfo& rcv,
+                                   const std::string& receivedBuffer) {
   int err = 0;
 
   uint32_t ppid = ntohl(rcv.rcv_ppid);
   switch (ppid) {
     case DataChannelPPIDControl:
-      err = OnDataChannelControl(rcv, (char*)data, len);
+      err = OnDataChannelControl(rcv, receivedBuffer);
       break;
     case DataChannelPPIDString:
     case DataChannelPPIDBinary:
-      err = OnDataChannelMsg(rcv, (char*)data, len);
+      err = OnDataChannelMsg(rcv, receivedBuffer);
       break;
     default:
       break;
@@ -549,15 +549,16 @@ int DataChannelHandler::OnSctpData(const struct sctp_rcvinfo& rcv, void* data,
   return err;
 }
 
-int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
-                                             char* data, int len) {
-  if (len <= 12) {
+int DataChannelHandler::OnDataChannelControl(
+    const struct sctp_rcvinfo& rcv, const std::string& receivedBuffer) {
+  if (receivedBuffer.size() <= 12) {
     tylog("sctp data length invalid");
     return -1;
   }
 
   int pos = 0;
-  uint32_t byte_left = len;
+  uint32_t byte_left = receivedBuffer.size();
+  const char* data = receivedBuffer.data();
   uint8_t msg_type = data[pos];
   pos += 1;
   switch (msg_type) {
@@ -666,7 +667,7 @@ int DataChannelHandler::OnDataChannelControl(const struct sctp_rcvinfo& rcv,
 }
 
 int DataChannelHandler::OnDataChannelMsg(const struct sctp_rcvinfo& rcv,
-                                         char* data, int len) {
+                                         const std::string& receivedBuffer) {
   int ret = 0;
 
   std::unique_lock<std::mutex> lock_guard(channel_mutex_);
@@ -681,15 +682,17 @@ int DataChannelHandler::OnDataChannelMsg(const struct sctp_rcvinfo& rcv,
 
   lock_guard.unlock();
 
-  tylog("on recv data len=%d, data=%p %.*s.", len, data, len, data);
+  // raw data may have '\0', use .*
+  tylog("on recv data len=%zu, data=%p %.*s.", receivedBuffer.size(),
+        receivedBuffer.data(), static_cast<int>(receivedBuffer.size()),
+        receivedBuffer.data());
 
   // to use string view
-  std::string s(data, len);
-  auto i = s.find("g_vp8Payload=");
+  auto i = receivedBuffer.find("g_vp8Payload=");
   size_t size = strlen("g_vp8Payload=");
   if (i != std::string::npos) {
     assert(i == 0);
-    int payload = atoi(s.substr(size).data());
+    int payload = atoi(receivedBuffer.substr(size).data());
     tylog("taylor payload=%d.", payload);
     this->belongingPeerConnection_.sdpHandler_.vp8PayloadType = payload;
 
@@ -703,8 +706,7 @@ int DataChannelHandler::OnDataChannelMsg(const struct sctp_rcvinfo& rcv,
   }
 
   // OPT: use string_view
-  ret = peerPC->dataChannelHandler_.SendSctpDataForLable(
-      "sendChannel", std::string(data, len));
+  ret = peerPC->dataChannelHandler_.SendSctpDataForLable(receivedBuffer);
   if (ret) {
     tylog("sendSctpDataForLable ret=%d.", ret);
 
@@ -715,8 +717,8 @@ int DataChannelHandler::OnDataChannelMsg(const struct sctp_rcvinfo& rcv,
 }
 
 // key
-int DataChannelHandler::SendSctpDataForLable(const std::string& label,
-                                             const std::string& bufferToSend) {
+int DataChannelHandler::SendSctpDataForLable(const std::string& bufferToSend) {
+  const std::string& label = "sendChannel";
   uint16_t sid = 0;
   std::unique_lock<std::mutex> lock_guard(channel_mutex_);
 

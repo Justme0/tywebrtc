@@ -200,20 +200,37 @@
                 video: {
                     facingMode: { ideal: 'user' },
                     frameRate: { max: 13, ideal: 13 },
-                    width: { max: 500, ideal: 500 },
-                    height: { max: 500, ideal: 500 },
+                    width: { max: 450, ideal: 450 },
+                    height: { max: 450, ideal: 450 },
                     aspectRatio: 1,
                 },
-                audio: true
+                audio: {
+                    sampleRate: { ideal: 48000 },
+                    channelCount: { ideal: 1 },
+                    echoCancellation: { ideal: true },
+                    autoGainControl: { ideal: true },
+                    noiseSuppression: { ideal: true },
+                }
             }
 
-            console.log(`to get media, constraints=${JSON.stringify(constraints)}`)
+            console.log(`to get media, constraints=${JSON.stringify(constraints, null, 2)}`)
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
             console.log("to get media done")
             videoElement.srcObject = stream;
 
-            pc = new RTCPeerConnection();
+            pc = new RTCPeerConnection({
+                iceServers: [
+                    {
+                        urls: "turn:test12.rtc.qq.com:3478",
+                        // username: "user01",
+                        // credential: "pass01"
+                        username: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
+                        credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__"
+                    }
+                ],
+                iceTransportPolicy: "relay"
+            });
 
             sendChannel = pc.createDataChannel("sendChannel");
             sendChannel.onopen = handleSendChannelStatusChange;
@@ -223,15 +240,20 @@
             };
             sendChannel.onmessage = handleReceiveMessage;
 
-            // for uplink
-            await pc.addTransceiver(stream.getAudioTracks()[0], {
-                direction: "sendrecv",
-                streams: [stream],
-            });
-            await pc.addTransceiver(stream.getVideoTracks()[0], {
-                direction: "sendrecv",
-                streams: [stream],
-            });
+            // for uplink,
+            // if have no audio or video device
+            if (stream.getAudioTracks()[0]) {
+                await pc.addTransceiver(stream.getAudioTracks()[0], {
+                    direction: "sendrecv",
+                    streams: [stream],
+                });
+            }
+            if (stream.getVideoTracks()[0]) {
+                await pc.addTransceiver(stream.getVideoTracks()[0], {
+                    direction: "sendrecv",
+                    streams: [stream],
+                });
+            }
 
             // for downlink
             await pc.addTransceiver("audio", {
@@ -375,11 +397,10 @@ a=max-message-size:262144
         }, false);
         */
 
-
         // Set up an event listener which will run the startup
         // function once the page is done loading.
         window.addEventListener('load', publish, false);
-
+        // setTimeout(function () {window.location.reload()}, 5000);
     </script>
 </body>
 

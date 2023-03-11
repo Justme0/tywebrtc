@@ -101,15 +101,16 @@ class DataChannelHandler {
   void HandleDataChannelPacket(const char* buf, const int nb_buf);
 
   // on recv
-  int OnSctpEvent(const struct sctp_rcvinfo& rcv, void* data, size_t len);
-  int OnSctpData(const struct sctp_rcvinfo& rcv, void* data, size_t len);
+  int OnSctpEvent(const struct sctp_rcvinfo& rcv,
+                  const std::string& receivedBuffer);
+  int OnSctpData(const struct sctp_rcvinfo& rcv,
+                 const std::string& receivedBuffer);
 
   // on send
   int SendBufferedMsg();
 
   // active send data
-  int SendSctpDataForLable(const std::string& label,
-                           const std::string& bufferToSend);
+  int SendSctpDataForLable(const std::string& bufferToSend);
   // void OnSendThresholdCallback();
   // void OnSendSctpData(const uint8_t* data, size_t len);
 
@@ -119,8 +120,10 @@ class DataChannelHandler {
 
   int SendSctpDataForSid(const uint16_t sid, const std::string& bufferToSend);
 
-  int OnDataChannelControl(const struct sctp_rcvinfo& rcv, char* data, int len);
-  int OnDataChannelMsg(const struct sctp_rcvinfo& rcv, char* data, int len);
+  int OnDataChannelControl(const struct sctp_rcvinfo& rcv,
+                           const std::string& receivedBuffer);
+  int OnDataChannelMsg(const struct sctp_rcvinfo& rcv,
+                       const std::string& receivedBuffer);
 
  private:
   std::mutex channel_mutex_;
