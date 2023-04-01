@@ -106,7 +106,7 @@ std::string PeerConnection::ToString() const {
 }
 
 std::shared_ptr<PeerConnection> PeerConnection::FindPeerPC() const {
-  for (const auto &p : Singleton::Instance().client2PC_) {
+  for (const auto &p : Singleton<PCManager>::Instance().client2PC_) {
     if (clientIP_ == p.first.ip && clientPort_ == p.first.port) {
       continue;
     }

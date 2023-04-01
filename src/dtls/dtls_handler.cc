@@ -356,10 +356,8 @@ int DtlsHandler::HandshakeCompleted(bool bSessionCompleted) {
   memset(fprint, '\0', MAX_FP_SIZE);
 
   if (!GetRemoteFingerprint(fprint)) {
-    tylog(
-        "getRemoteFingerprint error, Peer did not authenticate, return succ :) "
-        "%s",
-        ToString().data());
+    tylog("getRemoteFingerprint err, peer not authenticate, return succ %s.",
+          ToString().data());
 
     return 0;
   }

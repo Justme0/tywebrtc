@@ -32,6 +32,14 @@ class MediaData {
   uint64_t timestamp_ = 0;
   int composition_timestamp_ = 0;
   VideoRotation rotate_angle_ = kVideoRotation0;
+
+  std::string ToString() const {
+    return tylib::format_string(
+        "{payloadType=%u, rtpTs=%u, rtmp ts=%lu, compositionTs=%d, "
+        "videoRotation=%d}",
+        payload_type_, rtp_timestamp_, timestamp_, composition_timestamp_,
+        rotate_angle_);
+  }
 };
 
 struct FrameItem {

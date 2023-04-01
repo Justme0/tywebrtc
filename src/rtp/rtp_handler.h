@@ -4,7 +4,10 @@
 #include <unordered_map>
 #include <vector>
 
+#include "codec/audio_codec.h"
+#include "rtmp/rtmp_handler.h"
 #include "rtp/pack_unpack/rtp_to_h264.h"
+#include "rtp/pack_unpack/rtp_to_vp8.h"
 #include "transport/receiver/receiver.h"
 #include "transport/sender/sender.h"
 
@@ -37,6 +40,7 @@ class RtpHandler {
   int HandleRtpPacket(const std::vector<char> &vBufReceive);
   // int GetUpAudioSSRC(uint32_t& ssrc) const;
   // int GetUpVideoSSRC(uint32_t& ssrc) const;
+  int DumpPacket(const std::vector<char> &packet, H264Unpacketizer &unpacker);
 
   std::string ToString() const;
 
@@ -46,10 +50,16 @@ class RtpHandler {
 
  public:
   PeerConnection &belongingPeerConnection_;
+
   uint32_t upAudioSSRC = 0;
   uint32_t upVideoSSRC = 0;
+  RtmpHandler rtmpHandler;
 
   std::unordered_map<uint32_t, SSRCInfo> ssrcInfoMap_;
+
+ private:
+  SrsAudioTranscoder audioTranscoder_;
+  RtpDepacketizerVp8 videoTranscoder_;
 };
 
 #endif  // RTP_RTP_HANDLER_H_

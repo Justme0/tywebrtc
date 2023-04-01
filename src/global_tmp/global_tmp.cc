@@ -17,7 +17,7 @@ int g_dumpSendSockfd;
 // https://stackoverflow.com/questions/97050/stdmap-insert-or-stdmap-find
 // here we can also use insert and update, but lower_bound is more general
 // OPT: add ufrag logic
-std::shared_ptr<PeerConnection> Singleton::GetPeerConnection(
+std::shared_ptr<PeerConnection> PCManager::GetPeerConnection(
     const std::string &ip, int port, const std::string &ufrag) {
   ClientSrcId clientSrcId{ip, port};
   auto lb = client2PC_.lower_bound(clientSrcId);
@@ -43,7 +43,7 @@ std::shared_ptr<PeerConnection> Singleton::GetPeerConnection(
   }
 }
 
-void Singleton::CleanTimeoutPeerConnection() {
+void PCManager::CleanTimeoutPeerConnection() {
   for (auto it = this->client2PC_.begin(); it != client2PC_.end();) {
     if (it->second->lastActiveTimeMs_ + kPCDeadTimeoutMs <
         static_cast<int64_t>(g_now_ms)) {

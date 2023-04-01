@@ -145,11 +145,146 @@ enum enRtpExtType {
       256  // 256 appbits https://datatracker.ietf.org/doc/html/rfc5285
 };
 
+//  0
+//  0 1 2 3 4 5 6 7
+// +-+-+-+-+-+-+-+-+
+// |  ID   |  len  |
+// +-+-+-+-+-+-+-+-+
+typedef struct TagstRtpExtCommonHead {
+  uint32_t ExtLen : 4;
+  uint32_t ExtId : 4;
+} RTP_EXT_COMMON_HRAD;
+
+//  0                   1                   2                   3
+//  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |  ID   | len=2 |              transmission offset              |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//传输偏移rfc5450，RTP时间戳表示的是RTP数据采集的时间，这个字段表示的是RTP数据实际发送的时间，单位和RTP时间一致
+typedef struct TagstRtpExtTransmissionOffset {
+  uint32_t ExtLen : 4;
+  uint32_t ExtId : 4;
+
+  uint32_t TransOffsetH : 8;
+  uint32_t TransOffsetM : 8;
+  uint32_t TransOffsetL : 8;
+
+} ST_RTP_EXT_TRANSMISSION_TIME_OFFSET;
+
+//  0                   1
+//  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |  ID   | len=0 |V|   level     |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+// RTP_EXT_AUDIO_LEVEL
+//音量信息rfc6464，
+typedef struct TagstRtpExtAudioLevel {
+  uint32_t ExtLen : 4;
+  uint32_t ExtId : 4;
+
+  uint32_t Level : 7;  //单位是-dBov，取值范围是0-127，表示0 to -127 dBov
+  uint32_t voiceActivity : 1;  //表示是否是静音
+} ST_RTP_EXT_AUDIO_LEVEL;
+
+//绝对的发送时间abs_send_time_24 = (ntp_timestamp_64>> 14) & 0x00ffffff
+
+//  0                   1                   2                   3
+//  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |  ID   | len=2 |              absolute send time               |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+typedef struct TagstRtpExtAbsoluteSendTime {
+  uint32_t ExtLen : 4;
+  uint32_t ExtId : 4;
+
+  uint32_t TsH : 8;
+  uint32_t TsM : 8;
+  uint32_t TsL : 8;
+
+} ST_RTP_EXT_ABSOLUTE_SEND_TIME;
+
+//  0                   1
+//  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |  ID   | len=0 |0 0 0 0 C F R R|
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+/*
+R1 	R0 	R5 	R4 	R3 	R2 	Rotation
+0 	0 	0 	0 	0 	0 	0° rotation 	None
+0 	0 	0 	0 	0 	1	(360/64)°
+0 	0 	0 	0 	1 	0	(2*360/64)?
+. 	. 	. 	. 	. 	. 	. 	.
+. 	. 	. 	. 	. 	. 	. 	.
+. 	. 	. 	. 	. 	. 	. 	.
+1 	1 	1 	1 	1 	0	(62*360/64)°
+1 	1 	1 	1 	1 	1	(63*360/64)°
+*/
+typedef struct TagstRtpExtVideoRotation {
+  uint32_t ExtLen : 4;
+  uint32_t ExtId : 4;
+
+  uint32_t R0R1 : 2;  //指示旋转角度VIDEO_ROTATION 顺时针
+  uint32_t F : 1;     // 1标识水平翻转
+  uint32_t C : 1;     //指示前置后置摄像头，VIDEO_CAM_TYPE
+  uint32_t R2R5 : 4;  //和R0R1共同使用可以按照64分之一的角度旋转
+
+} ST_RTP_EXT_VIDEO_ROTATION;
+
+//   0                   1                   2
+//   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3
+//  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//  |  ID   | L=1   |transport wide sequence number |
+//  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+typedef struct TagstRtpExtTransportSeq {
+  uint32_t ExtLen : 4;
+  uint32_t ExtId : 4;
+
+  uint32_t Seq : 16;
+
+  uint32_t Padding : 8;
+} ST_RTP_EXT_TRANSPORT_SEQ;
+
+//   0                   1                   2                   3
+//   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+//  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//  |  ID   | len=2 |   MIN delay           |   MAX delay           |
+//  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// Playout delay in milliseconds. A playout delay limit (min or max)
+// has 12 bits allocated. This allows a range of 0-4095 values which
+// translates to a range of 0-40950 in milliseconds. 注意这里有10倍的关系
+
+typedef struct TagstRtpExtPalyOutDelay {
+  uint32_t ExtLen : 4;
+  uint32_t ExtId : 4;
+
+  uint32_t MinDelayH : 8;
+
+  uint32_t MaxDelayH : 4;
+  uint32_t MinDelayL : 4;
+
+  uint32_t MaxDelayL : 8;
+} ST_RTP_EXT_PLAYOUT_DELAY;
+
+//    0                   1
+//    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//   |  ID   | len=0 | Content type  |
+//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+struct ST_RTP_EXT_RTP_EXT_CONTENT_TYPE {
+  uint32_t ExtLen : 4;
+  uint32_t ExtId : 4;
+  uint32_t ContentType : 8;
+};
+
 // base class
 struct Extension {
   enRtpExtType extension_type;
 };
 
+/*
 class AudioLevelExt : public Extension {
  public:
   bool voice_activity;
@@ -310,7 +445,8 @@ class VideoSendTiming : public Extension {
     // %d,encode_start_delta_ms %d,encode_finish_delta_ms
     // %d,packetization_finish_delta_ms %d,pacer_exit_delta_ms
     // %d,network_timestamp_delta_ms %d,network2_timestamp_delta_ms %d",
-    // flags,encode_start_delta_ms,encode_finish_delta_ms,packetization_finish_delta_ms,pacer_exit_delta_ms,network_timestamp_delta_ms,network2_timestamp_delta_ms);
+    //
+flags,encode_start_delta_ms,encode_finish_delta_ms,packetization_finish_delta_ms,pacer_exit_delta_ms,network_timestamp_delta_ms,network2_timestamp_delta_ms);
     return true;
   }
   bool Write(char* data, size_t size) {
@@ -331,7 +467,8 @@ class VideoSendTiming : public Extension {
     // %d,encode_start_delta_ms %d,encode_finish_delta_ms
     // %d,packetization_finish_delta_ms %d,pacer_exit_delta_ms
     // %d,network_timestamp_delta_ms %d,network2_timestamp_delta_ms %d",
-    // flags,encode_start_delta_ms,encode_finish_delta_ms,packetization_finish_delta_ms,pacer_exit_delta_ms,network_timestamp_delta_ms,network2_timestamp_delta_ms);
+    //
+flags,encode_start_delta_ms,encode_finish_delta_ms,packetization_finish_delta_ms,pacer_exit_delta_ms,network_timestamp_delta_ms,network2_timestamp_delta_ms);
     return true;
   }
 
@@ -344,6 +481,8 @@ class VideoSendTiming : public Extension {
   uint16_t network2_timestamp_delta_ms;
   uint8_t flags;
 };
+
+  */
 
 // enum MediaType { kMediaVideo, kMediaAudio, kMediaData, kMediaMax };
 
@@ -362,8 +501,6 @@ static inline void rtp_write_uint32(uint8_t* ptr, uint32_t val) {
   ptr[2] = (uint8_t)((val >> 8) & 0xFF);
   ptr[3] = (uint8_t)(val & 0xFF);
 }
-
-class PowerfulSeq {};
 
 //  0                   1                   2                   3
 //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -396,6 +533,7 @@ class RtpFixedHeaderExt {
   // bits of the extension header
   // https://en.wikipedia.org/wiki/Real-time_Transport_Protocol
   uint16_t getExtLength() const { return ntohs(extensionlength); }
+
   void setExtLength(uint16_t extensionlength) {
     extensionlength = htons(extensionlength);
   }
@@ -563,9 +701,8 @@ class RtpHeader {
         getHeaderLength());
   }
 
- private:
   // if header ext exists, return value is the address of header ext struct.
-  // Otherwise undefined behavior
+  // Otherwise undefined behavior, this function danger!
   const RtpFixedHeaderExt* getHeaderExt() const {
     return (RtpFixedHeaderExt*)((uint8_t*)this + kRtpHeaderLenByte + cc * 4);
   }
@@ -776,6 +913,54 @@ class RtpRtcpStrategy {
   unsigned int uiRemoteAudioSsrc;
   unsigned int uiRemoteVideoSsrc;
   unsigned int uiRemoteRtxSsrc;
+};
+
+// Write the VP8 payload descriptor.
+//       0
+//       0 1 2 3 4 5 6 7 8
+//      +-+-+-+-+-+-+-+-+-+
+//      |X| |N|S| PART_ID |
+//      +-+-+-+-+-+-+-+-+-+
+// X:   |I|L|T|K|         | (mandatory if any of the below are used)
+//      +-+-+-+-+-+-+-+-+-+
+// I:   |PictureID   (16b)| (optional)
+//      +-+-+-+-+-+-+-+-+-+
+// L:   |   TL0PIC_IDX    | (optional)
+//      +-+-+-+-+-+-+-+-+-+
+// T/K: |TID:Y|  KEYIDX   | (optional)
+//      +-+-+-+-+-+-+-+-+-+
+
+#define NO_PIC_IDX (-1)
+#define NO_TL0_PIC_IDX (-1)
+#define NO_TEMPORAL_IDX (0xFF)
+#define NO_KEY_IDX (-1)
+#define X_BIT (0x80)
+#define N_BIT (0x20)
+#define S_BIT (0x10)
+#define KEY_IDX_FILED (0x1F)
+#define I_BIT (0x80)
+#define L_BIT (0x40)
+#define T_BIT (0x20)
+#define K_BIT (0x10)
+#define Y_BIT (0x20)
+#define VP8_MIN_PAYLOAD_HEAD_LEN (3)
+#define VP8_MAX_PAYLOAD_HEAD_LEN (6)
+#define VP8_RAW_DATA_LEN (1024 * 1024)
+
+struct RTP_HEADER_INFO_VP8 {
+  bool NonReference;  // Non-reference帧，当为1时，说明该帧可以被丢弃
+
+  // 8位或16位的长度，其中首位为为1时，则为16位的长度，后15位为picture
+  // id，为0,则为8位的长度，后7位为picture id,如果NO_PIC_IDX标记为不存在
+  short PictureId;
+  short Tl0PicIdx;      // TL0PIC_IDX, 8 bits,NO_TL0_PIC_IDX标记为不存在
+  uint8_t TemporalIdx;  //时域分层的idx，NO_TEMPORAL_IDX标记为不存在
+  bool LayerSync;  // layer sync frame.分层同步帧，NO_TEMPORAL_IDX标记为不存在
+  int KeyIdx;       // 5 bits; NO_KEY_IDX标记为不存在
+  int PartitionId;  // VP8 partition ID
+
+  // True if this packet is the first in a VP8 partition. Otherwise false
+  bool BeginningOfPartition;
 };
 
 #endif  // RTP_RTP_PARSER_H_

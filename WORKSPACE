@@ -82,3 +82,98 @@ cc_library(
 )
 """
 )
+
+# 7. librtmp
+new_local_repository(
+    name = "librtmp",
+    path = "third_party/rtmpdump",
+    # path = select({
+    # "@bazel_tools//src/conditions:linux": "srtp",
+    # "@bazel_tools//src/conditions:darwin": "/opt/homebrew/opt/srtp"}),
+
+    build_file_content = """
+package(default_visibility = ["//visibility:public"])
+cc_library(
+    name = "librtmp_package",
+    srcs = ["librtmp/librtmp.a"],
+    hdrs = ["."],
+    includes = ["."],
+)
+"""
+)
+
+# 8. ffmpeg
+new_local_repository(
+    name = "ffmpeg",
+    path = "third_party/ffmpeg",
+    # path = select({
+    # "@bazel_tools//src/conditions:linux": "srtp",
+    # "@bazel_tools//src/conditions:darwin": "/opt/homebrew/opt/srtp"}),
+
+    build_file_content = """
+package(default_visibility = ["//visibility:public"])
+cc_library(
+    name = "ffmpeg_package",
+    srcs = ["libavformat/libavformat.a", "libavcodec/libavcodec.a", "libavutil/libavutil.a", "libswresample/libswresample.a", "libswscale/libswscale.a"],
+    hdrs = ["."],
+    includes = ["."],
+)
+"""
+)
+
+# 9. opus
+new_local_repository(
+    name = "opus",
+    path = "third_party/libopus",
+    # path = select({
+    # "@bazel_tools//src/conditions:linux": "srtp",
+    # "@bazel_tools//src/conditions:darwin": "/opt/homebrew/opt/srtp"}),
+
+    build_file_content = """
+package(default_visibility = ["//visibility:public"])
+cc_library(
+    name = "opus_package",
+    srcs = ["lib/libopus.a"],
+    hdrs = glob(["include/**/*.h"]),
+    includes = ["include"],
+)
+"""
+)
+
+# 10. libvpx
+new_local_repository(
+    name = "libvpx",
+    path = "third_party/libvpx",
+    # path = select({
+    # "@bazel_tools//src/conditions:linux": "srtp",
+    # "@bazel_tools//src/conditions:darwin": "/opt/homebrew/opt/srtp"}),
+
+    build_file_content = """
+package(default_visibility = ["//visibility:public"])
+cc_library(
+    name = "libvpx_package",
+    srcs = ["libvpx.a"],
+    hdrs = glob(["include/**/*.h"]),
+    includes = ["include"],
+)
+"""
+)
+
+# 10. x264
+new_local_repository(
+    name = "x264",
+    path = "third_party/x264",
+    # path = select({
+    # "@bazel_tools//src/conditions:linux": "srtp",
+    # "@bazel_tools//src/conditions:darwin": "/opt/homebrew/opt/srtp"}),
+
+    build_file_content = """
+package(default_visibility = ["//visibility:public"])
+cc_library(
+    name = "libx264_package",
+    srcs = ["libx264.a"],
+    hdrs = glob(["include/**/*.h"]),
+    includes = ["include"],
+)
+"""
+)

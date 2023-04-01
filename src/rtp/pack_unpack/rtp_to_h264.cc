@@ -46,10 +46,10 @@ FrameItem &FrameBuffer::PushNewFrame(const RtpHeader &h) {
     //     cost of the runtime check, but it's only safe if the program can
     //     guarantee (through some other logic) that the object pointed to by
     //     expression is definitely Derived.
-    const CompositionTimeIdExt &exten =
-        *static_cast<CompositionTimeIdExt *>(ext.get());
-    cts = exten.cts;
-    tylog("new frame cts %d", exten.cts);
+    // const CompositionTimeIdExt &exten =
+    //     *static_cast<CompositionTimeIdExt *>(ext.get());
+    // cts = exten.cts;
+    // tylog("new frame cts %d", exten.cts);
 
     // NOTE: only one iterate logic
     break;
@@ -93,8 +93,9 @@ int H264Unpacketizer::ParseFuaNalu_(const std::vector<char> &vBufReceive) {
     return -1;
   }
 
-  enVideoH264NaluType original_nal_type = static_cast<enVideoH264NaluType>(
-      payload[1] & kH264TypeMask);  // taylor not payload[0] ?
+  // taylor not payload[0] ?
+  enVideoH264NaluType original_nal_type =
+      static_cast<enVideoH264NaluType>(payload[1] & kH264TypeMask);
   bool first_fragment = ((payload[1] & kSBit) != 0);
   tylog("original_nal_type=%s, first_fragment=%d.",
         enVideoH264NaluTypeToString(original_nal_type).data(), first_fragment);

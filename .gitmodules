@@ -4,3 +4,6 @@
 [submodule "third_party/usrsctp"]
 	path = third_party/usrsctp
 	url = https://github.com/sctplab/usrsctp
+[submodule "third_party/rtmpdump"]
+	path = third_party/rtmpdump
+	url = https://git.ffmpeg.org/rtmpdump.git

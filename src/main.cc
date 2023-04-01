@@ -202,7 +202,7 @@ int HandleRequest() {
   // get some pc according to clientip, port or ICE username (to FIX),
   // cannot handle ICE connection change
   std::shared_ptr<PeerConnection> pc =
-      Singleton::Instance().GetPeerConnection(ip, port, "");
+      Singleton<PCManager>::Instance().GetPeerConnection(ip, port, "");
 
   // must before srtp if it's rtp, otherwise srtp_err_status_replay_fail
   // https://segmentfault.com/a/1190000040211375
@@ -482,7 +482,7 @@ int InitDumpSock() {
 int InitMonitor() {
   // https://github.com/jupp0r/prometheus-cpp
   // create an http server
-  const int kMonitorPort = 443;
+  const int kMonitorPort = 444;
   tylogAndPrintfln("bind prometheus http port=%d", kMonitorPort);
   // Exporser object should always alive
   // https://github.com/jupp0r/prometheus-cpp/issues/559#issuecomment-1068933850

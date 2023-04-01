@@ -7,13 +7,18 @@ cc_binary(
 	  # hdrs = glob(["**/*.h"]),
     # includes = ['.'],
 	  copts = ["-I src"],
-    linkopts = ["-l dl -pthread"],
+    linkopts = ["-l dl -pthread -l z"],
     deps = [
         "@tylib//:tylib",
         "@sctp//:sctp_package",
+        "@librtmp//:librtmp_package",
         "@openssl//:openssl_package",
         "@srtp//:srtp_package",
         "@com_github_jupp0r_prometheus_cpp//pull",
+        "@ffmpeg//:ffmpeg_package",
+        "@opus//:opus_package",
+        "@libvpx//:libvpx_package",
+        "@x264//:libx264_package",
     ],
 )
 

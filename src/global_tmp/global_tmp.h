@@ -31,18 +31,31 @@ class PeerConnection;
 
 // TODO: should save to remote DB ? must refactor! Now we use singleton
 // OPT2: move to tylib
-class Singleton {
+template <class T>
+class Singleton : private T {
  public:
-  static Singleton& Instance() {
+  // may have param
+  static T& Instance() {
     // 1. C++11: If control enters the declaration concurrently while the
     // variable is being initialized, the concurrent execution shall wait for
     // completion of the initialization.
     // 2. Lazy evaluation.
-    static Singleton s;
+    static Singleton<T> s;
 
     return s;
   }
 
+ private:
+  Singleton() {}
+  ~Singleton() {}
+
+  Singleton(const Singleton&) = delete;
+  Singleton& operator=(const Singleton&) = delete;
+};
+
+// manage all peerConnection, in singleton
+class PCManager {
+ public:
   struct ClientSrcId {
     std::string ip;
     int port;
@@ -60,12 +73,6 @@ class Singleton {
   std::shared_ptr<PeerConnection> GetPeerConnection(const std::string& ip,
                                                     int port,
                                                     const std::string& ufrag);
-
- private:
-  Singleton(const Singleton&) = delete;
-  Singleton& operator=(const Singleton&) = delete;
-
-  Singleton() {}
 
   // should be private
  public:

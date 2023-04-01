@@ -5,9 +5,9 @@
 #include "pc/peer_connection.h"
 
 bool MonitorStateTimer::_OnTimer() {
-  Singleton::Instance().CleanTimeoutPeerConnection();
+  Singleton<PCManager>::Instance().CleanTimeoutPeerConnection();
 
-  const int size = Singleton::Instance().GetPeerConnectionSize();
+  const int size = Singleton<PCManager>::Instance().GetPeerConnectionSize();
   tylog("client2pc size=%d.", size);
 
   static prometheus::Family<prometheus::Gauge>* s_sessionNum = nullptr;
@@ -21,7 +21,7 @@ bool MonitorStateTimer::_OnTimer() {
                       .Help("Number of sessions")
                       .Register(*g_pRegistry);
 
-  for (auto& session : Singleton::Instance().client2PC_) {
+  for (auto& session : Singleton<PCManager>::Instance().client2PC_) {
     s_sessionNum
         ->Add({{"clientIP", session.first.ip},
                {"clientPort", tylib::AnyToString(session.first.port)}})

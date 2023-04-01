@@ -43,7 +43,7 @@ struct VideoFuHeader {
 // Nalu type定义，根据H264协议标准定义
 // https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-h264.c#L302
 enum enVideoH264NaluType {
-  kVideoNakuUnspecific = 0,
+  kVideoNaluUnspecific = 0,
   kVideoNaluSlice = 1,
   kVideoNaluDpa = 2,
   kVideoNaluDpb = 3,
@@ -63,7 +63,7 @@ enum enVideoH264NaluType {
 
 inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
   switch (v) {
-    case kVideoNakuUnspecific:
+    case kVideoNaluUnspecific:
       return "Undefined";
     case kVideoNaluSlice:
       return "NAL unit - Coded slice of a non-IDR picture";

@@ -222,14 +222,24 @@
             pc = new RTCPeerConnection({
                 iceServers: [
                     {
-                        urls: "turn:test12.rtc.qq.com:3478",
+                        urls: "turns:turn.cloud-rtc.com:443?transport=tcp",
                         // username: "user01",
                         // credential: "pass01"
                         username: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
-                        credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__"
-                    }
+                        credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
+                        // credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
+                    } ,
+                   // {
+                   //     // urls: "turns:test12.rtc.qq.com:443?transport=tcp",
+                   //     urls: "turn:turn.cloud-rtc.com:80?transport=tcp",
+                   //     // username: "user01",
+                   //     // credential: "pass01"
+                   //     username: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
+                   //     credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
+                   //     // credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
+                   // },
                 ],
-                iceTransportPolicy: "relay"
+                iceTransportPolicy: "all"
             });
 
             sendChannel = pc.createDataChannel("sendChannel");

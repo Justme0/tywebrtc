@@ -56,6 +56,7 @@ bazel test --verbose_failures --sandbox_debug --subcommands --explain=bazel_buil
 #  --copt="-Weffc++" \
 #  --copt="-Wno-error=effc++" \
 # no -Wdeprecated-declarations is temp
+  # --copt="-Wno-error=deprecated-declarations" \
 # cmd doc https://bazel.build/docs/user-manual
 # shit copt multiple flags cannot be in one option.
 # must specify -c dbg, or strip debug info
