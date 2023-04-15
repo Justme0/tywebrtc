@@ -29,9 +29,6 @@ class RtpDepacketizerVp8 {
   void VideoRtpStat(int Id, int Cnt);
 
  private:
-  unsigned long long m_ChanlNo; /* 通道号，由应用层设置，必须设置 */
-  unsigned int m_MaxPackSize; /* 最大包长，字节单位，包括RTP头的字节长度 */
-
   RTP_HEADER_INFO_VP8 m_RtpHeadInfoVp8;
 
   /* 将数据包的RTP header信息保存，用于校验包打包使用 */
@@ -41,7 +38,6 @@ class RtpDepacketizerVp8 {
   int Height_ = 0;
 
   char m_RtpHeadVp8[VP8_MAX_PAYLOAD_HEAD_LEN];
-  int m_RtpHeadVp8Len;
   CodecDecoder* decoder;
   CodecEncoder* encoder;
   // VIDEO_FAST_UP_DATE m_pFastUpDate;

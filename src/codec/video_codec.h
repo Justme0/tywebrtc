@@ -32,9 +32,6 @@ struct CodecParam {
   const char* level;
   int thread;
   const char* codecName;
-  /* audio only */
-  int sample_rate;  ///< samples per second
-  int channels;     ///< number of audio channels
 
   CodecParam() {
     bitRate = 350000;
@@ -47,8 +44,6 @@ struct CodecParam {
     level = "3.0";
     thread = 1;
     codecName = "libx264";
-    sample_rate = 48000;
-    channels = 2;
   }
 };
 
@@ -56,14 +51,13 @@ class CodecDecoder {
  public:
   CodecDecoder();
   ~CodecDecoder();
-  bool InitDecoder(const CodecParam& param, uint64_t tinyId);
+  bool InitDecoder(const CodecParam& param);
   AVFrame* Decode(uint8_t* encodeData, int len);
   AVFrame* ScaleImg(AVFrame* srcFrame, int nDstW, int nDstH);
 
  private:
   AVCodecContext* av_codec_tx_;
   AVFrame* av_frame_;
-  uint64_t tinyId_;
   bool init_sucess_;
   struct SwsContext* sws_context_;
   AVFrame* dst_frame_;
@@ -74,7 +68,7 @@ class CodecEncoder {
  public:
   CodecEncoder();
   ~CodecEncoder();
-  bool InitEncoder(const CodecParam& param, uint64_t tinyId);
+  bool InitEncoder(const CodecParam& param);
   AVPacket* Encode(AVFrame* yuvFrame, bool isKeyFrame, bool unref_frame);
   void UnrefPacket();
   void Reset();
@@ -82,7 +76,6 @@ class CodecEncoder {
  private:
   AVCodecContext* av_codec_tx_;
   AVPacket* av_packet_;
-  uint64_t tinyId_;
   bool init_sucess_;
 };
 

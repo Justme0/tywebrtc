@@ -16,8 +16,8 @@ class FlvAssist {
  public:
   FlvAssist(RtmpHandler& belongingRtmpHandler);
 
-  int SendVideoFrame(const std::vector<char>& h264Frame, time_t frameTs);
-  int SendAudioFrame(const std::string& audioFrame, time_t frameTs);
+  int SendVideoFrame(const std::vector<char>& h264Frame, uint64_t frameMs);
+  int SendAudioFrame(const std::vector<char>& audioFrame, uint64_t frameMs);
 
   FlvVideoFrameType AvcFrameType2FlvVideoFrameType(
       const enVideoH264NaluType avcFrameType);

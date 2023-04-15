@@ -177,3 +177,22 @@ cc_library(
 )
 """
 )
+
+# 11. srt
+new_local_repository(
+    name = "srt",
+    path = "third_party/srt",
+    # path = select({
+    # "@bazel_tools//src/conditions:linux": "srtp",
+    # "@bazel_tools//src/conditions:darwin": "/opt/homebrew/opt/srtp"}),
+
+    build_file_content = """
+package(default_visibility = ["//visibility:public"])
+cc_library(
+    name = "srt_package",
+    srcs = ["libsrt.a"],
+    hdrs = glob(["include/**/*.h"]),
+    includes = ["include"],
+)
+"""
+)

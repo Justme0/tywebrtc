@@ -21,16 +21,16 @@ class RtmpHandler {
   ~RtmpHandler();
 
  public:
-  int InitRtmpConnection(std::string rtmpUrl, bool writeable, uint32_t timeout,
-                         const bool liveSource);
+  int InitProtocolHandler(const std::string &rtmpUrl, bool writeable = true,
+                          uint32_t timeout = 1000,
+                          const bool liveSource = true);
+  bool InitSucc() const;
 
-  int SendVideoFrame(const std::vector<char> &h264Frame, time_t frameTs);
-  int SendAudioFrame(const std::string &audioFrame, time_t frameTs);
+  int SendAudioFrame(const std::vector<char> &audioFrame, uint64_t frameMs);
+  int SendVideoFrame(const std::vector<char> &h264Frame, uint64_t frameMs);
 
+  // now no use
   int RecvRtmpPacket(std::vector<char> *o_recvBuf);
-
-  // tmp public, indicate if rtmp setup is ok (not null)
-  RTMP *mRtmpInstance = nullptr;
 
  private:
   int InitRtmp_();
@@ -50,6 +50,10 @@ class RtmpHandler {
   bool mLiveSource = false;
 
   // RTMPPacket* mRtmpPacket = nullptr;
+
+ public:
+  // tmp public, indicate if rtmp setup is ok (not null)
+  RTMP *mRtmpInstance = nullptr;
 };
 
 #endif  // RTMP_RTMP_HANDLER_H_

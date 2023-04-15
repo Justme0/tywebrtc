@@ -10,7 +10,7 @@
 // FFmpeg cannot deliver private data to log callback function, we use global
 // variable. see
 // http://km.oa.com/q/view/251359
-uint64_t g_ffmpeg_codec_tinyid_for_log = 0;
+// uint64_t g_ffmpeg_codec_tinyid_for_log = 0;
 
 bool g_register_all = false;
 
@@ -47,70 +47,7 @@ CodecDecoder::~CodecDecoder() {
   }
 }
 
-// ref https://ffmpeg.org/doxygen/3.0/log_8c_source.html#l00224
-static const char *my_get_level_str(int level) {
-  switch (level) {
-    case AV_LOG_QUIET:
-      return "quiet";
-    case AV_LOG_DEBUG:
-      return "debug";
-    case AV_LOG_VERBOSE:
-      return "verbose";
-    case AV_LOG_INFO:
-      return "info";
-    case AV_LOG_WARNING:
-      return "warning";
-    case AV_LOG_ERROR:
-      return "error";
-    case AV_LOG_FATAL:
-      return "fatal";
-    case AV_LOG_PANIC:
-      return "panic";
-    default:
-      return "";
-  }
-}
-
-// @brief FFmpeg log callback function
-// reference: void format_line(void *avcl, int level, const char *fmt, va_list
-// vl, AVBPrint part[4],
-// int *print_prefix, int type[2]) at
-// https://ffmpeg.org/doxygen/3.4/log_8c_source.html#l00248
-static void uls_av_log_output(void *avcl, int level, const char *fmt,
-                              va_list vargs) {
-  // output info level log
-  if (level >= AV_LOG_VERBOSE) {
-    return;
-  }
-
-  std::stringstream nameInfo;
-
-  AVClass *avc = avcl ? *(AVClass **)avcl : NULL;
-  if (avc) {
-    if (avc->parent_log_context_offset) {
-      AVClass **parent =
-          *(AVClass ***)(((uint8_t *)avcl) + avc->parent_log_context_offset);
-      if (parent && *parent) {
-        nameInfo << "parent name is [" << (*parent)->item_name(parent) << " @ "
-                 << parent << "] ";
-      }
-    }
-    nameInfo << "avc name is [" << avc->item_name(avcl) << " @ " << avcl << "]";
-  }
-
-  char codecInfo[512] = {'\0'};
-  vsnprintf(codecInfo, sizeof(codecInfo), fmt, vargs);
-
-  tylog("FFmpeg log[%s]: %s, %s", my_get_level_str(level),
-        nameInfo.str().data(), codecInfo);
-}
-
-bool CodecDecoder::InitDecoder(const CodecParam &param, uint64_t tinyId) {
-  tinyId_ = tinyId;
-
-  g_ffmpeg_codec_tinyid_for_log = tinyId_;
-  av_log_set_callback(uls_av_log_output);
-
+bool CodecDecoder::InitDecoder(const CodecParam &param) {
   if (!param.codecName || strcmp(param.codecName, "") == 0) {
     tylog("CodecDecoder codecName is NULL");
     return false;
@@ -137,8 +74,8 @@ bool CodecDecoder::InitDecoder(const CodecParam &param, uint64_t tinyId) {
 
   av_codec_tx_->codec_type = codec->type;
   av_codec_tx_->codec_id = codec->id;
-  av_codec_tx_->channels = param.channels;
-  av_codec_tx_->sample_rate = param.sample_rate;
+  // av_codec_tx_->channels = param.channels;
+  // av_codec_tx_->sample_rate = param.sample_rate;
   av_codec_tx_->sample_fmt = AV_SAMPLE_FMT_FLTP;
   av_codec_tx_->pix_fmt = AV_PIX_FMT_YUV420P;
   av_codec_tx_->extradata = NULL;
@@ -163,10 +100,8 @@ bool CodecDecoder::InitDecoder(const CodecParam &param, uint64_t tinyId) {
 }
 
 AVFrame *CodecDecoder::Decode(uint8_t *encodeData, int len) {
-  g_ffmpeg_codec_tinyid_for_log = tinyId_;
-
   if (!init_sucess_) {
-    tylog("CodecDecoder init_sucess_ failed,tinyId_ %" PRIu64 "", tinyId_);
+    tylog("CodecDecoder init_sucess_ failed");
     return NULL;
   }
   AVPacket packet;
@@ -252,16 +187,12 @@ CodecEncoder::CodecEncoder() {
 }
 CodecEncoder::~CodecEncoder() { Reset(); }
 
-bool CodecEncoder::InitEncoder(const CodecParam &param, uint64_t tinyId) {
-  tinyId_ = tinyId;
-
-  g_ffmpeg_codec_tinyid_for_log = tinyId_;
-  av_log_set_callback(uls_av_log_output);
-
+bool CodecEncoder::InitEncoder(const CodecParam &param) {
   if (!param.codecName || strcmp(param.codecName, "") == 0) {
     tylog("CodecEncoder codecName is NULL");
     return false;
   }
+
   Reset();
   if (!g_register_all) {
     // av_register_all();
@@ -339,14 +270,14 @@ bool CodecEncoder::InitEncoder(const CodecParam &param, uint64_t tinyId) {
 
 AVPacket *CodecEncoder::Encode(AVFrame *yuvFrame, bool isKeyFrame,
                                bool unref_frame) {
-  g_ffmpeg_codec_tinyid_for_log = tinyId_;
-
   if (!init_sucess_) {
-    tylog("CodecEncoder init_sucess_ failed,tinyId_ %" PRIu64 "", tinyId_);
+    tylog("CodecEncoder init_sucess_ failed");
     return NULL;
   }
 
-  if (!yuvFrame) return NULL;
+  if (!yuvFrame) {
+    return NULL;
+  }
 
   if (isKeyFrame) {
     yuvFrame->pict_type = AV_PICTURE_TYPE_I;
@@ -369,7 +300,10 @@ AVPacket *CodecEncoder::Encode(AVFrame *yuvFrame, bool isKeyFrame,
     yuvFrame->pict_type = AV_PICTURE_TYPE_NONE;
     yuvFrame->key_frame = 0;
   }
-  if (unref_frame) av_frame_unref(yuvFrame);
+  if (unref_frame) {
+    av_frame_unref(yuvFrame);
+  }
+
   return av_packet_;
 }
 

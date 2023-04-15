@@ -33,7 +33,7 @@ const unsigned char FlvAssist::sSliceStartCode[] = {0x00, 0x00, 0x01};
 
 // send a video frame
 int FlvAssist::SendVideoFrame(const std::vector<char>& h264Frame,
-                              time_t frameTs) {
+                              uint64_t frameMs) {
   int ret = 0;
 
   const char* pRawDataBuff = h264Frame.data();
@@ -56,7 +56,7 @@ int FlvAssist::SendVideoFrame(const std::vector<char>& h264Frame,
   /*没有收到I帧立即请求I帧，并设置请求I帧标志位置，后续由定时器触发请求*/
 
   MediaBuffer mediaBuffer;
-  mediaBuffer.setMediaTime(frameTs);
+  mediaBuffer.setMediaTime(frameMs);
 #define VIDEO_RAW_STM_MAX_LEN (2048000)
 #define AUDIO_RAW_STM_MAX_LEN (4096)
 #define UDP_RECV_BUFF_MAX_LEN (16384)
@@ -93,7 +93,7 @@ int FlvAssist::SendVideoFrame(const std::vector<char>& h264Frame,
   /*
     if (pClient->pfOutfpFLV) {
       MediaBuffer mediaBufferDbg;
-      mediaBufferDbg.setMediaTime(frameTs);
+      mediaBufferDbg.setMediaTime(frameMs);
       mediaBufferDbg.init(pRawDataBuff, RawBuffLen, (unsigned char*)dstBuf,
                           dstBufLen);
       mediaBufferDbg.setCompositionTimeOffset(0);
@@ -111,7 +111,8 @@ int FlvAssist::SendVideoFrame(const std::vector<char>& h264Frame,
   return 0;
 }
 
-int FlvAssist::SendAudioFrame(const std::string& audioFrame, time_t frameTs) {
+int FlvAssist::SendAudioFrame(const std::vector<char>& audioFrame,
+                              uint64_t frameMs) {
   int ret = 0;
 
   const char* pRawDataBuff = audioFrame.data();
@@ -121,7 +122,7 @@ int FlvAssist::SendAudioFrame(const std::string& audioFrame, time_t frameTs) {
 
   // pClient->AudioBitCycle += (RawBuffLen << 3);
   MediaBuffer mediaBuffer;
-  mediaBuffer.setMediaTime(frameTs);
+  mediaBuffer.setMediaTime(frameMs);
 
   static unsigned char dstBuf[AUDIO_RAW_STM_MAX_LEN];
   int dstBufLen = AUDIO_RAW_STM_MAX_LEN;

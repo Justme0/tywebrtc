@@ -28,7 +28,7 @@ RtpHandler::RtpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
   SrsAudioCodecId to = SrsAudioCodecIdAAC;     // The output audio codec.
   int channels = 2;                            // The output audio channels.
   int sample_rate = 48000;  // The output audio sample rate in HZ.
-  int bitrate = 48000;      // The output audio bitrate in bps.
+  int bitrate = 64000;      // The output audio bitrate in bps.
   int ret =
       audioTranscoder_.initialize(from, to, channels, sample_rate, bitrate);
   if (ret) {
@@ -36,6 +36,28 @@ RtpHandler::RtpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
 
     assert(!"init audio transcoder fail, should not use assert :)");
   }
+}
+
+static int WriteFile(const std::vector<char> &data) {
+  static FILE *pfOutfpAAC = nullptr;
+  if (nullptr == pfOutfpAAC) {
+    pfOutfpAAC = fopen("audio.aac", "wb");
+    if (nullptr == pfOutfpAAC) {
+      tylog("open aac file fail, errno=%d[%s]", errno, strerror(errno));
+      // should not use assert
+      assert(!"shit open aac file");
+
+      return -1;
+    }
+  }
+
+  size_t n = fwrite(data.data(), data.size(), 1, pfOutfpAAC);
+  if (n < 1) {
+    tylog("fwrite fail, return value=%zu.", n);
+    return -2;
+  }
+
+  return 0;
 }
 
 extern int g_sock_fd;
@@ -61,27 +83,15 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
   std::string mediaType = rtpHeader.GetMediaType();
 
   if (mediaType == kMediaTypeVideo) {
-    const bool isvp8 = true;  // tmp
+    std::vector<std::string> h264Frames;  // should with dts
+    const bool isvp8 = true;              // tmp
     if (isvp8) {
-      std::vector<std::string> h264Frames;
       ret = this->videoTranscoder_.VideoUnPackVp8RtpStm(
           packet.data(), packet.size(), &h264Frames);
       if (ret) {
         tylog("vp8 decode ret=%d.", ret);
 
         return ret;
-      }
-
-      for (const std::string &frame : h264Frames) {
-        // to use string,
-        // TODP: pts should be source time
-        ret = this->rtmpHandler.SendVideoFrame(
-            std::vector<char>(frame.begin(), frame.end()), g_now_ms);
-        if (ret) {
-          tylog("rtmp send video ret=%d", ret);
-
-          return ret;
-        }
       }
     } else {
       std::vector<MediaData> media;
@@ -90,25 +100,28 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
         tylog("unpacketize rtp ret=%d", ret);
         return ret;
       }
+      for (MediaData &m : media) {
+        h264Frames.emplace_back(std::move(m.data_));
+        assert(m.data_.empty());
+      }
+    }
 
-      tylog("unpack media.size=%zu", media.size());
-      for (const MediaData &m : media) {
-        ret = unpacker.DumpRawStream(m.data_, rtpHeader.getSSRC());
-        if (ret) {
-          tylog("dump ret=%d", ret);
-          return ret;
-        }
+    tylog("video h264 frames.size=%zu.", h264Frames.size());
+    assert(h264Frames.size() <= 1);  // tmp
+    for (const std::string &frame : h264Frames) {
+      ret = unpacker.DumpRawStream(frame, rtpHeader.getSSRC());
+      if (ret) {
+        tylog("dump raw stream ret=%d", ret);
 
-        tylog("send rtmp video mediaData=%s.", m.ToString().data());
+        return ret;
+      }
 
-        // to use string,
-        // TODP: pts should be source time
-        ret = this->rtmpHandler.SendVideoFrame(
-            std::vector<char>(m.data_.begin(), m.data_.end()), g_now_ms);
-        if (ret) {
-          tylog("rtmp send video ret=%d", ret);
-          return ret;
-        }
+      ret = this->srtHandler.SendVideoFrame(
+          std::vector<char>(frame.begin(), frame.end()), g_now_ms * 90);
+      if (ret) {
+        tylog("push send video ret=%d", ret);
+
+        return ret;
       }
     }
   } else {
@@ -139,21 +152,27 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
 
     tylog("transcode opus->aac return succ, outFrames.size=%zu.",
           outFrames.size());
+    assert(outFrames.size() <= 1);  // tmp
 
     for (const SrsAudioFrame &outFrame : outFrames) {
       // to use string
 
-      int aac_profile = 2;            // AAC LC
-      int frequencey_index = 3;       // 44,100Hz
-      int channel_configuration = 2;  // stereo (left, right)
+      // https://stackoverflow.com/questions/65013622/ffmpeg-encoding-aac-audio-encoded-file-can-not-be-played#comment115182982_65150073
 
       // https://wiki.multimedia.cx/index.php/MPEG-4_Audio#Channel_Configurations
-
-      int frame_length = outFrame.s.size();
+      int aac_profile = 2;            // AAC LC
+      int frequencey_index = 3;       // 48000 Hz
+      int channel_configuration = 2;  // stereo (left, right)
 
       unsigned char adts_header[7];
-      // Take look here: https://wiki.multimedia.cx/index.php/ADTS
+      const int kADTSHeaderLen = sizeof adts_header;
 
+      // KEY: Frame length, length of the ADTS frame including headers and CRC
+      // check.
+      // we have no CRC check.
+      int frame_length = outFrame.s.size() + kADTSHeaderLen;
+
+      // Take look here: https://wiki.multimedia.cx/index.php/ADTS
       // fill in ADTS data
       adts_header[0] = (unsigned char)0xFF;
       adts_header[1] = (unsigned char)0xF9;
@@ -166,11 +185,12 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
       adts_header[5] = (unsigned char)(((frame_length & 7) << 5) + 0x1F);
       adts_header[6] = (unsigned char)0xFC;
 
-      std::string adts_frame(adts_header, adts_header + 7);
-      adts_frame.append(outFrame.s);
+      std::vector<char> adts_frame(adts_header, adts_header + kADTSHeaderLen);
+      adts_frame.insert(adts_frame.end(), outFrame.s.begin(), outFrame.s.end());
 
-      ret = this->rtmpHandler.SendAudioFrame(adts_frame,
-                                             g_now_ms /*outFrame.ts_ms*/);
+      WriteFile(adts_frame);
+
+      ret = this->srtHandler.SendAudioFrame(adts_frame, g_now_ms * 90);
       if (ret) {
         tylog("rtmp send audio ret=%d", ret);
         return ret;
@@ -284,31 +304,25 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     return -1;
   } else if (belongingPeerConnection_.stateMachine_ ==
              EnumStateMachine::DTLS_DONE) {
+    // notify others I entered
     belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_RTP;
     auto peerPC = belongingPeerConnection_.FindPeerPC();
     if (nullptr != peerPC) {
       peerPC->dataChannelHandler_.SendSctpDataForLable("another user enter");
     }
 
-    const char *rtmpurl =
-        "rtmp://36.155.205.204/push/"
-        "295036?sdkappid=1400188366&userid=taylorobs&usersig="
-        "eJw1jdEKgjAYRl9FdmvIr3NrCl2UV0EEpS9gbLNfqy0dkUbvXprdno9zvhcpdnnQYUVSj9"
-        "RD44PO6aExdVGtNSb3XtKNzbbCmZo58If9*"
-        "ZgVoRYrsvAmVT0ttuprh4yxCABm3smmtBbluMQAoRCU83l7qHa8iwL4VxxepwZf8phRHic"
-        "zR6luDjX*BFf2F9OaU0feH0NZNK8_&use_number_room_id=1";
+    // init push handler
+    const char *url = std::getenv("TY_PUSH_URL");
+    if (nullptr != url) {
+      tylog("push url=%s", url);
+      ret = this->srtHandler.InitProtocolHandler(url);
+      if (ret) {
+        tylog("Handler.handshakeTo ret=%d.", ret);
 
-    //     rtmpurl =
-    //         "rtmp://live-push.bilivideo.com/live-bvc/"
-    //         "?streamname=live_389158067_17670889&key="
-    //         "36b07508453f9f1623e8444ad727509f&schedule=rtmp&pflag=1";
-
-    ret = this->rtmpHandler.InitRtmpConnection(rtmpurl, true, 1000, true);
-    if (ret) {
-      tylog("rtmp Handler.handshakeTo ret=%d.", ret);
-      assert(rtmpHandler.mRtmpInstance == nullptr);
-
-      // return ret;
+        // return ret;
+      }
+    } else {
+      tylog("push url env var not exist");
     }
 
     // 收到RTP后定时请求I帧
@@ -464,7 +478,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     tylog("pop jitter's OrderedPackets size=%zu", orderedPackets.size());
 
     for (RtpBizPacket &packet : orderedPackets) {
-      if (rtmpHandler.mRtmpInstance != nullptr) {
+      if (this->srtHandler.InitSucc()) {
         ret = DumpPacket(packet.rtpRawPacket, ssrcInfo.h264Unpacketizer);
         if (ret) {
           tylog("dump uplink packet ret=%d, not return err :)", ret);

@@ -467,6 +467,7 @@ int H264Unpacketizer::UpdataPps_(const char *data, size_t len) {
   return 0;
 }
 
+// @brief Dump to local file
 int H264Unpacketizer::DumpRawStream(const std::string &rawStream,
                                     uint32_t ssrc) {
   if (rtp_2_h264_file_ == nullptr) {

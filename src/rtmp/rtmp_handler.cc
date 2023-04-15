@@ -14,8 +14,8 @@ RtmpHandler::~RtmpHandler() {
 
 // init rtmp and connect
 // OPT: block mode
-int RtmpHandler::InitRtmpConnection(std::string rtmpUrl, bool writeable,
-                                    uint32_t timeout, const bool liveSource) {
+int RtmpHandler::InitProtocolHandler(const std::string &rtmpUrl, bool writeable,
+                                     uint32_t timeout, const bool liveSource) {
   int ret = 0;
 
   ret = InitRtmp_();
@@ -36,14 +36,17 @@ int RtmpHandler::InitRtmpConnection(std::string rtmpUrl, bool writeable,
   return 0;
 }
 
+bool RtmpHandler::InitSucc() const { return nullptr != this->mRtmpInstance; }
+
 // to cancle repeat
-int RtmpHandler::SendAudioFrame(const std::string &audioFrame, time_t frameTs) {
-  return flvAssist.SendAudioFrame(audioFrame, frameTs);
+int RtmpHandler::SendAudioFrame(const std::vector<char> &audioFrame,
+                                uint64_t frameMs) {
+  return flvAssist.SendAudioFrame(audioFrame, frameMs);
 }
 
 int RtmpHandler::SendVideoFrame(const std::vector<char> &h264Frame,
-                                time_t frameTs) {
-  return flvAssist.SendVideoFrame(h264Frame, frameTs);
+                                uint64_t frameMs) {
+  return flvAssist.SendVideoFrame(h264Frame, frameMs);
 
   //   if (!RTMP_IsConnected(
   //           mRtmpInstance) /*&& reconnect(push_key, outip, selfPort) != 0*/)

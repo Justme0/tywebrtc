@@ -36,49 +36,6 @@ static const AVCodec *srs_find_encoder_by_id(SrsAudioCodecId id) {
   return NULL;
 }
 
-class SrsFFmpegLogHelper {
- public:
-  SrsFFmpegLogHelper() {
-    av_log_set_callback(ffmpeg_log_callback);
-    av_log_set_level(AV_LOG_TRACE);
-  }
-
-  static void ffmpeg_log_callback(void *, int level, const char *fmt,
-                                  va_list vl) {
-    static char buf[4096] = {0};
-    int nbytes = vsnprintf(buf, sizeof(buf), fmt, vl);
-    if (nbytes > 0 && nbytes < (int)sizeof(buf)) {
-      // Srs log is always start with new line, replcae '\n' to '\0', make log
-      // easy to read.
-      if (buf[nbytes - 1] == '\n') {
-        buf[nbytes - 1] = '\0';
-      }
-      switch (level) {
-        case AV_LOG_PANIC:
-        case AV_LOG_FATAL:
-        case AV_LOG_ERROR:
-          tylog("%s", buf);
-          break;
-        case AV_LOG_WARNING:
-          tylog("%s", buf);
-          break;
-        case AV_LOG_INFO:
-          tylog("%s", buf);
-          break;
-        case AV_LOG_VERBOSE:
-        case AV_LOG_DEBUG:
-        case AV_LOG_TRACE:
-        default:
-          tylog("%s", buf);
-          break;
-      }
-    }
-  }
-};
-
-// Register FFmpeg log callback funciton.
-SrsFFmpegLogHelper _srs_ffmpeg_log_helper;
-
 SrsAudioTranscoder::SrsAudioTranscoder() {
   dec_ = NULL;
   dec_frame_ = NULL;
@@ -440,8 +397,8 @@ int SrsAudioTranscoder::encode(std::vector<SrsAudioFrame> &pkts) {
       SrsAudioFrame out_frame;
       out_frame.s.assign(enc_packet_->data,
                          enc_packet_->data + enc_packet_->size);
-      tylog("enc aac packet dts=%lu, pts=%lu. size=%d.", enc_packet_->dts,
-            enc_packet_->pts, enc_packet_->size);
+      tylog("enc aac packet dts=%lu, pts=%lu, nowMs=%lu, pkt size=%d.",
+            enc_packet_->dts, enc_packet_->pts, g_now_ms, enc_packet_->size);
       assert(enc_packet_->dts == enc_packet_->pts);
       out_frame.ts_ms = enc_packet_->dts;
 

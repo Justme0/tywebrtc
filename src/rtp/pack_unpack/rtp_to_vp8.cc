@@ -177,9 +177,6 @@ void RtpDepacketizerVp8::InitRTPVideoHeaderVP8() {
 void RtpDepacketizerVp8::Init() {
   InitRTPVideoHeaderVP8();
 
-  m_ChanlNo = 0;
-  m_MaxPackSize = 1300;
-  m_RtpHeadVp8Len = 0;
   m_RawDataLen = 0;
 
   memset((void*)m_RtpHeadVp8, 0, VP8_MAX_PAYLOAD_HEAD_LEN);
@@ -238,9 +235,9 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
   if (m_RtpHeadInfoVp8.PartitionId > 8) {
     // Weak check for corrupt payload_data: PartID MUST NOT be larger than 8.
     tylog(
-        "Weak check for corrupt payload_data: PartID MUST NOT be "
-        "larger than 8,m_ChanlNo %llu",
-        m_ChanlNo);
+        "Weak check for corrupt payload_data: PartID=%d MUST NOT be larger "
+        "than 8",
+        m_RtpHeadInfoVp8.PartitionId);
     return -4;
   }
 
@@ -248,7 +245,7 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
                        m_RtpHeadInfoVp8.PartitionId == 0;
   int Vp8PayloadSize = PayoadLen - DescriptorSize;
   if (Vp8PayloadSize == 0) {
-    tylog("Empty vp8 payload,m_ChanlNo %llu", m_ChanlNo);
+    tylog("Empty vp8 payload");
     return -5;
   }
 
@@ -268,7 +265,7 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
 
   if (m_UnPackParams.RequestKeyFrame) {
     if (!is_key_frame) {
-      tylog("is_key_frame is not key frame,m_ChanlNo %llu", m_ChanlNo);
+      tylog("is_key_frame is not key frame");
       return -1;
     }
     m_UnPackParams.RequestKeyFrame = false;
@@ -280,13 +277,13 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
 
     if (0 < LostPktCnt) {
       // tylog("Chn %llu,lost %d packets, pre_seq_num(%u), CurSeqNum(%u)!",
-      // m_ChanlNo, LostPktCnt, UnPackParams.PackSeqNo, Seq);
+      //  LostPktCnt, UnPackParams.PackSeqNo, Seq);
 
       m_UnPackParams.RequestKeyFrame = true;
       // TODO: req I frame
 
       // if (m_pFastUpDate) {
-      //   m_pFastUpDate(m_pUserPtr, m_ChanlNo, m_DataType);
+      //   m_pFastUpDate(m_pUserPtr,  m_DataType);
       // }
       m_RawDataLen = 0;
       is_key_frame = false;
@@ -318,8 +315,8 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
       Param.height = Height_;
 
       Param.codecName = "libvpx";
-      if (!decoder->InitDecoder(Param, m_ChanlNo)) {
-        tylog("InitDecoder failed,m_ChanlNo %llu", m_ChanlNo);
+      if (!decoder->InitDecoder(Param)) {
+        tylog("InitDecoder failed");
       }
     }
     AVFrame* yuvFrame = decoder->Decode((uint8_t*)m_Vp8RawData, m_RawDataLen);
@@ -357,8 +354,8 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
       Param.codecName = "libx264";
 
       // 如果分辨率改变了要重新建立编码器
-      if (!encoder->InitEncoder(Param, m_ChanlNo)) {
-        tylog("InitEncoder failed,m_ChanlNo %llu", m_ChanlNo);
+      if (!encoder->InitEncoder(Param)) {
+        tylog("InitEncoder failed");
 
         return -1;
       }
@@ -369,31 +366,10 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
       h264Packet = encoder->Encode(yuvFrame, is_key_frame, true);
     }
     if (h264Packet) {
+      tylog("avpacket size=%d, dts=%lu, pts=%lu, nowMs=%lu.", h264Packet->size,
+            h264Packet->dts, h264Packet->pts, g_now_ms);
       o_h264Frames->emplace_back(h264Packet->data,
                                  h264Packet->data + h264Packet->size);
-
-      /*
-      VIDEO_RTP_DATA_INFO FullRtpBuf = {std::move(buffer),
-                                        nullptr,
-                                        (uint32_t)h264Packet->size,
-                                        RtpTimestamp,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        m_DataType,
-                                        Ssrc,
-                                        nullptr,
-                                        0,
-                                        */
-
-      // After convert VP8 to H264, dump H264 on demand
-      // if (m_pfOutfpH264) {
-      //   WriteFile(h264Packet->data, h264Packet->size, m_pfOutfpH264);
-      // }
-
-      // m_pSndFullRtpBuf(m_pUserPtr, m_ChanlNo, &FullRtpBuf);
     }
     encoder->UnrefPacket();
 

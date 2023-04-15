@@ -12,13 +12,15 @@ cc_binary(
         "@tylib//:tylib",
         "@sctp//:sctp_package",
         "@librtmp//:librtmp_package",
-        "@openssl//:openssl_package",
         "@srtp//:srtp_package",
         "@com_github_jupp0r_prometheus_cpp//pull",
         "@ffmpeg//:ffmpeg_package",
         "@opus//:opus_package",
         "@libvpx//:libvpx_package",
         "@x264//:libx264_package",
+        "@srt//:srt_package",
+        # srt depends openssl, so in the front
+        "@openssl//:openssl_package",
     ],
 )
 

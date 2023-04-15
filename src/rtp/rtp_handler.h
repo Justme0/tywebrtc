@@ -8,6 +8,7 @@
 #include "rtmp/rtmp_handler.h"
 #include "rtp/pack_unpack/rtp_to_h264.h"
 #include "rtp/pack_unpack/rtp_to_vp8.h"
+#include "srt/srt_handler.h"
 #include "transport/receiver/receiver.h"
 #include "transport/sender/sender.h"
 
@@ -54,6 +55,7 @@ class RtpHandler {
   uint32_t upAudioSSRC = 0;
   uint32_t upVideoSSRC = 0;
   RtmpHandler rtmpHandler;
+  SrtHandler srtHandler;
 
   std::unordered_map<uint32_t, SSRCInfo> ssrcInfoMap_;
 

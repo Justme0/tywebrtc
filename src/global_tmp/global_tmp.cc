@@ -78,3 +78,80 @@ void DumpSendPacket(const std::vector<char> &packet) {
     // return -1;
   }
 }
+
+// ref https://ffmpeg.org/doxygen/3.0/log_8c_source.html#l00224
+static const char *my_get_level_str(int level) {
+  switch (level) {
+    case AV_LOG_QUIET:
+      return "quiet";
+    case AV_LOG_PANIC:
+      return "panic";
+    case AV_LOG_FATAL:
+      return "fatal";
+    case AV_LOG_ERROR:
+      return "error";
+    case AV_LOG_WARNING:
+      return "warning";
+    case AV_LOG_INFO:
+      return "info";
+    case AV_LOG_VERBOSE:
+      return "verbose";
+    case AV_LOG_DEBUG:
+      return "debug";
+    case AV_LOG_TRACE:
+      return "trace";
+    default:
+      return "";
+  }
+}
+
+class SrsFFmpegLogHelper {
+ public:
+  SrsFFmpegLogHelper() {
+    av_log_set_callback(ffmpeg_log_callback);
+    av_log_set_level(AV_LOG_TRACE);
+  }
+
+  // @brief FFmpeg log callback function
+  // reference: void format_line(void *avcl, int level, const char *fmt, va_list
+  // vl, AVBPrint part[4],
+  // int *print_prefix, int type[2]) at
+  // https://ffmpeg.org/doxygen/3.4/log_8c_source.html#l00248
+  static void ffmpeg_log_callback(void *avcl, int level, const char *fmt,
+                                  va_list vargs) {
+    if (level > AV_LOG_TRACE) {
+      return;
+    }
+
+    std::stringstream nameInfo;
+
+    AVClass *avc = avcl ? *(AVClass **)avcl : NULL;
+    if (avc) {
+      if (avc->parent_log_context_offset) {
+        AVClass **parent =
+            *(AVClass ***)(((uint8_t *)avcl) + avc->parent_log_context_offset);
+        if (parent && *parent) {
+          nameInfo << "parent [" << (*parent)->item_name(parent) << " @ "
+                   << parent << "] ";
+        }
+      }
+      nameInfo << "[" << avc->item_name(avcl) << " @ " << avcl << "]";
+    }
+
+    static char codecInfo[4096] = {0};
+    int nbytes = vsnprintf(codecInfo, sizeof(codecInfo), fmt, vargs);
+    if (nbytes > 0 && nbytes < (int)sizeof(codecInfo)) {
+      // Srs log is always start with new line, replcae '\n' to '\0', make log
+      // easy to read.
+      if (codecInfo[nbytes - 1] == '\n') {
+        codecInfo[nbytes - 1] = '\0';
+      }
+
+      tylog("%s %s %s", my_get_level_str(level), nameInfo.str().data(),
+            codecInfo);
+    }
+  }
+};
+
+// Register FFmpeg log callback funciton.
+SrsFFmpegLogHelper _srs_ffmpeg_log_helper;
