@@ -5,10 +5,13 @@
 #include <vector>
 
 #include "codec/audio_codec.h"
+#include "push/push_handler.h"
 #include "rtmp/rtmp_handler.h"
+#include "rtmp/rtmp_pull.h"
+#include "rtp/pack_unpack/audio_to_rtp.h"
+#include "rtp/pack_unpack/h264_to_rtp.h"
 #include "rtp/pack_unpack/rtp_to_h264.h"
 #include "rtp/pack_unpack/rtp_to_vp8.h"
-#include "srt/srt_handler.h"
 #include "transport/receiver/receiver.h"
 #include "transport/sender/sender.h"
 
@@ -24,6 +27,9 @@ struct SSRCInfo {
   // why define ssrc's unpacketizer: save unpacked frame e.g. FU-A
   // audio don't use h264Unpacketizer
   H264Unpacketizer h264Unpacketizer;
+  H264Packetizer h264Packetizer;
+  AudioPacketizer audioPacketizer;
+
   RtpReceiver rtpReceiver;
   RtpSender rtpSender;
 
@@ -54,10 +60,12 @@ class RtpHandler {
 
   uint32_t upAudioSSRC = 0;
   uint32_t upVideoSSRC = 0;
-  RtmpHandler rtmpHandler;
-  SrtHandler srtHandler;
 
   std::unordered_map<uint32_t, SSRCInfo> ssrcInfoMap_;
+
+ public:  // tmp
+  // downlink may have multiple
+  SrsAudioTranscoder audioTranscoderDownlink_;
 
  private:
   SrsAudioTranscoder audioTranscoder_;

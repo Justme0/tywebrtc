@@ -334,7 +334,7 @@ int DtlsHandler::OnHandshakeCompleted_() {
   }
 
   belongingPeerConnection_.stateMachine_ = EnumStateMachine::DTLS_DONE;
-  tylog("DTLS_DONE, message:HandShakeCompleted");
+  tylog("key info: DTLS_DONE, message:HandShakeCompleted");
 
   return 0;
 }

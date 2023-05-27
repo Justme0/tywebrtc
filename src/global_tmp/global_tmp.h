@@ -3,7 +3,10 @@
 
 #pragma once
 
+#include <sys/stat.h>
+
 #include <cassert>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <string>
@@ -13,8 +16,10 @@
 #include "prometheus/gauge.h"
 
 const int kUplossRateMul100 = 0;
-const int kDownlossRateMul100 = 0;
+const int kDownlossRateMul100 = 10;
 const int kPCDeadTimeoutMs = 1 * 1000;
+
+const int kGuessMtuByte = 1200;
 
 extern prometheus::Family<prometheus::Gauge>* g_startServer;
 extern prometheus::Family<prometheus::Gauge>* g_recvPacketNum;
@@ -25,7 +30,8 @@ extern int g_dumpSendSockfd;
 
 const int kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
 const int kDownlinkAudioPayloadType = 111;
-const int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
+const constexpr int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
+const int kDownlinkH264PayloadType = 106;
 
 class PeerConnection;
 
@@ -45,12 +51,12 @@ class Singleton : private T {
     return s;
   }
 
+  Singleton(const Singleton&) = delete;
+  Singleton& operator=(const Singleton&) = delete;
+
  private:
   Singleton() {}
   ~Singleton() {}
-
-  Singleton(const Singleton&) = delete;
-  Singleton& operator=(const Singleton&) = delete;
 };
 
 // manage all peerConnection, in singleton
@@ -74,6 +80,8 @@ class PCManager {
                                                     int port,
                                                     const std::string& ufrag);
 
+  std::shared_ptr<PeerConnection> GetPeerConnection(int targetFd) const;
+
   // should be private
  public:
   // don't use global variable STL
@@ -87,3 +95,32 @@ class PCManager {
 
 void DumpRecvPacket(const std::vector<char>& packet);
 void DumpSendPacket(const std::vector<char>& packet);
+
+// tmp
+inline int mkdir_p(const char* path, mode_t mode) {
+  const char* p;
+  p = strchr(path + 1, '/');
+
+  struct stat st;
+  while (1) {
+    if (!p) {
+      int n;
+      if ((n = strlen(path)) > 0 && path[n - 1] != '/') {
+        if (stat(path, &st) < 0 && errno == ENOENT &&
+            (mkdir(path, mode) < 0 || chmod(path, mode) < 0))
+          return -1;
+      }
+      break;
+    }
+
+    std::string name = std::string(path, p - path);
+
+    if (stat(name.c_str(), &st) < 0 && errno == ENOENT &&
+        (mkdir(name.c_str(), mode) < 0 || chmod(name.c_str(), mode) < 0))
+      return -2;
+
+    p = strchr(p + 1, '/');
+  }
+
+  return 0;
+}

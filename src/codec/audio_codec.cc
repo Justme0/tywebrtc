@@ -1,3 +1,5 @@
+// from SRS
+
 #include "codec/audio_codec.h"
 
 #include <cassert>
@@ -253,7 +255,8 @@ int SrsAudioTranscoder::init_swr(AVCodecContext *decoder) {
   * Each pointer will later point to the audio samples of the corresponding
   * channels (although it may be NULL for interleaved formats).
   */
-  if (!(swr_data_ = (uint8_t **)calloc(enc_->channels, sizeof(*swr_data_)))) {
+  if (!(swr_data_ = static_cast<uint8_t **>(
+            calloc(enc_->channels, sizeof(*swr_data_))))) {
     tylog("alloc swr buffer");
     return -1;
   }
@@ -263,7 +266,6 @@ int SrsAudioTranscoder::init_swr(AVCodecContext *decoder) {
   if ((error = av_samples_alloc(swr_data_, NULL, enc_->channels,
                                 enc_->frame_size, enc_->sample_fmt, 0)) < 0) {
     tylog("alloc swr buffer(%d:%s)", error,
-
           av_make_error_string(err_buf, AV_ERROR_MAX_STRING_SIZE, error));
 
     return -1;
@@ -320,7 +322,12 @@ int SrsAudioTranscoder::decode_and_resample(const SrsAudioFrame &pkt) {
     }
 
     int in_samples = dec_frame_->nb_samples;
-    const uint8_t **in_data = (const uint8_t **)dec_frame_->extended_data;
+
+    // https://stackoverflow.com/a/24434872/1204713
+    // https://en.cppreference.com/w/cpp/language/const_cast
+    uint8_t const **in_data =
+        const_cast<uint8_t const **>(dec_frame_->extended_data);
+
     do {
       /* Convert the samples using the resampler. */
       int frame_size =
@@ -361,8 +368,8 @@ int SrsAudioTranscoder::encode(std::vector<SrsAudioFrame> &pkts) {
   while (av_audio_fifo_size(fifo_) >= enc_->frame_size) {
     /* Read as many samples from the FIFO buffer as required to fill the frame.
     * The samples are stored in the frame temporarily. */
-    if (av_audio_fifo_read(fifo_, (void **)enc_frame_->data, enc_->frame_size) <
-        enc_->frame_size) {
+    if (av_audio_fifo_read(fifo_, reinterpret_cast<void **>(enc_frame_->data),
+                           enc_->frame_size) < enc_->frame_size) {
       tylog("Could not read data from FIFO");
       return -1;
     }
@@ -427,8 +434,8 @@ int SrsAudioTranscoder::add_samples_to_fifo(uint8_t **samples, int frame_size) {
   }
 
   /* Store the new samples in the FIFO buffer. */
-  if ((error = av_audio_fifo_write(fifo_, (void **)samples, frame_size)) <
-      frame_size) {
+  if ((error = av_audio_fifo_write(fifo_, reinterpret_cast<void **>(samples),
+                                   frame_size)) < frame_size) {
     tylog("Could not write data to FIFO(%d,%s)", error,
           av_make_error_string(err_buf, AV_ERROR_MAX_STRING_SIZE, error));
 

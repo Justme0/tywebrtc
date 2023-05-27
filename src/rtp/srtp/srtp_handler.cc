@@ -119,6 +119,8 @@ bool SrtpHandler::SetRtpParams(const std::string &sending_key,
   return true;
 }
 
+// Encrypted portion is only payload.
+// https://mp.weixin.qq.com/s/u7eStMiCGxNyEWsYkG8UYg
 int SrtpHandler::ProtectRtp(std::vector<char> *io_vBufForSrtp) {
   if (!active_) {
     tylog("error active=%d", active_);
@@ -178,6 +180,8 @@ int SrtpHandler::UnprotectRtp(std::vector<char> *io_vBufForSrtp) {
   return 0;
 }
 
+// Encrypt portion after header, so sender SSRC isn't encrypted.
+// https://mp.weixin.qq.com/s/u7eStMiCGxNyEWsYkG8UYg
 int SrtpHandler::ProtectRtcp(std::vector<char> *io_vBufForSrtp) {
   if (!active_) {
     tylog("error active=%d", active_);

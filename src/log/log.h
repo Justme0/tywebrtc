@@ -123,7 +123,7 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
   va_list args;
   va_start(args, format);
   int n = vsnprintf(buf, sizeof(buf), format, args);
-  if (n >= (int)sizeof(buf)) {
+  if (n >= static_cast<int>(sizeof(buf))) {
     n = sizeof(buf) - 1;
   }
   va_end(args);

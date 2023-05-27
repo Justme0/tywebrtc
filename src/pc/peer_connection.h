@@ -120,6 +120,9 @@ class PeerConnection {
   SrtpHandler srtpHandler_;
   DataChannelHandler dataChannelHandler_;
 
+  PushHandler pushHandler_;
+  PullHandler pullHandler_;
+
   std::string clientIP_;
   int clientPort_ = 0;
 

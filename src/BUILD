@@ -6,7 +6,8 @@ cc_binary(
     srcs = glob(["**/*.cc", "**/*.h"], exclude = ["**/*_test.cc"],),
 	  # hdrs = glob(["**/*.h"]),
     # includes = ['.'],
-	  copts = ["-I src"],
+    # OPT: remove error=old-style-cast
+	  copts = ["-I src", "-Wno-error=old-style-cast", "-Wno-error=deprecated-declarations"],
     linkopts = ["-l dl -pthread -l z"],
     deps = [
         "@tylib//:tylib",

@@ -14,7 +14,7 @@ class RtpDepacketizerOpus {
   };
 
   int Process(uint8_t* data, uint32_t length);
-  int ProcessExtInfo(uint8_t* data, uint32_t length);
+  int ProcessExtInfo(uint8_t* data, int length);
   int ParseAudioLevel(uint8_t* data, uint32_t length, uint32_t& audio_level);
 
  private:

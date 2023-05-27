@@ -14,6 +14,7 @@ PeerConnection::PeerConnection()
       rtcpHandler_(*this),
       srtpHandler_(*this),
       dataChannelHandler_(*this),
+      pullHandler_(*this),
       initTimeMs_(g_now_ms),
       pliTimer_(*this),
       dtlsTimer_(*this) {}

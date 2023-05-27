@@ -26,6 +26,7 @@
 #include "log/log.h"
 #include "monitor/monitor.h"
 #include "pc/peer_connection.h"
+#include "rtmp/rtmp_pull.h"
 #include "timer/timer.h"
 
 prometheus::Exposer* g_pExposer;
@@ -182,8 +183,9 @@ int HandleRequest() {
   } else if (iRecvLen == 0) {
     tylog("peer shutdown (not error)");
 
-    return 1;
-  } else if (iRecvLen > static_cast<int>(vBufReceive.size())) {
+    return 0;
+  } else if (iRecvLen > (int)(vBufReceive.size())) {
+    // } else if (iRecvLen > static_cast<int>(vBufReceive.size())) {
     tylog("recv buffer overflow len=%ld", iRecvLen);
 
     return -3;
@@ -315,39 +317,48 @@ void CrossPlatformNetworkIO() {
 
 #include <sys/epoll.h>
 
+int g_efd;  // tmp
+
 void CrossPlatformNetworkIO() {
   tylogAndPrintfln("in Linux");
-  int efd = epoll_create(
+  g_efd = epoll_create(
       kMultiplexIOMaxEventNum);  // if media data IO frequently, use select(2)
-  if (efd == -1) {
+  if (g_efd == -1) {
     tylogAndPrintfln("epoll_create return -1, errno=%d[%s]", errno,
                      strerror(errno));
 
     return;
   }
 
-  struct epoll_event event;
+  epoll_event event{};
   event.data.fd = g_sock_fd;
+  // level trigger
   event.events = EPOLLIN | EPOLLHUP | EPOLLERR | EPOLLRDHUP;
-  if (epoll_ctl(efd, EPOLL_CTL_ADD, g_sock_fd, &event) == -1) {
+  if (epoll_ctl(g_efd, EPOLL_CTL_ADD, g_sock_fd, &event) == -1) {
     tylogAndPrintfln("epoll_ctl return -1, add g_sockfd=%d failed errno=%d[%s]",
                      g_sock_fd, errno, strerror(errno));
 
     return;
   }
 
-  struct epoll_event events[kMultiplexIOMaxEventNum];
-
+  epoll_event events[kMultiplexIOMaxEventNum]{};
   tylogAndPrintfln("to loop");
   while (1) {
-    int timeout_ms = 20;
-    int nfds = epoll_wait(efd, &events[0], kMultiplexIOMaxEventNum, timeout_ms);
+    const int timeout_ms = 10000;
+    int nfds = epoll_wait(g_efd, events, kMultiplexIOMaxEventNum, timeout_ms);
     if (-1 == nfds) {
-      tylog("epoll_wait return -1, errno=%d[%s]", errno, strerror(errno));
+      tylog("epoll wait return -1, errno=%d[%s]", errno, strerror(errno));
+
       continue;
     }
 
-    // tylog("nfds=%d", nfds);
+    assert(nfds >= 0);
+
+    if (nfds == 0) {
+      tylog("epoll nothing happened");
+
+      continue;
+    }
 
     for (int i = 0; g_now.ComputeNow(),
              TimerManager::Instance()->UpdateTimers(g_now), i < nfds;
@@ -362,19 +373,34 @@ void CrossPlatformNetworkIO() {
         } else {
           tylog("unexpect epoll events=%d", events[i].events);
         }
-      } else {
-        uint64_t exp;
-        int s = read(fd, &exp, sizeof(uint64_t));
-        if (-1 == s) {
-          tylog("read return -1, errno=%d[%s]", errno, strerror(errno));
-          continue;
-        }
-        if (s != sizeof(uint64_t)) {
-          tylog("read timerfd failed, read fd=%d, return %d", fd, s);
+      } else if (std::shared_ptr<PeerConnection> pc =
+                     Singleton<PCManager>::Instance().GetPeerConnection(fd)) {
+        // OPT: use epoll data.ptr O(1) avoid the shit p_playSocket_
+        tylog("recv rtmp packet from socket fd=%d.", fd);
+        if (events[i].events | EPOLLIN) {
+          int ret = pc->pullHandler_.HandlePacket();
+          if (ret) {
+            tylog("handleRequest fail, ret=%d", ret);
+          }
         } else {
-          tylog("shit unknown");
-          // HandleJitter(fd, exp);
+          tylog("unexpect epoll events=%d", events[i].events);
         }
+      } else {
+        tylog("NOTE: unknown fd=%d.", fd);
+
+        // may have timer fd
+        // uint64_t exp;
+        // int s = read(fd, &exp, sizeof(uint64_t));
+        // if (-1 == s) {
+        //   tylog("read return -1, errno=%d[%s]", errno, strerror(errno));
+        //   continue;
+        // }
+        // if (s != sizeof(uint64_t)) {
+        //   tylog("read timerfd failed, read fd=%d, return %d", fd, s);
+        // } else {
+        //   tylog("shit unknown");
+        //   // HandleJitter(fd, exp);
+        // }
       }
     }
   }
@@ -383,34 +409,6 @@ void CrossPlatformNetworkIO() {
 
 static void InitTimer() {
   TimerManager::Instance()->AddTimer(new MonitorStateTimer);
-}
-
-int mkdir_p(const char* path, mode_t mode) {
-  const char* p;
-  p = strchr(path + 1, '/');
-
-  struct stat st;
-  while (1) {
-    if (!p) {
-      int n;
-      if ((n = strlen(path)) > 0 && path[n - 1] != '/') {
-        if (stat(path, &st) < 0 && errno == ENOENT &&
-            (mkdir(path, mode) < 0 || chmod(path, mode) < 0))
-          return -1;
-      }
-      break;
-    }
-
-    std::string name = std::string(path, p - path);
-
-    if (stat(name.c_str(), &st) < 0 && errno == ENOENT &&
-        (mkdir(name.c_str(), mode) < 0 || chmod(name.c_str(), mode) < 0))
-      return -1;
-
-    p = strchr(p + 1, '/');
-  }
-
-  return 0;
 }
 
 #define INIT_LOG_V2(path, format, level, size)                        \

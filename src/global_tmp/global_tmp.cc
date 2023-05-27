@@ -43,6 +43,20 @@ std::shared_ptr<PeerConnection> PCManager::GetPeerConnection(
   }
 }
 
+// get rtmp play fd, O(n).
+std::shared_ptr<PeerConnection> PCManager::GetPeerConnection(
+    int targetFd) const {
+  for (const std::pair<ClientSrcId, std::shared_ptr<PeerConnection>> &p :
+       client2PC_) {
+    if (p.second->pullHandler_.p_playSocket_ != nullptr &&
+        *p.second->pullHandler_.p_playSocket_ == targetFd) {
+      return p.second;
+    }
+  }
+
+  return nullptr;
+}
+
 void PCManager::CleanTimeoutPeerConnection() {
   for (auto it = this->client2PC_.begin(); it != client2PC_.end();) {
     if (it->second->lastActiveTimeMs_ + kPCDeadTimeoutMs <
@@ -67,7 +81,7 @@ void DumpRecvPacket(const std::vector<char> &packet) {
   }
 }
 
-// 发出时dump，包括发给源client和下游peer
+// 发包前dump未加密的包，包括发给源client和下游peer
 void DumpSendPacket(const std::vector<char> &packet) {
   sockaddr_in addr = tylib::ConstructSockAddr("127.0.0.1", 12347);
   ssize_t sendtoLen =
@@ -79,7 +93,8 @@ void DumpSendPacket(const std::vector<char> &packet) {
   }
 }
 
-// ref https://ffmpeg.org/doxygen/3.0/log_8c_source.html#l00224
+// from https://ffmpeg.org/doxygen/3.0/log_8c_source.html#l00224
+// origin is `static` so we copy it
 static const char *my_get_level_str(int level) {
   switch (level) {
     case AV_LOG_QUIET:
@@ -105,11 +120,35 @@ static const char *my_get_level_str(int level) {
   }
 }
 
+// from rtmp lib static var
+static const char *levels[] = {"CRIT", "ERROR", "WARNING",
+                               "INFO", "DEBUG", "DEBUG2"};
+
 class SrsFFmpegLogHelper {
  public:
   SrsFFmpegLogHelper() {
-    av_log_set_callback(ffmpeg_log_callback);
+    // ffmpeg
     av_log_set_level(AV_LOG_TRACE);
+    av_log_set_callback(ffmpegLog);
+
+    // rtmp lib
+    RTMP_LogSetLevel(RTMP_LOGDEBUG);
+    RTMP_LogSetCallback(rtmpLog);
+  }
+
+  // from librtmp/log.c rtmp_log_default()
+  static void rtmpLog(int level, const char *format, va_list vl) {
+    if (level > RTMP_debuglevel) {
+      return;
+    }
+
+#define MAX_PRINT_LEN 2048
+    char str[MAX_PRINT_LEN] = "";
+
+    vsnprintf(str, MAX_PRINT_LEN - 1, format, vl);
+
+    // should check level value
+    tylog("%s %s", levels[level], str);
   }
 
   // @brief FFmpeg log callback function
@@ -117,8 +156,7 @@ class SrsFFmpegLogHelper {
   // vl, AVBPrint part[4],
   // int *print_prefix, int type[2]) at
   // https://ffmpeg.org/doxygen/3.4/log_8c_source.html#l00248
-  static void ffmpeg_log_callback(void *avcl, int level, const char *fmt,
-                                  va_list vargs) {
+  static void ffmpegLog(void *avcl, int level, const char *fmt, va_list vargs) {
     if (level > AV_LOG_TRACE) {
       return;
     }

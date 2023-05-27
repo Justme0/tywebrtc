@@ -34,9 +34,9 @@ class H264Packetizer {
                 std::vector<std::vector<char>> &packets);
 
  private:
-  uint32_t ssrc_;
-  int mtu_size_byte_ = 1500;  // should probe using PMTU
-  uint8_t payload_type_;
+  uint32_t ssrc_ = kDownlinkVideoSsrc;
+  uint8_t payload_type_ = kDownlinkH264PayloadType;
+  // int mtu_size_byte_ = 1200;  // should probe using PMTU
   std::string sps_;
   std::string pps_;
 };

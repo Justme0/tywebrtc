@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "push/push_handler.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -14,7 +16,10 @@ extern "C" {
 }
 #endif
 
-class SrtHandler {
+// create SRT server:
+// ffmpeg -loglevel debug -f mpegts -i srt://127.0.0.1:9001?mode=listener -c
+// copy a.aac -y
+class SrtHandler : public PushHandler {
  public:
   ~SrtHandler();
 

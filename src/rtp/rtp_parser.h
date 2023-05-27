@@ -486,6 +486,7 @@ flags,encode_start_delta_ms,encode_finish_delta_ms,packetization_finish_delta_ms
 
 // enum MediaType { kMediaVideo, kMediaAudio, kMediaData, kMediaMax };
 
+/*
 static inline uint16_t rtp_read_uint16(const uint8_t* ptr) {
   return (((uint16_t)ptr[0]) << 8) | ptr[1];
 }
@@ -496,11 +497,12 @@ static inline uint32_t rtp_read_uint32(const uint8_t* ptr) {
 }
 
 static inline void rtp_write_uint32(uint8_t* ptr, uint32_t val) {
-  ptr[0] = (uint8_t)((val >> 24) & 0xFF);
-  ptr[1] = (uint8_t)((val >> 16) & 0xFF);
-  ptr[2] = (uint8_t)((val >> 8) & 0xFF);
-  ptr[3] = (uint8_t)(val & 0xFF);
+  ptr[0] = (val >> 24) & 0xFF;
+  ptr[1] = (val >> 16) & 0xFF;
+  ptr[2] = (val >> 8) & 0xFF;
+  ptr[3] = val & 0xFF;
 }
+*/
 
 //  0                   1                   2                   3
 //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -556,6 +558,7 @@ class RtpFixedHeaderExt {
 };
 
 const int kRtpHeaderLenByte = 12;
+const int MAX_PKT_BUF_SIZE = 2048;  // maybe too large
 
 class RtpHeader {
  public:
@@ -704,7 +707,8 @@ class RtpHeader {
   // if header ext exists, return value is the address of header ext struct.
   // Otherwise undefined behavior, this function danger!
   const RtpFixedHeaderExt* getHeaderExt() const {
-    return (RtpFixedHeaderExt*)((uint8_t*)this + kRtpHeaderLenByte + cc * 4);
+    return reinterpret_cast<const RtpFixedHeaderExt*>(
+        reinterpret_cast<const uint8_t*>(this) + kRtpHeaderLenByte + cc * 4);
   }
 
  private:

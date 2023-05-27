@@ -448,7 +448,7 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   } else if (EnumStateMachine::GOT_FIRST_ICE >
              belongingPeerConnection_.stateMachine_) {
     belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_FIRST_ICE;
-    tylog("got first STUN");
+    tylog("key info: GOT_FIRST_ICE");
   }
 
   /*回包*/

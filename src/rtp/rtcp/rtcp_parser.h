@@ -245,11 +245,11 @@ class RtcpHeader {
   uint32_t version : 2;
   RtcpPacketType packettype : 8;
   uint32_t length : 16;
-  uint32_t ssrc;
+  uint32_t senderSSRC;
 
   union report_t {
     struct receiverReport_t {
-      uint32_t ssrcsource;
+      uint32_t mediaSourceSSRC;
       /* RECEIVER REPORT DATA*/
       uint32_t fractionlost : 8;
       int32_t lost : 24;
@@ -269,12 +269,12 @@ class RtcpHeader {
     } senderReport;
 
     struct genericNack_t {
-      uint32_t ssrcsource;
+      uint32_t mediaSourceSSRC;
       NackBlock nack_block;
     } nackPacket;
 
     struct remb_t {
-      uint32_t ssrcsource;
+      uint32_t mediaSourceSSRC;
       uint32_t uniqueid;
       uint32_t numssrc : 8;
       uint32_t brLength : 24;
@@ -282,12 +282,12 @@ class RtcpHeader {
     } rembPacket;
 
     struct pli_t {
-      uint32_t ssrcsource;
+      uint32_t mediaSourceSSRC;
       uint32_t fci;
     } pli;
 
     struct fir_t {
-      uint32_t ssrcsource;
+      uint32_t mediaSourceSSRC;
       uint32_t mediasource;
       uint32_t seqnumber : 8;
       uint32_t reserved : 24;
@@ -318,7 +318,7 @@ class RtcpHeader {
         version(2),
         packettype(RtcpPacketType::RTCP_MIN_PT),
         length(0),
-        ssrc(0) {}
+        senderSSRC(0) {}
 
   bool isFeedback(void) {
     return (packettype == RtcpPacketType::kReceiverReport ||
@@ -330,22 +330,20 @@ class RtcpHeader {
   void setPacketType(RtcpPacketType pt) { packettype = pt; }
 
   // maybe FMT for RtcpPayloadSpecificFormat or RtcpGenericFeedbackFormat
-  uint8_t getBlockCount() const { return (uint8_t)blockcount; }
+  uint8_t getBlockCount() const { return blockcount; }
   void setBlockCount(uint8_t count) { blockcount = count; }
 
   uint16_t getLength() const { return ntohs(length); }
   void setLength(uint16_t theLength) { length = htons(theLength); }
-  uint32_t getSSRC() const { return ntohl(ssrc); }
-  void setSSRC(uint32_t aSsrc) { ssrc = htonl(aSsrc); }
-  uint32_t getSourceSSRC() const {
-    return ntohl(report.receiverReport.ssrcsource);
+  uint32_t getSenderSSRC() const { return ntohl(senderSSRC); }
+  void setSSRC(uint32_t aSsrc) { senderSSRC = htonl(aSsrc); }
+  uint32_t getMediaSourceSSRC() const {
+    return ntohl(report.receiverReport.mediaSourceSSRC);
   }
-  void setSourceSSRC(uint32_t sourceSsrc) {
-    report.receiverReport.ssrcsource = htonl(sourceSsrc);
+  void setMediaSourceSSRC(uint32_t mediaSourceSSRC) {
+    report.receiverReport.mediaSourceSSRC = htonl(mediaSourceSSRC);
   }
-  uint8_t getFractionLost() const {
-    return (uint8_t)report.receiverReport.fractionlost;
-  }
+  uint8_t getFractionLost() const { return report.receiverReport.fractionlost; }
   void setFractionLost(uint8_t fractionLost) {
     report.receiverReport.fractionlost = fractionLost;
   }
@@ -394,12 +392,14 @@ class RtcpHeader {
     report.senderReport.octetssent = htonl(octets_sent);
   }
   uint64_t getNtpTimestamp() const {
-    return (((uint64_t)htonl(report.senderReport.ntptimestamp)) << 32) +
+    return (static_cast<uint64_t>(htonl(report.senderReport.ntptimestamp))
+            << 32) +
            htonl(report.senderReport.ntptimestamp >> 32);
   }
   void setNtpTimestamp(uint64_t ntp_timestamp) {
     report.senderReport.ntptimestamp =
-        (((uint64_t)ntohl(ntp_timestamp)) << 32) + ntohl(ntp_timestamp >> 32);
+        (static_cast<uint64_t>(ntohl(ntp_timestamp)) << 32) +
+        ntohl(ntp_timestamp >> 32);
   }
   uint32_t getRtpTimestamp() const { return ntohl(report.senderReport.rtprts); }
   void setRtpTimestamp(uint32_t rtp_timestamp) {
@@ -481,10 +481,10 @@ class RtcpHeader {
     // return (((uint64_t)htonl(report.xr_rrtr.ntp)) << 32) +
     // htonl(report.xr_rrtr.ntp >> 32);
     uint64_t ntp = 0;
-    uint32_t seconds = ntohl(report.xr_rrtr.seconds);
+    uint64_t seconds = ntohl(report.xr_rrtr.seconds);
     uint32_t fractions = ntohl(report.xr_rrtr.fractions);
 
-    ntp = (((uint64_t)seconds) << 32) | fractions;
+    ntp = (seconds << 32) | fractions;
 
     return ntp;
   }
@@ -497,10 +497,10 @@ class RtcpHeader {
 
   std::string ToString() const {
     return tylib::format_string(
-        "{blockCnt=%d, pad=%d, packetType=%d[%s], len=%d, ssrc=%u(0x%X)}",
+        "{blockCnt=%d, pad=%d, packetType=%d[%s], len=%d, senderSSRC=%u(0x%X)}",
         getBlockCount(), padding, static_cast<int>(getPacketType()),
-        RtcpPacketTypeToString(getPacketType()).data(), getLength(), getSSRC(),
-        getSSRC());
+        RtcpPacketTypeToString(getPacketType()).data(), getLength(),
+        getSenderSSRC(), getSenderSSRC());
   }
 };
 

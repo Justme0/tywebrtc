@@ -36,6 +36,14 @@ RtpHandler::RtpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
 
     assert(!"init audio transcoder fail, should not use assert :)");
   }
+
+  ret = audioTranscoderDownlink_.initialize(
+      SrsAudioCodecIdAAC, SrsAudioCodecIdOpus, 2, 48000, 64000);
+  if (ret) {
+    tylog("init downlink audio transcoder ret=%d", ret);
+
+    assert(!"init downlink audio transcoder fail, should not use assert :)");
+  }
 }
 
 static int WriteFile(const std::vector<char> &data) {
@@ -116,7 +124,7 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
         return ret;
       }
 
-      ret = this->srtHandler.SendVideoFrame(
+      ret = this->belongingPeerConnection_.pushHandler_.SendVideoFrame(
           std::vector<char>(frame.begin(), frame.end()), g_now_ms * 90);
       if (ret) {
         tylog("push send video ret=%d", ret);
@@ -190,7 +198,8 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
 
       WriteFile(adts_frame);
 
-      ret = this->srtHandler.SendAudioFrame(adts_frame, g_now_ms * 90);
+      ret = this->belongingPeerConnection_.pushHandler_.SendAudioFrame(
+          adts_frame, g_now_ms * 90);
       if (ret) {
         tylog("rtmp send audio ret=%d", ret);
         return ret;
@@ -245,8 +254,7 @@ int RtpHandler::SendToPeer_(RtpBizPacket &rtpBizPacket) {
 
   DumpSendPacket(rtpBizPacket.rtpRawPacket);
 
-  ret = peerPC->srtpHandler_.ProtectRtp(
-      const_cast<std::vector<char> *>(&rtpBizPacket.rtpRawPacket));
+  ret = peerPC->srtpHandler_.ProtectRtp(&rtpBizPacket.rtpRawPacket);
   if (ret) {
     tylog("downlink protect rtp ret=%d", ret);
 
@@ -254,7 +262,7 @@ int RtpHandler::SendToPeer_(RtpBizPacket &rtpBizPacket) {
   }
 
   // OPT: cancle string copy
-  std::vector<char> tmpbuf(rtpBizPacket.rtpRawPacket);
+  std::vector<char> saveRtp(rtpBizPacket.rtpRawPacket);
 
   tylog("downlink rtp=%s", downlinkRtpHeader.ToString().data());
 
@@ -271,7 +279,7 @@ int RtpHandler::SendToPeer_(RtpBizPacket &rtpBizPacket) {
   SSRCInfo &ssrcInfo = it->second;
   ssrcInfo.rtpSender.Enqueue(std::move(rtpBizPacket));
 
-  ret = peerPC->SendToClient(tmpbuf);
+  ret = peerPC->SendToClient(saveRtp);
   if (ret) {
     tylog("send to peer ret=%d", ret);
 
@@ -306,16 +314,25 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
              EnumStateMachine::DTLS_DONE) {
     // notify others I entered
     belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_RTP;
+    tylog("key info: GOT_RTP");
     auto peerPC = belongingPeerConnection_.FindPeerPC();
     if (nullptr != peerPC) {
-      peerPC->dataChannelHandler_.SendSctpDataForLable("another user enter");
+      peerPC->dataChannelHandler_.SendSctpDataForLable("I'm coming.");
     }
 
     // init push handler
     const char *url = std::getenv("TY_PUSH_URL");
     if (nullptr != url) {
       tylog("push url=%s", url);
-      ret = this->srtHandler.InitProtocolHandler(url);
+
+      RtmpHandler &rtmpPusher = *new RtmpHandler;  // FIXME
+
+      ret = this->belongingPeerConnection_.pushHandler_.InitPushHandler(
+          std::bind(&RtmpHandler::InitProtocolHandler, &rtmpPusher, url),
+          std::bind(&RtmpHandler::SendAudioFrame, &rtmpPusher,
+                    std::placeholders::_1, std::placeholders::_2),
+          std::bind(&RtmpHandler::SendVideoFrame, &rtmpPusher,
+                    std::placeholders::_1, std::placeholders::_2));
       if (ret) {
         tylog("Handler.handshakeTo ret=%d.", ret);
 
@@ -323,6 +340,30 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       }
     } else {
       tylog("push url env var not exist");
+    }
+
+    // if pull fail, retry ? but current branch is run only once
+    if (!this->belongingPeerConnection_.pullHandler_.InitSucc()) {
+      const char *url = std::getenv("TY_PULL_URL");
+      if (nullptr != url) {
+        tylog("pull url=%s", url);
+
+        RtmpPuller &rtmpPuller =
+            *new RtmpPuller(this->belongingPeerConnection_);  // FIXME
+
+        ret = this->belongingPeerConnection_.pullHandler_.InitPullHandler(
+            &rtmpPuller.rtmp_.m_sb.sb_socket,
+            std::bind(&RtmpPuller::InitProtocolHandler, &rtmpPuller, url),
+            std::bind(&RtmpPuller::HandlePacket, &rtmpPuller),
+            std::bind(&RtmpPuller::CloseStream, &rtmpPuller));
+        if (ret) {
+          tylog("Handler.handshakeTo ret=%d.", ret);
+
+          // return ret;
+        }
+      } else {
+        tylog("pull url env var not exist");
+      }
     }
 
     // 收到RTP后定时请求I帧
@@ -478,7 +519,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     tylog("pop jitter's OrderedPackets size=%zu", orderedPackets.size());
 
     for (RtpBizPacket &packet : orderedPackets) {
-      if (this->srtHandler.InitSucc()) {
+      if (this->belongingPeerConnection_.pushHandler_.InitSucc()) {
         ret = DumpPacket(packet.rtpRawPacket, ssrcInfo.h264Unpacketizer);
         if (ret) {
           tylog("dump uplink packet ret=%d, not return err :)", ret);
@@ -489,6 +530,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       ret = SendToPeer_(packet);
       if (ret) {
         tylog("send to peer ret=%d", ret);
+
         return ret;
       }
     }

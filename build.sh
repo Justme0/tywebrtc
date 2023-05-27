@@ -53,22 +53,22 @@ kServerName="tywebrtc" # svr name is same in Makefile
 bazel test --verbose_failures --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --cxxopt="-std=c++14" --test_output=all //src:tywebrtc_test
 
 # -Wfatal-errors
-#  --copt="-Weffc++" \
-#  --copt="-Wno-error=effc++" \
+#  --cxxopt="-Weffc++" \
+#  --cxxopt="-Wno-error=effc++" \
 # no -Wdeprecated-declarations is temp
-  # --copt="-Wno-error=deprecated-declarations" \
+# --cxxopt="-Wno-error=unused-parameter" \
+# --copt="-Wno-error=deprecated-declarations" \
+# --cxxopt="-Wold-style-cast" \
 # cmd doc https://bazel.build/docs/user-manual
 # shit copt multiple flags cannot be in one option.
 # must specify -c dbg, or strip debug info
 bazel build \
-  --cxxopt="-std=c++14" \
+  --compilation_mode dbg \
   --copt="-g" \
-  -c dbg \
+  --cxxopt="-std=c++14" \
   --copt="-Werror" \
   --copt="-Wall" \
   --copt="-Wextra" \
-  --copt="-Wno-error=deprecated-declarations" \
-  --copt="-Wno-error=unused-parameter" \
   --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --verbose_failures --test_output=all //src:$kServerName
 
 rm -rf $kServerName

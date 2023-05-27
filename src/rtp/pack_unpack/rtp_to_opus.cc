@@ -54,7 +54,7 @@ void RtpDepacketizerOpus::DecodeOneByteExt(const uint8_t* pStart,
       }
 
       ST_RTP_EXT_AUDIO_LEVEL* pRtpExtVideoRotation =
-          (ST_RTP_EXT_AUDIO_LEVEL*)pExtCommHead;
+          reinterpret_cast<ST_RTP_EXT_AUDIO_LEVEL*>(pExtCommHead);
       audio_level_ = pRtpExtVideoRotation->Level;
     }
 
@@ -62,10 +62,10 @@ void RtpDepacketizerOpus::DecodeOneByteExt(const uint8_t* pStart,
   }
 }
 
-int RtpDepacketizerOpus::ProcessExtInfo(uint8_t* data, uint32_t length) {
+int RtpDepacketizerOpus::ProcessExtInfo(uint8_t* data, int length) {
   RtpHeader* header = reinterpret_cast<RtpHeader*>(data);
 
-  if (header->getHeaderLength() > (int)length) {
+  if (header->getHeaderLength() > length) {
     return -1;
   }
 
@@ -78,7 +78,8 @@ int RtpDepacketizerOpus::ProcessExtInfo(uint8_t* data, uint32_t length) {
     if (VIDEO_RFC5285_ONEBYTE_ORDER_NAME ==
         header->getHeaderExt()->getExtId()) {
       // self head (payload + length) 4B
-      const uint8_t* ext_start = (uint8_t*)header->getHeaderExt() + 4;
+      const uint8_t* ext_start =
+          reinterpret_cast<const uint8_t*>(header->getHeaderExt()) + 4;
 
       DecodeOneByteExt(ext_start, ext_start + ext_length * 4);
     }

@@ -6,9 +6,10 @@
 
 // C++ compile av_err2str err
 // https://ffmpeg.org/pipermail/libav-user/2013-January/003458.html
-#define av_err2string(errnum)                                             \
-  av_make_error_string((char*)__builtin_alloca(AV_ERROR_MAX_STRING_SIZE), \
-                       AV_ERROR_MAX_STRING_SIZE, errnum)
+#define av_err2string(errnum)                                         \
+  av_make_error_string(                                               \
+      static_cast<char*>(__builtin_alloca(AV_ERROR_MAX_STRING_SIZE)), \
+      AV_ERROR_MAX_STRING_SIZE, errnum)
 
 SrtHandler::~SrtHandler() {
   if (nullptr == formatContext_) {
@@ -163,7 +164,7 @@ int SrtHandler::AddAudioStream_(uint32_t sampleRate, uint32_t channels,
 }
 
 int SrtHandler::AddVideoStream_(uint32_t width, uint32_t height,
-                                AVDictionary*& options) {
+                                AVDictionary*&) {
   const enum AVCodecID codec_id = AV_CODEC_ID_H264;
   AVStream* stream = avformat_new_stream(this->formatContext_, NULL);
   if (nullptr == stream) {

@@ -16,6 +16,11 @@ new_local_repository(
     # "@bazel_tools//src/conditions:linux": "openssl",
     # "@bazel_tools//src/conditions:darwin": "/opt/homebrew/opt/openssl"}),
 
+    # ssl rely on crypto lib, NOTE link order!
+    # https://stackoverflow.com/questions/12917731/linking-issues-using-openssl-in-ubuntu#comment33092031_12917932
+    # I experienced the same problem, however I was linking with -lcrypto. What fixed it for me was by linking with crypto after ssl. Why the order matters goes beyond me. 
+    # @climax Order matters with libraries. Until libssl was processed, OPENSSL_add_all_algorithms_noconf etc were not needed. So when libcrypto was first processed, they were not included in the build. Later, when they were needed, libcrypto had already been processed.
+
     build_file_content = """
 package(default_visibility = ["//visibility:public"])
 cc_library(

@@ -473,8 +473,7 @@ int H264Unpacketizer::DumpRawStream(const std::string &rawStream,
   if (rtp_2_h264_file_ == nullptr) {
     // /for debug, not use ssrc
     // now allow only one pc
-    (void)ssrc;
-    const std::string &name = tylib::format_string("uplink_ssrc_%u.h264", 0);
+    const std::string &name = tylib::format_string("uplink_ssrc_%u.h264", ssrc);
     rtp_2_h264_file_ = fopen(name.data(), "wb+");
     if (nullptr == rtp_2_h264_file_) {
       tylog("open file %s fail, errno=%d[%s]", name.data(), errno,

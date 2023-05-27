@@ -393,7 +393,7 @@ int FlvAssist::makeAacTag(MediaBuffer& mediaBuffer) {
   int dataSizePos = 0;
   int configTagSize = 0;
   unsigned int timeStamp = mediaBuffer.getMediaTime();
-  // RTMP_Log(RTMP_LOGERROR, "debug ts=%u", timeStamp);
+  // tylog( "debug ts=%u", timeStamp);
   CommonAssist commonAssist;
   commonAssist.setupBuffer(mediaBuffer.getDestBuffer(),
                            mediaBuffer.getDestBufferLength());
@@ -988,11 +988,10 @@ int FlvAssist::makeAvcConfTag(MediaBuffer& mediaBuffer, int& tagSize) {
     commonAssist.putByte(e_FlvTagType_Video);  // Tag Type
 
     dataSizePos = commonAssist.getContentLength();
-    commonAssist.putBit24(0);                            // DataSize(24)
-    commonAssist.putBit24((unsigned int)u64TimeOffset);  // Timestamp(24)
-    commonAssist.putByte(((unsigned int)u64TimeOffset) >>
-                         24);  // TimestampExtended(8)
-    commonAssist.putBit24(0);  // StreamID(24), always 0
+    commonAssist.putBit24(0);                   // DataSize(24)
+    commonAssist.putBit24(u64TimeOffset);       // Timestamp(24)
+    commonAssist.putByte(u64TimeOffset >> 24);  // TimestampExtended(8)
+    commonAssist.putBit24(0);                   // StreamID(24), always 0
 
     commonAssist.putByte(e_FlvVideoFrameType_Key |
                          e_FlvVideoCodecId_Avc);      // Frametype and CodecID

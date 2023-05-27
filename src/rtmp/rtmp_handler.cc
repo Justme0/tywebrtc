@@ -1,5 +1,7 @@
 #include "rtmp/rtmp_handler.h"
 
+#include <cassert>
+
 #include "log/log.h"
 #include "tylib/time/timer.h"
 
@@ -14,8 +16,7 @@ RtmpHandler::~RtmpHandler() {
 
 // init rtmp and connect
 // OPT: block mode
-int RtmpHandler::InitProtocolHandler(const std::string &rtmpUrl, bool writeable,
-                                     uint32_t timeout, const bool liveSource) {
+int RtmpHandler::InitProtocolHandler(const std::string &rtmpUrl) {
   int ret = 0;
 
   ret = InitRtmp_();
@@ -23,7 +24,7 @@ int RtmpHandler::InitProtocolHandler(const std::string &rtmpUrl, bool writeable,
     return ret;
   }
 
-  ret = SetupRtmp_(rtmpUrl, writeable, timeout, liveSource);
+  ret = SetupRtmp_(rtmpUrl, true, 1000, true);
   if (ret) {
     return ret;
   }
@@ -163,7 +164,7 @@ int RtmpHandler::SetupRtmp_(std::string rtmpUrl, bool writeable,
   }
   mLiveSource = liveSource;
 
-  if (!RTMP_SetupURL(mRtmpInstance, (char *)mRtmpUrl.c_str())) {
+  if (!RTMP_SetupURL(mRtmpInstance, const_cast<char *>(mRtmpUrl.c_str()))) {
     RTMP_Free(mRtmpInstance);
     mRtmpInstance = NULL;
     mRtmpUrl.clear();
@@ -236,6 +237,8 @@ int RtmpHandler::ConnectRtmp_() {
     RTMP_Free(mRtmpInstance);
     mRtmpInstance = NULL;
     mRtmpUrl.clear();
+    assert(!"not playing");
+
     return -3;
   }
 

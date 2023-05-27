@@ -37,33 +37,22 @@ int CommonAssist::putByte(const unsigned char val) {
 }
 
 int CommonAssist::putBit16(const unsigned short val) {
-  return (0 == putByte((unsigned char)(val >> 8))) &&
-                 (0 == putByte((unsigned char)val))
-             ? 0
-             : -1;
+  return (0 == putByte(val >> 8)) && (0 == putByte(val)) ? 0 : -1;
 }
 
 int CommonAssist::putBit24(const unsigned int val) {
-  return (0 == putBit16((unsigned short)(val >> 8))) &&
-                 (0 == putByte((unsigned char)val))
-             ? 0
-             : -1;
+  return (0 == putBit16(val >> 8)) && (0 == putByte(val)) ? 0 : -1;
 }
 
 int CommonAssist::putBit32(const unsigned int val) {
-  return (0 == putByte((unsigned char)(val >> 24))) &&
-                 (0 == putByte((unsigned char)(val >> 16))) &&
-                 (0 == putByte((unsigned char)(val >> 8))) &&
-                 (0 == putByte((unsigned char)val))
+  return (0 == putByte(val >> 24)) && (0 == putByte(val >> 16)) &&
+                 (0 == putByte(val >> 8)) && (0 == putByte(val))
              ? 0
              : 1;
 }
 
 int CommonAssist::putBit64(const unsigned long long val) {
-  return (0 == putBit32((unsigned int)(val >> 32))) &&
-                 (0 == putBit32((unsigned int)val))
-             ? 0
-             : 1;
+  return (0 == putBit32(val >> 32)) && (0 == putBit32(val)) ? 0 : 1;
 }
 
 int CommonAssist::putBytes(const void* data, unsigned int length) {
@@ -92,9 +81,9 @@ int CommonAssist::putBit24At(const unsigned int val, const unsigned int pos) {
     return -1;
   }
 
-  mBuffer[pos] = (unsigned char)(val >> 16);
-  mBuffer[pos + 1] = (unsigned char)(val >> 8);
-  mBuffer[pos + 2] = (unsigned char)val;
+  mBuffer[pos] = val >> 16;
+  mBuffer[pos + 1] = val >> 8;
+  mBuffer[pos + 2] = val;
 
   return 0;
 }
@@ -104,10 +93,10 @@ int CommonAssist::putBit32At(const unsigned int val, const unsigned int pos) {
     return -1;
   }
 
-  mBuffer[pos] = (unsigned char)(val >> 24);
-  mBuffer[pos + 1] = (unsigned char)(val >> 16);
-  mBuffer[pos + 2] = (unsigned char)(val >> 8);
-  mBuffer[pos + 3] = (unsigned char)val;
+  mBuffer[pos] = val >> 24;
+  mBuffer[pos + 1] = val >> 16;
+  mBuffer[pos + 2] = val >> 8;
+  mBuffer[pos + 3] = val;
 
   return 0;
 }

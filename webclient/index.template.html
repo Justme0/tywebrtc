@@ -123,18 +123,24 @@
 
         function sendMessage() {
             sendChannel.send(messageInputBox.value);
+            addToDialog('[me] ' + messageInputBox.value)
 
             messageInputBox.value = "";
             messageInputBox.focus();
         }
 
-        function handleReceiveMessage(event) {
+        function addToDialog(strMessage) {
             const el = document.createElement("p");
-            const txtNode = document.createTextNode(event.data);
+            t = (new Date().toLocaleTimeString()) + " " + strMessage
+            const txtNode = document.createTextNode(t);
 
             el.appendChild(txtNode);
             receiveBox = document.getElementById('receivebox');
             receiveBox.appendChild(el);
+        }
+
+        function handleReceiveMessage(event) {
+            addToDialog('[friend] ' + event.data)
         }
 
         // Handle status changes on the local end of the data
@@ -145,6 +151,7 @@
                 var state = sendChannel.readyState;
                 if (state === "open") {
                     console.log("data channel opened");
+                    addToDialog("connect success");
                     messageInputBox.disabled = false;
                     // messageInputBox.focus();
                     sendButton.disabled = false;
@@ -154,6 +161,7 @@
                     // connectButton.disabled = true;
                 } else {
                     console.log("data channel closed");
+                    addToDialog("closed");
                     messageInputBox.disabled = true;
                     sendButton.disabled = true;
                     // connectButton.disabled = false;
@@ -228,16 +236,16 @@
                         username: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
                         credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
                         // credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
-                    } ,
-                   // {
-                   //     // urls: "turns:test12.rtc.qq.com:443?transport=tcp",
-                   //     urls: "turn:turn.cloud-rtc.com:80?transport=tcp",
-                   //     // username: "user01",
-                   //     // credential: "pass01"
-                   //     username: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
-                   //     credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
-                   //     // credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
-                   // },
+                    },
+                    // {
+                    //     // urls: "turns:test12.rtc.qq.com:443?transport=tcp",
+                    //     urls: "turn:turn.cloud-rtc.com:80?transport=tcp",
+                    //     // username: "user01",
+                    //     // credential: "pass01"
+                    //     username: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
+                    //     credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
+                    //     // credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
+                    // },
                 ],
                 iceTransportPolicy: "all"
             });
@@ -347,7 +355,7 @@ a=ssrc:16854838 cname:YZcxBwerFFm6GH69
 a=ssrc:16854838 msid:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV 128f4fa0-81dd-4c3a-bbcd-22e71e29d178
 a=ssrc:16854838 mslabel:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV
 a=ssrc:16854838 label:128f4fa0-81dd-4c3a-bbcd-22e71e29d178
-m=video 9 UDP/TLS/RTP/SAVPF 96
+m=video 9 UDP/TLS/RTP/SAVPF 96 106
 c=IN IP4 0.0.0.0
 a=rtcp:9 IN IP4 0.0.0.0
 a=candidate:1 1 udp 1686052607 36.155.205.204 8090 typ host
@@ -362,11 +370,18 @@ a=sendonly
 a=rtcp-mux
 a=rtcp-rsize
 a=rtpmap:96 VP8/90000
+a=fmtp:106 packetization-mode=1;profile-level-id=42e01f;sps-pps-idr-in-keyframe=1;level-asymmetry-allowed=1
 a=rtcp-fb:96 goog-remb
 a=rtcp-fb:96 ccm fir
 a=rtcp-fb:96 nack
 a=rtcp-fb:96 nack pli
 a=rtcp-fb:96 rrtr
+a=rtpmap:106 H264/90000
+a=rtcp-fb:106 goog-remb
+a=rtcp-fb:106 ccm fir
+a=rtcp-fb:106 nack
+a=rtcp-fb:106 nack pli
+a=rtcp-fb:106 rrtr
 a=ssrc-group:FID 33697348 50472669
 a=ssrc:33697348 cname:ovaCctnHP9Asci9c
 a=ssrc:33697348 msid:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV 1d7fc300-9889-4f94-9f35-c0bcc77a260d

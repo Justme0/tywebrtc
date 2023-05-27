@@ -46,7 +46,7 @@ bool PLITimer::_OnTimer() {
 bool DTLSTimer::_OnTimer() {
   int ret = belongingPC_.dtlsHandler_.OnTime();
   if (ret) {
-    tylog("createPLIReportSend ret=%d", ret);
+    tylog("dtls timer ret=%d", ret);
   }
 
   return true;

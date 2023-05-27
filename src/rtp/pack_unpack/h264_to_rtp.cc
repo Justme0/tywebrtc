@@ -8,7 +8,6 @@
 
 // H.264 nalu header type mask.
 const uint8_t kNalTypeMask = 0x1F;
-const int MAX_PKT_BUF_SIZE = 2048;  // maybe too large
 
 // @see: https://tools.ietf.org/html/rfc6184#section-5.8
 
@@ -106,8 +105,6 @@ int H264Packetizer::PacketStapA(const uint32_t timestamp,
     return 0;
   }
 
-  int ret = 0;
-
   uint8_t header = sps_[0];
   uint8_t nal_type = header & kNalTypeMask;
 
@@ -138,18 +135,18 @@ int H264Packetizer::PacketStapA(const uint32_t timestamp,
 
   WriteBigEndian(dst, sps_.size(), 2);
   dst += 2;
-  memcpy(dst, (const uint8_t*)sps_.data(), sps_.size());
+  memcpy(dst, sps_.data(), sps_.size());
   dst += sps_.size();
   WriteBigEndian(dst, pps_.size(), 2);
   dst += 2;
-  memcpy(dst, (const uint8_t*)pps_.data(), pps_.size());
+  memcpy(dst, pps_.data(), pps_.size());
   dst += pps_.size();
 
   packet.resize(dst - packet.data());
 
   packets.emplace_back(std::move(packet));
 
-  return ret;
+  return 0;
 }
 
 int H264Packetizer::PacketSingleNalu(
@@ -172,8 +169,6 @@ int H264Packetizer::PacketSingleNalu(
     PacketStapA(timestamp, extensions, packets);
   }
 
-  int ret = 0;
-
   std::vector<char> packet(MAX_PKT_BUF_SIZE);
   RtpHeader& header = *reinterpret_cast<RtpHeader*>(packet.data());
   header.setVersion(2);  // fix number
@@ -192,7 +187,7 @@ int H264Packetizer::PacketSingleNalu(
 
   packets.emplace_back(std::move(packet));
 
-  return ret;
+  return 0;
 }
 
 int H264Packetizer::PacketFuA(
@@ -210,7 +205,7 @@ int H264Packetizer::PacketFuA(
 
   int32_t data_len = len - VIDEO_NALU_HEADER_LTH;
   const int RTP_HEADER_LTH = 12;
-  int32_t slice_len = mtu_size_byte_ - RTP_HEADER_LTH;
+  int32_t slice_len = kGuessMtuByte - RTP_HEADER_LTH;
   assert(slice_len > 0);
   int32_t pkt_num = data_len / slice_len;
 
@@ -291,15 +286,15 @@ int32_t H264Packetizer::Packetize(
 
   for (std::vector<Nalu>::iterator iter = nalus.begin(); iter != nalus.end();
        ++iter) {
-    if (iter->size <= mtu_size_byte_) {
+    if (iter->size <= kGuessMtuByte) {
       if ((ret = PacketSingleNalu(iter->data, iter->size, timestamp, extensions,
                                   rtp_packets)) != 0) {
-        return -1;
+        return -2;
       }
     } else {
       if ((ret = PacketFuA(iter->data, iter->size, timestamp, extensions,
                            rtp_packets)) != 0) {
-        return -1;
+        return -3;
       }
     }
   }
@@ -310,5 +305,5 @@ int32_t H264Packetizer::Packetize(
     rtpHeader.setMarker(1);
   }
 
-  return ret;
+  return 0;
 }

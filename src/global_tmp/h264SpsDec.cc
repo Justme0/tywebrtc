@@ -13,7 +13,7 @@ struct bit_buffer {
 
 static void skip_bits(bit_buffer *bb, size_t nbits) {
   bb->current = bb->current + ((nbits + bb->read_bits) / 8);
-  bb->read_bits = (unsigned char)((bb->read_bits + nbits) % 8);
+  bb->read_bits = static_cast<unsigned char>((bb->read_bits + nbits) % 8);
 }
 
 static unsigned char get_bit(bit_buffer *bb) {
@@ -85,8 +85,7 @@ static void parse_scaling_list(unsigned int size, bit_buffer *bb) {
 /**
     Parses a SPS NALU to retrieve video width and height
 */
-void H264ParseSps(const char *sps, unsigned int sps_size, int &width,
-                  int &height) {
+void H264ParseSps(const char *sps, unsigned int, int &width, int &height) {
   bit_buffer bb;
   unsigned int profile, pic_order_cnt_type, width_in_mbs, height_in_map_units;
   unsigned int i, size, left, right, top, bottom;

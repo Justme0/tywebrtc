@@ -14,8 +14,7 @@ extern int g_sock_fd;
 
 RtcpHandler::RtcpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {}
 
-// tmp
-
+// downlink send lost package
 int RtcpHandler::SendReqNackPkt(const std::vector<uint16_t> &seqVect,
                                 uint32_t sourceSSRC,
                                 std::vector<uint16_t> &failedSeqs) {
@@ -121,12 +120,12 @@ int RtcpHandler::HandleNack(const RtcpHeader &chead) {
     nackMovPointer += 4;
   }
 
-  tylog("sourceSSRC=%u(0x%X), %s, nack seqs=%s.", chead.getSourceSSRC(),
-        chead.getSourceSSRC(), chead.ToString().data(),
-        tylib::AnyToString(seqVect).data());
+  tylog("mediaSourceSSRC=%u(0x%X), %s, nack seqs=%s.",
+        chead.getMediaSourceSSRC(), chead.getMediaSourceSSRC(),
+        chead.ToString().data(), tylib::AnyToString(seqVect).data());
 
   std::vector<uint16_t> failedSeqs;
-  ret = SendReqNackPkt(seqVect, chead.getSourceSSRC(), failedSeqs);
+  ret = SendReqNackPkt(seqVect, chead.getMediaSourceSSRC(), failedSeqs);
   if (ret) {
     tylog("sendReqNackPkt ret=%d", ret);
 
@@ -147,9 +146,8 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
   // if peer doesn't exist, not handle it.
   // OPT: handle RRTR, RR, SR ...
   auto peerPC = belongingPeerConnection_.FindPeerPC();
-  if (nullptr == peerPC) {
-    return 0;
-  }
+  // if pull rtmp/srt/... stream, it's null;
+  // if pull another webrtc, it's not null.
 
   int ret = 0;
 
@@ -227,17 +225,25 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
           case RtcpPayloadSpecificFormat::kRtcpPLI:
           case RtcpPayloadSpecificFormat::kRtcpSLI:
           case RtcpPayloadSpecificFormat::kRtcpFIR: {
+            if (nullptr == peerPC) {
+              tylog(
+                  "another peerPC null(may pull rtmp/srt/...), not req I "
+                  "frame.");
+
+              break;
+            }
+
             RtcpHeader *rsphead = const_cast<RtcpHeader *>(chead);
             assert(peerPC->rtpHandler_.upVideoSSRC != 0);
-            rsphead->setSourceSSRC(peerPC->rtpHandler_.upVideoSSRC);
+            rsphead->setMediaSourceSSRC(peerPC->rtpHandler_.upVideoSSRC);
 
             // OPT: handle other type of RTCP source ssrc
             // if (rsphead->getSourceSSRC() == kDownlinkAudioSsrc) {
             //   assert(peerPC->rtpHandler_.upAudioSSRC != 0);
-            //   rsphead->setSourceSSRC(peerPC->rtpHandler_.upAudioSSRC);
+            //   rsphead->setMediaSourceSSRC(peerPC->rtpHandler_.upAudioSSRC);
             // } else if (rsphead->getSourceSSRC() == kDownlinkVideoSsrc) {
             //   assert(peerPC->rtpHandler_.upVideoSSRC != 0);
-            //   rsphead->setSourceSSRC(peerPC->rtpHandler_.upVideoSSRC);
+            //   rsphead->setMediaSourceSSRC(peerPC->rtpHandler_.upVideoSSRC);
             // }
 
             break;
@@ -263,6 +269,12 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
         tylog("recv unknown %d rtcp type", static_cast<int>(chead->packettype));
         break;
     }
+  }
+
+  if (nullptr == peerPC) {
+    tylog("another peerPC null, not transparent transfer.");
+
+    return 0;
   }
 
   DumpSendPacket(vBufReceive);
@@ -711,7 +723,7 @@ int RtcpHandler::SerializeNackSend_(const std::vector<NackBlock> &nackBlokVect,
   nack.setPacketType(RtcpPacketType::kGenericRtpFeedback);
   nack.setBlockCount(1);
   nack.setSSRC(sinkSSRC);
-  nack.setSourceSSRC(soucreSSRC);
+  nack.setMediaSourceSSRC(soucreSSRC);
   nack.setLength(2 + nackBlokVect.size());
 
   if (12 + nackBlokVect.size() * 4 > 2048) {
@@ -791,7 +803,7 @@ int RtcpHandler::CreatePLIReportSend(uint32_t ssrc, uint32_t sourceSSRC) {
   pli.setPacketType(RtcpPacketType::kPayloadSpecificFeedback);
   pli.setBlockCount(static_cast<uint8_t>(RtcpPayloadSpecificFormat::kRtcpPLI));
   pli.setSSRC(ssrc);
-  pli.setSourceSSRC(sourceSSRC);
+  pli.setMediaSourceSSRC(sourceSSRC);
   pli.setLength(2);
 
   const char *head = reinterpret_cast<const char *>(&pli);

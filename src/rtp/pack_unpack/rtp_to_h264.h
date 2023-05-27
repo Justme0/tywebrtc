@@ -7,8 +7,6 @@
 
 #include "rtp/rtp_parser.h"
 
-#define _DUMP_RTP_ 1
-
 // OPT: can cancel the struct ?
 class MediaData {
  public:

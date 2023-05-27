@@ -7,6 +7,7 @@
 
 #include "librtmp/rtmp.h"
 
+#include "push/push_handler.h"
 #include "rtmp/FlvAssist.h"
 
 // #include "user_basic_info_struct.h"
@@ -21,9 +22,7 @@ class RtmpHandler {
   ~RtmpHandler();
 
  public:
-  int InitProtocolHandler(const std::string &rtmpUrl, bool writeable = true,
-                          uint32_t timeout = 1000,
-                          const bool liveSource = true);
+  int InitProtocolHandler(const std::string &rtmpUrl);
   bool InitSucc() const;
 
   int SendAudioFrame(const std::vector<char> &audioFrame, uint64_t frameMs);
@@ -46,7 +45,7 @@ class RtmpHandler {
 
   std::string mRtmpUrl;
   bool mWriteable = false;
-  uint32_t mTimeOut = DEFAULT_TIMEOUT;
+  uint32_t mTimeOut = 30;  // second
   bool mLiveSource = false;
 
   // RTMPPacket* mRtmpPacket = nullptr;

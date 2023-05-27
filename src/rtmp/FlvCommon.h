@@ -88,7 +88,8 @@ enum FlvAacProfile {
   e_FlvAacProfile_None = 0,
   e_FlvAacProfile_Main = 1,
   e_FlvAacProfile_LC = 2,
-  e_FlvAacProfile_SBR = 5
+  e_FlvAacProfile_SBR = 5,
+  e_FlvAacProfile_HEV2 = 29,
 };
 
 enum FlvVideoFrameType {
