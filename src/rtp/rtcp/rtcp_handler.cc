@@ -75,7 +75,7 @@ int RtcpHandler::SendReqNackPkt(const std::vector<uint16_t> &seqVect,
     }
 
     assert(!rawPacket->empty());
-    // rawPacket is encrypted data
+    // OPT: rawPacket is encrypted data, but exclude head
     DumpSendPacket(*rawPacket);
 
     ret = belongingPeerConnection_.SendToClient(*rawPacket);

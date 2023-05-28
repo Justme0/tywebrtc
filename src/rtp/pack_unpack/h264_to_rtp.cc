@@ -92,15 +92,9 @@ static int ParseFrameNalus(const std::vector<char>& stream,
   return 0;
 }
 
-// FIX
-int GetSequence() {
-  static uint16_t s_seq = 0;
-  return s_seq++;
-}
-
 int H264Packetizer::PacketStapA(const uint32_t timestamp,
                                 const std::vector<std::shared_ptr<Extension>>&,
-                                std::vector<std::vector<char>>& packets) {
+                                std::vector<RtpBizPacket>& rtpBizPackets) {
   if (sps_.empty() || pps_.empty()) {
     return 0;
   }
@@ -122,7 +116,7 @@ int H264Packetizer::PacketStapA(const uint32_t timestamp,
   rtp_header.setMarker(0);  // last's mark setted outside
   rtp_header.setPayloadType(payload_type_);
 
-  rtp_header.setSeqNumber(GetSequence());
+  rtp_header.setSeqNumber(GeneratePowerSequence());
   rtp_header.setTimestamp(timestamp);
   rtp_header.setSSRC(ssrc_);
 
@@ -144,7 +138,10 @@ int H264Packetizer::PacketStapA(const uint32_t timestamp,
 
   packet.resize(dst - packet.data());
 
-  packets.emplace_back(std::move(packet));
+  RtpBizPacket rtpBizPacket(std::move(packet),
+                            SplitPowerSeq(powerSequence_).first);
+  rtpBizPacket.enterJitterTimeMs = g_now_ms;
+  rtpBizPackets.emplace_back(std::move(rtpBizPacket));
 
   return 0;
 }
@@ -152,7 +149,7 @@ int H264Packetizer::PacketStapA(const uint32_t timestamp,
 int H264Packetizer::PacketSingleNalu(
     const char* frame, const int len, const uint32_t timestamp,
     const std::vector<std::shared_ptr<Extension>>& extensions,
-    std::vector<std::vector<char>>& packets) {
+    std::vector<RtpBizPacket>& rtpBizPackets) {
   if ((frame[0] & kNalTypeMask) == 0x07) {
     sps_.assign(reinterpret_cast<const char*>(frame), len);
     pps_.clear();
@@ -166,7 +163,7 @@ int H264Packetizer::PacketSingleNalu(
   }
 
   if ((frame[0] & kNalTypeMask) == 0x05) {
-    PacketStapA(timestamp, extensions, packets);
+    PacketStapA(timestamp, extensions, rtpBizPackets);
   }
 
   std::vector<char> packet(MAX_PKT_BUF_SIZE);
@@ -174,7 +171,7 @@ int H264Packetizer::PacketSingleNalu(
   header.setVersion(2);  // fix number
   header.setTimestamp(timestamp);
   header.setSSRC(ssrc_);
-  header.setSeqNumber(GetSequence());
+  header.setSeqNumber(GeneratePowerSequence());
   header.setPayloadType(payload_type_);
   header.setMarker(0);
   header.setExtension(0);  // taylor
@@ -185,7 +182,10 @@ int H264Packetizer::PacketSingleNalu(
 
   packet.resize(headLen + len);
 
-  packets.emplace_back(std::move(packet));
+  RtpBizPacket rtpBizPacket(std::move(packet),
+                            SplitPowerSeq(powerSequence_).first);
+  rtpBizPacket.enterJitterTimeMs = g_now_ms;
+  rtpBizPackets.emplace_back(std::move(rtpBizPacket));
 
   return 0;
 }
@@ -193,14 +193,14 @@ int H264Packetizer::PacketSingleNalu(
 int H264Packetizer::PacketFuA(
     const char* frame, const int len, const uint32_t timestamp,
     const std::vector<std::shared_ptr<Extension>>& extensions,
-    std::vector<std::vector<char>>& packets) {
+    std::vector<RtpBizPacket>& rtpBizPackets) {
   // WEBRTC_ERROR_CHECK(stream_id_.c_str(), (nullptr == frame), 0,
   //                    "Chn %" PRIu64 " rtp buf is nullptr!", ssrc_);
   // WEBRTC_ERROR_CHECK(stream_id_.c_str(), (VIDEO_NALU_HEADER_LTH >= len), 0,
   //                    "Chn %" PRIu64 " rtp data len %d error.", ssrc_, len);
 
   if ((frame[0] & kH264TypeMask) == 0x05) {
-    PacketStapA(timestamp, extensions, packets);
+    PacketStapA(timestamp, extensions, rtpBizPackets);
   }
 
   int32_t data_len = len - VIDEO_NALU_HEADER_LTH;
@@ -243,7 +243,7 @@ int H264Packetizer::PacketFuA(
     header.setVersion(2);
     header.setTimestamp(timestamp);
     header.setSSRC(ssrc_);
-    header.setSeqNumber(GetSequence());
+    header.setSeqNumber(GeneratePowerSequence());
     header.setPayloadType(payload_type_);
     header.setMarker(0);
     // header.extensions = extensions;
@@ -263,7 +263,10 @@ int H264Packetizer::PacketFuA(
 
     memcpy(cur_pos, nalu, copy_len);
 
-    packets.emplace_back(std::move(packet));
+    RtpBizPacket rtpBizPacket(std::move(packet),
+                              SplitPowerSeq(powerSequence_).first);
+    rtpBizPacket.enterJitterTimeMs = g_now_ms;
+    rtpBizPackets.emplace_back(std::move(rtpBizPacket));
 
     fu_header &= 0x1F;  // clear flags, next loop use
     pkt_cnt++;
@@ -276,7 +279,7 @@ int H264Packetizer::PacketFuA(
 int32_t H264Packetizer::Packetize(
     const std::vector<char>& stream, uint32_t timestamp,
     const std::vector<std::shared_ptr<Extension>>& extensions,
-    std::vector<std::vector<char>>& rtp_packets) {
+    std::vector<RtpBizPacket>& rtpBizPackets) {
   int ret = 0;
 
   std::vector<Nalu> nalus;
@@ -288,21 +291,20 @@ int32_t H264Packetizer::Packetize(
        ++iter) {
     if (iter->size <= kGuessMtuByte) {
       if ((ret = PacketSingleNalu(iter->data, iter->size, timestamp, extensions,
-                                  rtp_packets)) != 0) {
+                                  rtpBizPackets)) != 0) {
         return -2;
       }
     } else {
       if ((ret = PacketFuA(iter->data, iter->size, timestamp, extensions,
-                           rtp_packets)) != 0) {
+                           rtpBizPackets)) != 0) {
         return -3;
       }
     }
   }
 
-  if (!rtp_packets.empty()) {
-    RtpHeader& rtpHeader =
-        *reinterpret_cast<RtpHeader*>(rtp_packets.back().data());
-    rtpHeader.setMarker(1);
+  if (!rtpBizPackets.empty()) {
+    reinterpret_cast<RtpHeader*>(rtpBizPackets.back().rtpRawPacket.data())
+        ->setMarker(1);
   }
 
   return 0;

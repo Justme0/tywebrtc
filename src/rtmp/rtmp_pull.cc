@@ -1747,19 +1747,19 @@ int RtmpPuller::DownlinkPackAndSend(bool bAudio,
   }
   SSRCInfo& ssrcInfo = it->second;
 
-  std::vector<std::vector<char>> rtp_packets;
+  std::vector<RtpBizPacket> rtpBizPackets;
 
   if (bAudio) {
-    ret =
-        ssrcInfo.audioPacketizer.Packetize(rawStream, rtpTime, {}, rtp_packets);
+    ret = ssrcInfo.audioPacketizer.Packetize(rawStream, rtpTime, {},
+                                             rtpBizPackets);
     if (ret) {
       tylog("ssrcInfo audio packetize ret=%d.", ret);
 
       return ret;
     }
   } else {
-    ret =
-        ssrcInfo.h264Packetizer.Packetize(rawStream, rtpTime, {}, rtp_packets);
+    ret = ssrcInfo.h264Packetizer.Packetize(rawStream, rtpTime, {},
+                                            rtpBizPackets);
     if (ret) {
       tylog("ssrcInfo h264 packetize ret=%d.", ret);
 
@@ -1767,13 +1767,13 @@ int RtmpPuller::DownlinkPackAndSend(bool bAudio,
     }
   }
 
-  for (std::vector<char>& rtpPacket : rtp_packets) {
-    tylog("rtmp to rtp=%s",
-          reinterpret_cast<RtpHeader*>(rtpPacket.data())->ToString().data());
+  for (RtpBizPacket& rtpBizPacket : rtpBizPackets) {
+    tylog("rtmp to rtp(biz)=%s", rtpBizPacket.ToString().data());
 
-    DumpSendPacket(rtpPacket);
+    DumpSendPacket(rtpBizPacket.rtpRawPacket);
 
-    ret = belongingPeerConnection_.srtpHandler_.ProtectRtp(&rtpPacket);
+    ret = belongingPeerConnection_.srtpHandler_.ProtectRtp(
+        &rtpBizPacket.rtpRawPacket);
     if (ret) {
       tylog("downlink protect rtp ret=%d", ret);
 
@@ -1781,12 +1781,8 @@ int RtmpPuller::DownlinkPackAndSend(bool bAudio,
     }
 
     // OPT: avoid copy
-    std::vector<char> saveRtp = rtpPacket;
+    std::vector<char> saveRtp = rtpBizPacket.rtpRawPacket;
 
-    // FIXME: fix cycle
-    RtpBizPacket rtpBizPacket(std::move(rtpPacket), 0);
-    rtpBizPacket.enterJitterTimeMs = g_now_ms;
-    assert(rtpPacket.empty());
     ssrcInfo.rtpSender.Enqueue(std::move(rtpBizPacket));
     assert(rtpBizPacket.rtpRawPacket.empty());
 
