@@ -741,8 +741,6 @@ void DtlsHandler::SetStreamDirect(StreamDirection direct) {
   m_StmDirect = direct;
 }
 
-bool DtlsHandler::GetHandshakeCompleted() const { return mHandshakeCompleted; }
-
 extern int g_sock_fd;
 
 void DtlsHandler::SendToDtls(const void* data, int len) {

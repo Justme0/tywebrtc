@@ -16,7 +16,7 @@
 #include "prometheus/gauge.h"
 
 const int kUplossRateMul100 = 0;
-const int kDownlossRateMul100 = 10;
+const int kDownlossRateMul100 = 0;
 const int kPCDeadTimeoutMs = 1 * 1000;
 
 const int kGuessMtuByte = 1200;

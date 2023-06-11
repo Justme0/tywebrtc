@@ -81,7 +81,6 @@ class DtlsHandler {
   std::string GetMyFingerprint();  // the fingerprint of the user cert
   void SendToDtls(const void* data, int len);
   int WriteDtlsPacket(const void* data, size_t len);
-  bool GetHandshakeCompleted() const;
   std::string ToString() const;
   int HandshakeCompleted(bool bSessionComplete);
 
