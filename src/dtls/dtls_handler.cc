@@ -90,7 +90,8 @@ static inline const char* GetSslBuffStateString(int errCode) {
     case SSL_ERROR_WANT_X509_LOOKUP:
       return "SSL_ERROR_WANT_X509_LOOKUP";
     case SSL_ERROR_SYSCALL:
-      return "SSL_ERROR_SYSCALL";  // look at error stack/return value/errno
+      // look at error stack/return value/errno
+      return "SSL_ERROR_SYSCALL";
     case SSL_ERROR_ZERO_RETURN:
       return "SSL_ERROR_ZERO_RETURN";
     case SSL_ERROR_WANT_CONNECT:
@@ -109,6 +110,7 @@ static inline std::string GetSslStateString(int stateCode) {
   return SSL_state_string_long(&ssl);
 #else
   return "shit_cannot_get_description_in_new_openssl_version:(";
+  (void)stateCode;
 #endif
 }
 
@@ -334,7 +336,8 @@ int DtlsHandler::OnHandshakeCompleted_() {
   }
 
   belongingPeerConnection_.stateMachine_ = EnumStateMachine::DTLS_DONE;
-  tylog("key info: DTLS_DONE, message:HandShakeCompleted");
+  tylog("stateMachine=%s, handShakeCompleted",
+        StateMachineToString(belongingPeerConnection_.stateMachine_).data());
 
   return 0;
 }
@@ -772,11 +775,10 @@ int DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
   tylog("write Dtls message len %zu, MTU %u %s", len, DTLS_MTU,
         ToString().data());
 
-  // to dump
-
   // to avoid copy
   std::vector<char> bufToSend(static_cast<const char*>(data),
                               static_cast<const char*>(data) + len);
+  DumpSendPacket(bufToSend);
   ret = belongingPeerConnection_.SendToClient(bufToSend);
   if (ret) {
     tylog("send to client ret=%d.", ret);
@@ -799,11 +801,10 @@ int DtlsHandler::rewriteDtlsPacket(const void* data, size_t len) {
           ToString().data());
   }
 
-  // to dump
-
   // to avoid copy
   std::vector<char> bufToSend(static_cast<const char*>(data),
                               static_cast<const char*>(data) + len);
+  DumpSendPacket(bufToSend);
   ret = belongingPeerConnection_.SendToClient(bufToSend);
   if (ret) {
     tylog("send to client ret=%d.", ret);

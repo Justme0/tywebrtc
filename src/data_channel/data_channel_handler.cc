@@ -183,14 +183,15 @@ static int SendSctpDataCallback(void* addr, void* data, size_t len,
 
 SctpGlobalEnv::SctpGlobalEnv() : id_(0) {
   tylog("sctp global env init");
-  usrsctp_init(0, SendSctpDataCallback, SctpDebugLog);
+  // use coroutine, not use multi-thread
+  usrsctp_init_nothreads(0, SendSctpDataCallback, SctpDebugLog);
 
   usrsctp_sysctl_set_sctp_ecn_enable(0);
   usrsctp_sysctl_set_sctp_asconf_enable(0);
   usrsctp_sysctl_set_sctp_auth_enable(0);
   usrsctp_sysctl_set_sctp_nr_outgoing_streams_default(kMaxStream);
 
-  // usrsctp_sysctl_set_sctp_debug_on(SCTP_DEBUG_ALL);
+  usrsctp_sysctl_set_sctp_debug_on(SCTP_DEBUG_ALL);
 }
 
 std::string SctpGlobalEnv::ToString() const {

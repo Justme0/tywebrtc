@@ -314,7 +314,9 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
              EnumStateMachine::DTLS_DONE) {
     // notify others I entered
     belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_RTP;
-    tylog("key info: GOT_RTP");
+    tylog("stateMachine=%s, handShakeCompleted",
+          StateMachineToString(belongingPeerConnection_.stateMachine_).data());
+
     auto peerPC = belongingPeerConnection_.FindPeerPC();
     if (nullptr != peerPC) {
       peerPC->dataChannelHandler_.SendSctpDataForLable("I'm coming.");

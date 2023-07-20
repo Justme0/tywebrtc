@@ -1,3 +1,5 @@
+// https://datatracker.ietf.org/doc/html/rfc3550
+
 #include "rtp/rtcp/rtcp_handler.h"
 
 #include <cassert>
@@ -164,31 +166,25 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
 
     movingBuf += rtcpLen;
     const RtcpHeader *chead = reinterpret_cast<const RtcpHeader *>(movingBuf);
-    tylog("recv number #%d rtcp=%s.", index++, chead->ToString().data());
     rtcpLen = (chead->getLength() + 1) * 4;
     totalLen += rtcpLen;
 
-    tylog("rtcpLen[%u], totalLen[%zu], input buf len[%zu]", rtcpLen, totalLen,
-          vBufReceive.size());
+    tylog(
+        "recv number #%d rtcp=%s. rtcpLen=%u, totalLen=%zu. (input buf "
+        "len=%zu)",
+        index, chead->ToString().data(), rtcpLen, totalLen, vBufReceive.size());
+    ++index;
 
     if (totalLen > vBufReceive.size()) {
       // should check why
+      tylog("NOTE: totalLen=%zu > all input len=%zu, break", totalLen,
+            vBufReceive.size());
+
       break;
     }
 
+    // TODO: use virtual function? instead of switch
     switch (chead->packettype) {
-      case RtcpPacketType::kSenderReport: {
-        tylog("[RTCP_SenderReport_PT]");
-
-        break;
-      }
-
-      case RtcpPacketType::kReceiverReport: {
-        tylog("[RTCP_ReceiverReport_PT]");
-
-        break;
-      }
-
       case RtcpPacketType::kGenericRtpFeedback: {
         switch (
             static_cast<RtcpGenericFeedbackFormat>(chead->getBlockCount())) {
@@ -220,6 +216,13 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
       }
 
       case RtcpPacketType::kPayloadSpecificFeedback: {
+        // TODO: move to ToString, use virtual function?
+        tylog(
+            "specific feedback recv type [%s]",
+            RtcpPayloadSpecificFormatToString(
+                static_cast<RtcpPayloadSpecificFormat>(chead->getBlockCount()))
+                .data());
+
         switch (
             static_cast<RtcpPayloadSpecificFormat>(chead->getBlockCount())) {
           case RtcpPayloadSpecificFormat::kRtcpPLI:
@@ -227,8 +230,8 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
           case RtcpPayloadSpecificFormat::kRtcpFIR: {
             if (nullptr == peerPC) {
               tylog(
-                  "another peerPC null(may pull rtmp/srt/...), not req I "
-                  "frame.");
+                  "another peerPC null(may only pull rtmp/srt/...), can not "
+                  "req I frame.");
 
               break;
             }
@@ -260,13 +263,8 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
         }
         break;
       }
-      case RtcpPacketType::kXrExtend: {
-        tylog("[RTCP_ExtendReport_PT]");
-        break;
-      }
 
       default:
-        tylog("recv unknown %d rtcp type", static_cast<int>(chead->packettype));
         break;
     }
   }

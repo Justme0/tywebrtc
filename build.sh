@@ -66,9 +66,6 @@ bazel build \
   --compilation_mode dbg \
   --copt="-g" \
   --cxxopt="-std=c++14" \
-  --copt="-Werror" \
-  --copt="-Wall" \
-  --copt="-Wextra" \
   --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --verbose_failures --test_output=all //src:$kServerName
 
 rm -rf $kServerName

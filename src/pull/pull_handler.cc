@@ -8,7 +8,8 @@ PullHandler::PullHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {}
 
 // TODO: push handler must destructor
 PullHandler::~PullHandler() {
-  if (initRet_ == 0) {
+  // taylor FIXME
+  if (closeFunc_) {
     assert(closeFunc_);  // callable
     int ret = closeFunc_();
     if (ret) {

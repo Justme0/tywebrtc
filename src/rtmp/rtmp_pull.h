@@ -538,8 +538,6 @@ class RtmpPuller {
 
   int SetupListen(int port);
 
-  int SetUdpPort(int port);
-
   void SetupRtmp(int fd, int idx);
 
   int SendCreateStreamRes(RTMP* pRtmp, double Txn, double ID);
@@ -670,14 +668,13 @@ class RtmpPuller {
   struct in_addr m_InnerAddr;
   int m_UdpFd;
   unsigned long long m_NowTimeMs;
-  int m_Nfds;
   Client m_Clients[MAX_SLOT];
   RTMP rtmp_;  // librtmp ABI is disclosed
   PeerConnection& belongingPeerConnection_;
+  int m_Socks[MAX_SLOT];  // tmp
 
  private:
   int m_RtmpPort;
-  int m_Socks[MAX_SLOT];
   int m_StmId;
   struct in_addr m_OutAddr;
   int m_InitErr = 0;
@@ -716,5 +713,56 @@ extern int GetFrameType(unsigned char* pNalu, int Len);
 
 extern in_addr_t GetAddrByName(const char* sIf);
 extern const char* VideoDumpHex(const char* data, int len);
+
+inline std::string RtmpHeaderTypeToString(int headerType) {
+  switch (headerType) {
+    case RTMP_PACKET_SIZE_LARGE:
+      return "LARGE";
+    case RTMP_PACKET_SIZE_MEDIUM:
+      return "MEDIUM";
+    case RTMP_PACKET_SIZE_SMALL:
+      return "SMALL";
+    case RTMP_PACKET_SIZE_MINIMUM:
+      return "MINIMUM";
+
+    default:
+      return "unknownHeaderType[" + std::to_string(headerType) + "]";
+  }
+}
+
+inline std::string RtmpPacketTypeToString(int rtmpPacketType) {
+  switch (rtmpPacketType) {
+    case RTMP_PACKET_TYPE_CHUNK_SIZE:
+      return "RTMP_PACKET_TYPE_CHUNK_SIZE";
+    case RTMP_PACKET_TYPE_BYTES_READ_REPORT:
+      return "RTMP_PACKET_TYPE_BYTES_READ_REPORT";
+    case RTMP_PACKET_TYPE_CONTROL:
+      return "RTMP_PACKET_TYPE_CONTROL";
+    case RTMP_PACKET_TYPE_SERVER_BW:
+      return "RTMP_PACKET_TYPE_SERVER_BW";
+    case RTMP_PACKET_TYPE_CLIENT_BW:
+      return "RTMP_PACKET_TYPE_CLIENT_BW";
+    case RTMP_PACKET_TYPE_AUDIO:
+      return "RTMP_PACKET_TYPE_AUDIO";
+    case RTMP_PACKET_TYPE_VIDEO:
+      return "RTMP_PACKET_TYPE_VIDEO";
+    case RTMP_PACKET_TYPE_FLEX_STREAM_SEND:
+      return "RTMP_PACKET_TYPE_FLEX_STREAM_SEND";
+    case RTMP_PACKET_TYPE_FLEX_SHARED_OBJECT:
+      return "RTMP_PACKET_TYPE_FLEX_SHARED_OBJECT";
+    case RTMP_PACKET_TYPE_FLEX_MESSAGE:
+      return "RTMP_PACKET_TYPE_FLEX_MESSAGE";
+    case RTMP_PACKET_TYPE_INFO:
+      return "RTMP_PACKET_TYPE_INFO";
+    case RTMP_PACKET_TYPE_SHARED_OBJECT:
+      return "RTMP_PACKET_TYPE_SHARED_OBJECT";
+    case RTMP_PACKET_TYPE_INVOKE:
+      return "RTMP_PACKET_TYPE_INVOKE";
+    case RTMP_PACKET_TYPE_FLASH_VIDEO:
+      return "RTMP_PACKET_TYPE_FLASH_VIDEO";
+    default:
+      return "unknownRtmpPacketType[" + std::to_string(rtmpPacketType) + "]";
+  }
+}
 
 #endif  // RTMP_RTMP_PULL_H_

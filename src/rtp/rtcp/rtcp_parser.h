@@ -27,6 +27,24 @@ enum class RtcpPayloadSpecificFormat {
   kRtcpREMB = 15,
 };
 
+inline std::string RtcpPayloadSpecificFormatToString(
+    RtcpPayloadSpecificFormat f) {
+  switch (f) {
+    case RtcpPayloadSpecificFormat::kRtcpPLI:
+      return "RtcpSpecific_PLI";
+    case RtcpPayloadSpecificFormat::kRtcpSLI:
+      return "RtcpSpecific_SLI";
+    case RtcpPayloadSpecificFormat::kRtcpRPSI:
+      return "RtcpSpecific_RPSI";
+    case RtcpPayloadSpecificFormat::kRtcpFIR:
+      return "RtcpSpecific_FIR";
+    case RtcpPayloadSpecificFormat::kRtcpREMB:
+      return "RtcpSpecific_REMB";
+    default:
+      return tylib::format_string("Unknown[%d]", static_cast<int>(f));
+  }
+}
+
 // if add new enum, modify ToString and rtcp handler switch case
 // should use polymorphism?
 // https://datatracker.ietf.org/doc/html/rfc5760#section-5

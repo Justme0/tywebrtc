@@ -62,8 +62,8 @@ inline PacketType getPacketType(uint8_t cSubCmd) {
 
 // taylor refactor name
 enum class EnumStateMachine {
-  SDP_DONE,
-  GOT_CANDIDATE,
+  SDP_DONE,       // now no use
+  GOT_CANDIDATE,  // now in initialization
   GOT_FIRST_ICE,
   GOT_USE_CANDIDATE_ICE,
   DTLS_DONE,

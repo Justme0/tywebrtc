@@ -61,8 +61,10 @@ void PCManager::CleanTimeoutPeerConnection() {
   for (auto it = this->client2PC_.begin(); it != client2PC_.end();) {
     if (it->second->lastActiveTimeMs_ + kPCDeadTimeoutMs <
         static_cast<int64_t>(g_now_ms)) {
-      tylog("timeout pc, clean it=%s.", it->second->ToString().data());
+      tylog("timeout pc, clean it=%s. after clean, client2PC size=%zu.",
+            it->second->ToString().data(), client2PC_.size() - 1);
       it = client2PC_.erase(it);
+      // FIXME: destroy coroutine of the pc?
     } else {
       ++it;
     }
@@ -132,8 +134,12 @@ class SrsFFmpegLogHelper {
     av_log_set_callback(ffmpegLog);
 
     // rtmp lib
-    RTMP_LogSetLevel(RTMP_LOGDEBUG);
+    RTMP_LogSetLevel(RTMP_LOGALL);
     RTMP_LogSetCallback(rtmpLog);
+
+    // libco
+    void libco_log_set_callback(void (*callback)(const char *, va_list));
+    libco_log_set_callback(libcoLog);
   }
 
   // from librtmp/log.c rtmp_log_default()
@@ -188,6 +194,10 @@ class SrsFFmpegLogHelper {
       tylog("%s %s %s", my_get_level_str(level), nameInfo.str().data(),
             codecInfo);
     }
+  }
+
+  static void libcoLog(const char *format, va_list args) {
+    tylog(format, args);
   }
 };
 

@@ -433,7 +433,8 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
     // machine state before assigning
     belongingPeerConnection_.stateMachine_ =
         EnumStateMachine::GOT_USE_CANDIDATE_ICE;
-    tylog("GOT_USE_CANDIDATE_ICE, ice done, now start dtls ...");
+    tylog("stateMachine=%s, ice done, now start dtls.",
+          StateMachineToString(belongingPeerConnection_.stateMachine_).data());
 
     // 收到带UseCandidate属性的STUN包后启动DTLS
     ret = belongingPeerConnection_.dtlsHandler_.StartDTLS();
@@ -448,7 +449,8 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   } else if (EnumStateMachine::GOT_FIRST_ICE >
              belongingPeerConnection_.stateMachine_) {
     belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_FIRST_ICE;
-    tylog("key info: GOT_FIRST_ICE");
+    tylog("stateMachine=%s",
+          StateMachineToString(belongingPeerConnection_.stateMachine_).data());
   }
 
   /*回包*/
@@ -501,6 +503,7 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
 
   // to avoid copy
   std::vector<char> bufToSend(SndBuff, SndBuff + SndLen);
+  DumpSendPacket(bufToSend);
   ret = belongingPeerConnection_.SendToClient(bufToSend);
   if (ret) {
     tylog("send to client ret=%d.", ret);

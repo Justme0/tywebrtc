@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "srtp2/srtp.h"
+#include "srtp.h"
 
 class PeerConnection;
 

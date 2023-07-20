@@ -9,7 +9,7 @@ class PeerConnection;
 
 class MonitorStateTimer : public Timer {
  public:
-  MonitorStateTimer() : Timer(2000, -1) {}
+  MonitorStateTimer() : Timer(1000, -1) {}
 
  private:
   bool _OnTimer() override;

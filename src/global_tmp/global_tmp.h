@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <fcntl.h>
 #include <sys/stat.h>
 
 #include <cassert>
@@ -14,6 +15,8 @@
 
 #include "prometheus/family.h"
 #include "prometheus/gauge.h"
+
+#include "log/log.h"
 
 const int kUplossRateMul100 = 0;
 const int kDownlossRateMul100 = 0;
@@ -120,6 +123,25 @@ inline int mkdir_p(const char* path, mode_t mode) {
       return -2;
 
     p = strchr(p + 1, '/');
+  }
+
+  return 0;
+}
+
+inline int SetNonBlock(int iSock) {
+  int iFlags = fcntl(iSock, F_GETFL, 0);
+  if (iFlags == -1) {
+    tylog("fcntl return -1, errno=%d [%s]", errno, strerror(errno));
+
+    return -1;
+  }
+  iFlags |= O_NONBLOCK;
+  iFlags |= O_NDELAY;
+  int ret = fcntl(iSock, F_SETFL, iFlags);
+  if (ret == -1) {
+    tylog("fcntl return -1, errno=%d [%s]", errno, strerror(errno));
+
+    return -2;
   }
 
   return 0;

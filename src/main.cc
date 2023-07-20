@@ -22,6 +22,8 @@
 #include "tylib/string/format_string.h"
 #include "tylib/time/timer.h"
 
+#include "colib/co_routine.h"
+
 #include "global_tmp/global_tmp.h"
 #include "log/log.h"
 #include "monitor/monitor.h"
@@ -169,7 +171,7 @@ int HandleRequest() {
       recvfrom(g_sock_fd, vBufReceive.data(), vBufReceive.size(), 0,
                (struct sockaddr*)&address, (socklen_t*)&addr_size);
 
-  tylog("recv len=%ld (application layer)", iRecvLen);
+  tylog("recv from return len=%ld (application layer)", iRecvLen);
 
   if (iRecvLen < -1) {
     // should not appear
@@ -177,9 +179,12 @@ int HandleRequest() {
 
     return -1;
   } else if (-1 == iRecvLen) {
-    tylog("received invalid packet, errno %d[%s]", errno, strerror(errno));
-
-    return -2;
+    tylog("recv from ret=-1, errno %d[%s]", errno, strerror(errno));
+    if (EAGAIN == errno) {
+      return 0;
+    } else {
+      return -1;
+    }
   } else if (iRecvLen == 0) {
     tylog("peer shutdown (not error)");
 
@@ -335,7 +340,7 @@ void CrossPlatformNetworkIO() {
   // level trigger
   event.events = EPOLLIN | EPOLLHUP | EPOLLERR | EPOLLRDHUP;
   if (epoll_ctl(g_efd, EPOLL_CTL_ADD, g_sock_fd, &event) == -1) {
-    tylogAndPrintfln("epoll_ctl return -1, add g_sockfd=%d failed errno=%d[%s]",
+    tylogAndPrintfln("epoll ctl return -1, add g_sockfd=%d failed errno=%d[%s]",
                      g_sock_fd, errno, strerror(errno));
 
     return;
@@ -344,8 +349,7 @@ void CrossPlatformNetworkIO() {
   epoll_event events[kMultiplexIOMaxEventNum]{};
   tylogAndPrintfln("to loop");
   while (1) {
-    const int timeout_ms = 10000;
-    int nfds = epoll_wait(g_efd, events, kMultiplexIOMaxEventNum, timeout_ms);
+    int nfds = epoll_wait(g_efd, events, kMultiplexIOMaxEventNum, -1);
     if (-1 == nfds) {
       tylog("epoll wait return -1, errno=%d[%s]", errno, strerror(errno));
 
@@ -522,8 +526,39 @@ int InitMonitor() {
   return 0;
 }
 
+void* libcoStart(void*) {
+  co_enable_hook_sys();
+
+  for (;;) {
+    struct pollfd pf = {0, 0, 0};
+    pf.fd = g_sock_fd;
+    pf.events = (POLLIN | POLLERR | POLLHUP);
+    co_poll(co_get_epoll_ct(), &pf, 1, 10000);
+
+    int ret = HandleRequest();
+    if (ret) {
+      tylog("handleRequest ret=%d", ret);
+    }
+  }
+
+  return nullptr;
+}
+
+void* mytimer(void*) {
+  co_enable_hook_sys();
+
+  for (;;) {
+    g_now.ComputeNow();
+    TimerManager::Instance()->UpdateTimers(g_now);
+    // sleep 1ms
+    poll(NULL, 0, 1);
+  }
+}
+
 int main() {
   int ret = 0;
+
+  tylogAndPrintfln("nowMs=%ld.", g_now_ms);
 
   // * init random seed
   srand(g_now_ms + getpid());
@@ -598,7 +633,37 @@ int main() {
   g_startServer->Add({{"dummy", "startServer"}}).Increment();
 
   // step 3: event loop
-  CrossPlatformNetworkIO();
+  // CrossPlatformNetworkIO();
+
+  {
+    ret = SetNonBlock(g_sock_fd);
+    if (ret) {
+      tylog("setNonBlock ret=%d.", ret);
+      return ret;
+    }
+
+    // create recv client req
+    stCoRoutine_t* co = nullptr;
+    ret = co_create(&co, nullptr, libcoStart, nullptr);
+    if (ret) {
+      tylog("co create ret=%d.", ret);
+      return ret;
+    }
+    co_resume(co);
+  }
+
+  {
+    // create timer
+    stCoRoutine_t* co = nullptr;
+    ret = co_create(&co, nullptr, mytimer, nullptr);
+    if (ret) {
+      tylog("co create ret=%d.", ret);
+      return ret;
+    }
+    co_resume(co);
+  }
+
+  co_eventloop(co_get_epoll_ct(), 0, 0);
 
   return 0;
 }

@@ -25,7 +25,7 @@ new_local_repository(
 package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "openssl_package",
-    srcs = ["lib/libssl.a", "lib/libcrypto.a"],
+    srcs = ["libssl.a", "libcrypto.a"],
     hdrs = glob(["include/**/*.h"]),
     includes = ["include/"],
 )
@@ -35,7 +35,7 @@ cc_library(
 # 3. srtp
 new_local_repository(
     name = "srtp",
-    path = "third_party/srtp",
+    path = "third_party/libsrtp",
     # path = select({
     # "@bazel_tools//src/conditions:linux": "srtp",
     # "@bazel_tools//src/conditions:darwin": "/opt/homebrew/opt/srtp"}),
@@ -43,8 +43,8 @@ new_local_repository(
     build_file_content = """
 package(default_visibility = ["//visibility:public"])
 cc_library(
-    name = "srtp_package",
-    srcs = ["lib/libsrtp2.a"],
+    name = "libsrtp_package",
+    srcs = ["libsrtp2.a"],
     hdrs = glob(["include/**/*.h"]),
     includes = ["include"],
 )
@@ -129,7 +129,7 @@ cc_library(
 # 9. opus
 new_local_repository(
     name = "opus",
-    path = "third_party/libopus",
+    path = "third_party/opus",
     # path = select({
     # "@bazel_tools//src/conditions:linux": "srtp",
     # "@bazel_tools//src/conditions:darwin": "/opt/homebrew/opt/srtp"}),
@@ -138,7 +138,7 @@ new_local_repository(
 package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "opus_package",
-    srcs = ["lib/libopus.a"],
+    srcs = [".libs/libopus.a"],
     hdrs = glob(["include/**/*.h"]),
     includes = ["include"],
 )
@@ -200,4 +200,31 @@ cc_library(
     includes = ["include"],
 )
 """
+)
+
+# 11. libco
+# doc https://blog.csdn.net/GreyBtfly/article/details/83688996
+# new_local_repository(
+#     name = "libco",
+#     path = "third_party",
+#     # path = select({
+#     # "@bazel_tools//src/conditions:linux": "srtp",
+#     # "@bazel_tools//src/conditions:darwin": "/opt/homebrew/opt/srtp"}),
+# 
+#     build_file_content = """
+# package(default_visibility = ["//visibility:public"])
+# cc_library(
+#     name = "libco_package",
+#     srcs = ["libco/libcolib.a"],
+#     hdrs = glob(["libco/*.h"]),
+#     includes = ["libco"],
+# )
+# """
+# )
+
+# load("@bazel_tools//tools/build_defs/repo:local.bzl", "local_repository")
+
+local_repository(
+    name = "libco",
+    path = "third_party/basic/",
 )

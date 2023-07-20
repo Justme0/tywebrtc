@@ -7,13 +7,14 @@ cc_binary(
 	  # hdrs = glob(["**/*.h"]),
     # includes = ['.'],
     # OPT: remove error=old-style-cast
-	  copts = ["-I src", "-Wno-error=old-style-cast", "-Wno-error=deprecated-declarations"],
+    # shit sctp header file use condition compile
+	  copts = ["-D SCTP_DEBUG", "-I src", "-Werror", "-Wall", "-Wextra", "-Wno-error=old-style-cast", "-Wno-error=deprecated-declarations"],
     linkopts = ["-l dl -pthread -l z"],
     deps = [
         "@tylib//:tylib",
         "@sctp//:sctp_package",
         "@librtmp//:librtmp_package",
-        "@srtp//:srtp_package",
+        "@srtp//:libsrtp_package",
         "@com_github_jupp0r_prometheus_cpp//pull",
         "@ffmpeg//:ffmpeg_package",
         "@opus//:opus_package",
@@ -22,6 +23,8 @@ cc_binary(
         "@srt//:srt_package",
         # srt depends openssl, so in the front
         "@openssl//:openssl_package",
+        # "@libco//:libco_package",
+        "@libco//colib:colib",
     ],
 )
 

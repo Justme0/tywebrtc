@@ -123,7 +123,7 @@
 
         function sendMessage() {
             sendChannel.send(messageInputBox.value);
-            addToDialog('[me] ' + messageInputBox.value)
+            addToDialog('me: ' + messageInputBox.value)
 
             messageInputBox.value = "";
             messageInputBox.focus();
@@ -140,7 +140,7 @@
         }
 
         function handleReceiveMessage(event) {
-            addToDialog('[friend] ' + event.data)
+            addToDialog('friend: ' + event.data)
         }
 
         // Handle status changes on the local end of the data

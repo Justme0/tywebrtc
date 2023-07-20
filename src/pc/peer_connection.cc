@@ -26,7 +26,7 @@ PeerConnection::~PeerConnection() {
   TimerManager::Instance()->KillTimer(&this->dtlsTimer_);
 }
 
-// vBufSend is encrypted data
+// vBufSend is encrypted data if RTP
 int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {
   int r = rand() % 100;
   if (r < kDownlossRateMul100) {
@@ -56,7 +56,7 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
 
   uint8_t cSubCmd = vBufReceive.front();
   PacketType packType = getPacketType(cSubCmd);
-  tylog("subcmd=%hhu, packType=%s", cSubCmd,
+  tylog("subcmd=%hhu, packType=%s (if RTP, maybe RTCP)", cSubCmd,
         PacketTypeToString(packType).data());
   tylog("stateMachine=%s", StateMachineToString(stateMachine_).data());
 
@@ -64,6 +64,7 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
   // switch-case
   switch (packType) {
     case PacketType::STUN: {
+      DumpRecvPacket(vBufReceive);
       ret = iceHandler_.HandleIcePacket(vBufReceive);
       if (ret) {
         tylog("handle ice packet fail, ret=%d", ret);
@@ -73,6 +74,7 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
     }
 
     case PacketType::DTLS: {
+      DumpRecvPacket(vBufReceive);
       ret = dtlsHandler_.HandleDtlsPacket(vBufReceive);
       if (ret) {
         tylog("handle dtls packet fail, ret=%d", ret);
@@ -82,6 +84,7 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
     }
 
     case PacketType::RTP: {
+      // dump recv data after decrypting according to RTP/RTCP
       ret = rtpHandler_.HandleRtpPacket(vBufReceive);
       if (ret) {
         tylog("handle rtp packet fail, ret=%d", ret);

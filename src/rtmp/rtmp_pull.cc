@@ -17,6 +17,7 @@
 #include <sstream>
 
 #include <openssl/md5.h>
+#include "colib/co_routine.h"
 #include "librtmp/log.h"
 #include "librtmp/rtmp_sys.h"
 
@@ -777,7 +778,78 @@ RtmpPuller::RtmpPuller(PeerConnection& pc) : belongingPeerConnection_(pc) {
 
 extern int g_efd;
 
+void* MyRtmpHandle(void* pRtmpPuller) {
+  tylog("enter myRtmpHandle");
+  co_enable_hook_sys();
+
+  const int Idx = 0;
+
+  RtmpPuller& rtmpPuller = *reinterpret_cast<RtmpPuller*>(pRtmpPuller);
+  RTMP* pRtmp = &rtmpPuller.rtmp_;
+
+  for (;;) {
+    struct pollfd pf = {0, 0, 0};
+    pf.fd = rtmpPuller.rtmp_.m_sb.sb_socket;
+    pf.events = (POLLIN | POLLERR | POLLHUP);
+    co_poll(co_get_epoll_ct(), &pf, 1, 10000);
+
+    // may stop when ConnectStream
+    if (!RTMP_IsConnected(pRtmp)) {
+      tylog("rtmp is not connected, not connectStream, return");
+      // TODO: how to free self?
+      return nullptr;
+    }
+
+    bool ok = RTMP_ConnectStream(pRtmp, 0);
+    if (!ok) {
+      if (errno == EAGAIN) {
+        tylog("rtmp connectStream not ok, but not error (nonblock mode)");
+
+        continue;
+      } else {
+        tylog("connectStream not ok, may be err, stop connect");
+        // should close rtmp?
+        return nullptr;
+      }
+    } else {
+      break;
+    }
+  }
+
+  tylog("socketfd:%d, Connect Server all ok tcURL=%s.", pRtmp->m_sb.sb_socket,
+        pRtmp->Link.tcUrl.av_val);
+
+  assert(pRtmp->m_sb.sb_socket > 0);
+
+  rtmpPuller.m_Clients[Idx].State = RTMP_STATE_PLAY;
+
+  rtmpPuller.m_Socks[Idx] = pRtmp->m_sb.sb_socket;
+
+  struct stat tStat;
+  if (-1 == fstat(pRtmp->m_sb.sb_socket, &tStat)) {
+    tylog("fstat fd:%d error:%s\n", pRtmp->m_sb.sb_socket, strerror(errno));
+    // to destruct client
+    // may should not use assert
+    assert(!"shit rtmp fd");
+  }
+
+  assert(RTMP_IsConnected(pRtmp));
+
+  int ret = rtmpPuller.HandlePacket();
+  if (ret) {
+    tylog("handleRequest fail, ret=%d, to close rtmp", ret);
+    RTMP_Close(pRtmp);
+    tylog("close rtmp done");
+
+    return nullptr;
+  }
+
+  return nullptr;
+}
+
 int RtmpPuller::InitProtocolHandler(const std::string& Url) {
+  int ret = 0;
+
   tylog("rtmp url:%s.", Url.c_str());
 
   RTMP* pRtmp = &rtmp_;  // for convention
@@ -820,45 +892,27 @@ int RtmpPuller::InitProtocolHandler(const std::string& Url) {
     return -1;
   }
 
-  tylog("rtmp connect ok");
-  ok = RTMP_ConnectStream(pRtmp, 0);
-  if (!ok) {
-    tylog("rtmp connect stream not ok");
-    return -2;
+  assert(RTMP_IsConnected(pRtmp));
+  tylog("rtmp fd=%d connect ok", pRtmp->m_sb.sb_socket);
+
+  ret = SetNonBlock(pRtmp->m_sb.sb_socket);
+  if (ret) {
+    tylog("setNonBlock ret=%d.", ret);
+
+    return ret;
   }
 
-  tylog("socketfd:%d m_Nfds:%d Connect Server all ok tcURL=%s.",
-        pRtmp->m_sb.sb_socket, m_Nfds, pRtmp->Link.tcUrl.av_val);
-
-  m_Clients[Idx].State = RTMP_STATE_PLAY;
-
-  if (pRtmp->m_sb.sb_socket > 0) {
-    m_Socks[Idx] = pRtmp->m_sb.sb_socket;
-    m_Nfds = pRtmp->m_sb.sb_socket > m_Nfds ? pRtmp->m_sb.sb_socket : m_Nfds;
-    tylog("Get socket:%d", pRtmp->m_sb.sb_socket);
+  stCoRoutine_t* co = nullptr;
+  ret = co_create(&co, nullptr, MyRtmpHandle, this);
+  if (ret) {
+    tylog("co create ret=%d.", ret);
+    return ret;
   }
+  co_resume(co);
 
-  if (0 != pRtmp->m_sb.sb_socket) {
-    struct stat tStat;
+  tylog("co_resume done, this=%p.", this);
 
-    if (-1 == fstat(pRtmp->m_sb.sb_socket, &tStat)) {
-      tylog("fstat fd:%d error:%s\n", pRtmp->m_sb.sb_socket, strerror(errno));
-      // to destruct client
-      // may should not use assert
-      assert(!"shit rtmp fd");
-    }
-
-    epoll_event event;
-    event.data.fd = pRtmp->m_sb.sb_socket;
-    event.events = EPOLLIN | EPOLLHUP | EPOLLERR | EPOLLRDHUP;
-    if (epoll_ctl(g_efd, EPOLL_CTL_ADD, pRtmp->m_sb.sb_socket, &event) == -1) {
-      tylogAndPrintfln(
-          "epoll_ctl return -1, add g_sockfd=%d failed errno=%d[%s]",
-          pRtmp->m_sb.sb_socket, errno, strerror(errno));
-
-      return -1;
-    }
-  }
+  // co_release(co);
 
   return 0;
 }
@@ -1013,7 +1067,7 @@ int RtmpPuller::SendChunksize(RTMP* pRtmp, int Size) {
   char pBuf[4];
   char* pEnd = pBuf + sizeof(pBuf);
   Packet.m_nChannel = 0x02;
-  Packet.m_headerType = 1;
+  Packet.m_headerType = RTMP_PACKET_SIZE_MEDIUM;
   Packet.m_packetType = 0x01;
   Packet.m_body = pBuf;
   Packet.m_nBodySize = 4;
@@ -2191,11 +2245,30 @@ _CTRL_ERR_:
   return RTMP_ERROR;
 }
 
+std::string RTMPChunkToString(const RTMPChunk& chunk) {
+  // print head?
+  return tylib::format_string("{headerSize=%d, chunkSize=%d, chunk=%p}",
+                              chunk.c_headerSize, chunk.c_chunkSize,
+                              chunk.c_chunk);
+}
+
+std::string RTMPPacketToString(const RTMPPacket& pkg) {
+  return tylib::format_string(
+      "{headerType=%s, packetType=%s, hasAbsTimestamp=%d, channel=%d, "
+      "timeStamp=%u, infoField2=%d, bodySize=%u, bytesRead=%u, chunk=%s, "
+      "body=%p}",
+      RtmpHeaderTypeToString(pkg.m_headerType).data(),
+      RtmpPacketTypeToString(pkg.m_packetType).data(), pkg.m_hasAbsTimestamp,
+      pkg.m_nChannel, pkg.m_nTimeStamp, pkg.m_nInfoField2, pkg.m_nBodySize,
+      pkg.m_nBytesRead,
+      pkg.m_chunk ? RTMPChunkToString(*pkg.m_chunk).data() : "", pkg.m_body);
+}
+
 int RtmpPuller::HandleRtmpPacket(Client* pClient, RTMPPacket* pPkg) {
   RTMP* pRtmp = &rtmp_;
 
   if ((0 == pPkg->m_nBodySize) || (NULL == pPkg->m_body)) {
-    tylog("RtmpPacket is null");
+    tylog("RtmpPacket is null: %s.", RTMPPacketToString(*pPkg).data());
 
     return 0;
   }
@@ -2238,7 +2311,7 @@ int RtmpPuller::HandleRtmpPacket(Client* pClient, RTMPPacket* pPkg) {
       break;
     }
     default: {
-      tylog("NOTE: Got unhandled packet type %d, not return err :)",
+      tylog("NOTE: not handle packet type %d, not return err :)",
             pPkg->m_packetType);
       return 0;
     }
@@ -2247,116 +2320,63 @@ int RtmpPuller::HandleRtmpPacket(Client* pClient, RTMPPacket* pPkg) {
   return 0;
 }
 
-std::string RtmpPacketTypeToString(int rtmpPacketType) {
-  switch (rtmpPacketType) {
-    case RTMP_PACKET_TYPE_CHUNK_SIZE:
-      return "RTMP_PACKET_TYPE_CHUNK_SIZE";
-    case RTMP_PACKET_TYPE_BYTES_READ_REPORT:
-      return "RTMP_PACKET_TYPE_BYTES_READ_REPORT";
-    case RTMP_PACKET_TYPE_CONTROL:
-      return "RTMP_PACKET_TYPE_CONTROL";
-    case RTMP_PACKET_TYPE_SERVER_BW:
-      return "RTMP_PACKET_TYPE_SERVER_BW";
-    case RTMP_PACKET_TYPE_CLIENT_BW:
-      return "RTMP_PACKET_TYPE_CLIENT_BW";
-    case RTMP_PACKET_TYPE_AUDIO:
-      return "RTMP_PACKET_TYPE_AUDIO";
-    case RTMP_PACKET_TYPE_VIDEO:
-      return "RTMP_PACKET_TYPE_VIDEO";
-    case RTMP_PACKET_TYPE_FLEX_STREAM_SEND:
-      return "RTMP_PACKET_TYPE_FLEX_STREAM_SEND";
-    case RTMP_PACKET_TYPE_FLEX_SHARED_OBJECT:
-      return "RTMP_PACKET_TYPE_FLEX_SHARED_OBJECT";
-    case RTMP_PACKET_TYPE_FLEX_MESSAGE:
-      return "RTMP_PACKET_TYPE_FLEX_MESSAGE";
-    case RTMP_PACKET_TYPE_INFO:
-      return "RTMP_PACKET_TYPE_INFO";
-    case RTMP_PACKET_TYPE_SHARED_OBJECT:
-      return "RTMP_PACKET_TYPE_SHARED_OBJECT";
-    case RTMP_PACKET_TYPE_INVOKE:
-      return "RTMP_PACKET_TYPE_INVOKE";
-    case RTMP_PACKET_TYPE_FLASH_VIDEO:
-      return "RTMP_PACKET_TYPE_FLASH_VIDEO";
-    default:
-      return "unknownRtmpPacketType[" + std::to_string(rtmpPacketType) + "]";
-  }
-}
-
 int RtmpPuller::HandlePacket() {
+  int ret = 0;
+
   Client* pClient = &this->m_Clients[0];
-
-  RTMP* pRtmp = &rtmp_;
-
   pClient->ActiveTime = g_now_ms;
 
-  // return value is same as recv
-  int recvRet = RTMPSockBuf_Fill(&pRtmp->m_sb);
-  if (recvRet == -1) {
-    tylog("received invalid packet, errno %d[%s]", errno, strerror(errno));
-
-    return 1;
-  } else if (recvRet == 0) {
-    tylog("peer shutdown, not error");
-
-    return 0;
-  }
-  assert(recvRet > 0);
-
-  tylog(
-      "++++++++++++++++++++++++++++++++++"
-      " from rtmp pull, recv size=%d "
-      "++++++++++++++++++++++++++++++++++",
-      recvRet);
-
-  if (0 > pRtmp->m_sb.sb_size) {
-    tylog("RTMPSockBuf_Fill err Ret[%d] sb_size[%d]", recvRet,
-          pRtmp->m_sb.sb_size);
-    return RTMP_ERROR;
-  } else if (0 == pRtmp->m_sb.sb_size) {
-    tylog("Client DisConnect\n");
-    return RTMP_ERROR;
-  }
-
-  // key
-  // if (RTMP_CONNECTED != pRtmp->m_HSContext.clientHSState) {
-  //   return RTMP_Connect_Process(pRtmp);
-  // }
-
-  RTMPPacket pPkg;
-  memset(&pPkg, 0, sizeof(RTMPPacket));
+  RTMP* pRtmp = &rtmp_;
 
   tylog("rtmp sb_socket=%d.", pRtmp->m_sb.sb_socket);
   // OPT: use non-block connect
   assert(RTMP_IsConnected(pRtmp));
 
-  do {
-    bool ok = RTMP_ReadPacket(pRtmp, &pPkg);
-    if (!ok) {
-      tylog("RTMP ReadPacket not ok");
-      // should free pPkg?
-      return -1;
-    }
-    tylog("recv packet type %d", pPkg.m_packetType);
+  for (;;) {
+    struct pollfd pf = {0, 0, 0};
+    pf.fd = rtmp_.m_sb.sb_socket;
+    pf.events = (POLLIN | POLLERR | POLLHUP);
+    co_poll(co_get_epoll_ct(), &pf, 1, 1000);
 
+    RTMPPacket rtmpPacket;
+    memset(&rtmpPacket, 0, sizeof(RTMPPacket));
+    // internal call RTMPSockBuf_Fill
+    bool ok = RTMP_ReadPacket(pRtmp, &rtmpPacket);
+    if (!ok) {
+      if (errno == EAGAIN) {
+        tylog("RTMP ReadPacket return EAGAIN, not error");
+        // FIXME
+
+        continue;
+      } else {
+        tylog("RTMP ReadPacket err errno=%d[%s]", errno, strerror(errno));
+        // should free rtmpPacket?
+        return -1;
+      }
+    }
+
+    tylog("recv rtmp packet %s", RTMPPacketToString(rtmpPacket).data());
+
+    // no use?
     if (RTMP_STATE_RTMP_CONNECTED > pClient->State) {
       pClient->State = RTMP_STATE_RTMP_CONNECTED;
     }
 
-    int Ret = HandleRtmpPacket(pClient, &pPkg);
-
-    RTMPPacket_Free(&pPkg);
-
-    if (RTMP_ERROR == Ret) {
-      tylog("handleRtmpPacket Need DisConnect Ret:%d\n", Ret);
-      return Ret;
-    } else if (RTMP_ERR_EXIST == Ret) {
-      tylog("Client Send EOF,  Closed Connection Ret:%d\n", Ret);
-      return Ret;
-    } else if (Ret) {
-      tylog("handle rtmp return ret=%d", Ret);
-      return Ret;
+    if (!RTMPPacket_IsReady(&rtmpPacket)) {
+      tylog("rtmp packet not ready, packet=%s.",
+            RTMPPacketToString(rtmpPacket).data());
+      assert(rtmpPacket.m_body == nullptr);
     }
-  } while (pRtmp->m_sb.sb_size > 0);
+
+    ret = HandleRtmpPacket(pClient, &rtmpPacket);
+    // if not ready, free has no effect
+    RTMPPacket_Free(&rtmpPacket);
+    if (ret) {
+      tylog("handleRtmpPacket ret=%d.", ret);
+
+      return ret;
+    }
+  }
 
   return 0;
 }
@@ -2413,36 +2433,6 @@ int RtmpPuller::SetupListen(int) {
 
   // tylog( "TCP Listening on %s:%d sockfd:%d\n",
   // inet_ntoa(addr.sin_addr), port, sockfd);
-  return sockfd;
-}
-
-int RtmpPuller::SetUdpPort(int port) {
-  int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  if (-1 == sockfd) {
-    fprintf(stderr, "%s, couldn't create socket port:%d.", __FUNCTION__, port);
-    tylog("couldn't create socket port:%d.", port);
-    m_InitErr = 2;
-    return -1;
-  }
-
-  int tmp = 1;
-  setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &tmp, sizeof(tmp));
-  struct sockaddr_in addr;
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = m_InnerAddr.s_addr;
-  addr.sin_port = htons(port);
-  int sockflags = fcntl(sockfd, F_GETFL, 0);
-  fcntl(sockfd, F_SETFL, sockflags | O_NONBLOCK);
-
-  if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr))) {
-    fprintf(stderr, "%s, udp bind failed for port number: %d\n", __FUNCTION__,
-            port);
-    tylog("udp bind failed for port number: %d\n", port);
-    m_InitErr = 3;
-    return -1;
-  }
-
-  tylog("udp bind on %s:%d sockfd:%d\n", inet_ntoa(m_InnerAddr), port, sockfd);
   return sockfd;
 }
 

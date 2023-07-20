@@ -19,3 +19,15 @@
 [submodule "third_party/x264"]
 	path = third_party/x264
 	url = https://github.com/mirror/x264.git
+[submodule "third_party/libco"]
+	path = third_party/libco
+	url = https://github.com/Tencent/libco.git
+[submodule "third_party/gperftools"]
+	path = third_party/gperftools
+	url = https://github.com/gperftools/gperftools.git
+[submodule "third_party/libsrtp"]
+	path = third_party/libsrtp
+	url = https://github.com/cisco/libsrtp.git
+[submodule "third_party/opus"]
+	path = third_party/opus
+	url = https://github.com/xiph/opus
