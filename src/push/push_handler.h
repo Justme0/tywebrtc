@@ -15,21 +15,22 @@ class PushHandler {
   PushHandler &operator=(const PushHandler &) = delete;
 
   int InitPushHandler(
-      std::function<int(void)> initFunc,
+      std::function<int(void)> initFunc, std::function<bool(void)> initSuccFunc,
       std::function<int(const std::vector<char> &frame, uint64_t frameMs)>
           sendAudioFrame,
       std::function<int(const std::vector<char> &frame, uint64_t frameMs)>
           sendVideoFrame);
 
-  bool InitSucc() const { return initRet_ == 0; };
+  // must check if empty, otherwise throw.
+  // https://stackoverflow.com/questions/21806632/how-to-properly-check-if-stdfunction-is-empty-in-c11
+  bool InitSucc() const { return initSuccFunc_ && initSuccFunc_(); };
 
   int SendAudioFrame(const std::vector<char> &audioFrame, uint64_t frameMs);
   int SendVideoFrame(const std::vector<char> &h264Frame, uint64_t frameMs);
 
  private:
-  int initRet_ = -1;  // default error
-
   std::function<int(void)> initFunc_;
+  std::function<bool(void)> initSuccFunc_;
   std::function<int(const std::vector<char> &frame, uint64_t frameMs)>
       sendAudioFrameFunc_;
   std::function<int(const std::vector<char> &frame, uint64_t frameMs)>

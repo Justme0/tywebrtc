@@ -11,11 +11,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
-// #include "rtmp_proxy.h"
-// #include "wbl/netinet_util.h"
-
 #include "log/log.h"
-
 static const int initGetHostByNameFail = 2939383;
 static const int gethostbyname_timeout = 2939384;
 static const int dns_gethostbyname_hostNotFound = 2939385;

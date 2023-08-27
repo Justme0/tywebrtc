@@ -69,9 +69,9 @@ bool SrtpHandler::ConfigureSrtpSession(srtp_t *session, const std::string &key,
   std::string decodedKey = tylib::Base64Decode(key);
   tylog(
       "transmit type=%s. input key len=%zu, data=%s, after base64 decode, "
-      "len=%zu, data=%s",
+      "len=%zu.",
       TransmissionTypeToString(type).data(), key.size(), key.data(),
-      decodedKey.size(), decodedKey.data());
+      decodedKey.size());
 
   // decodedKey.push_back('\0');                 // NOTE?
 

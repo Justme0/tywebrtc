@@ -8,8 +8,7 @@
 // VideoRfc7741::VideoUnPackVp8RtpStm() is single thread, so use global tinyid
 // is no problem.
 // FFmpeg cannot deliver private data to log callback function, we use global
-// variable. see
-// http://km.oa.com/q/view/251359
+// variable.
 // uint64_t g_ffmpeg_codec_tinyid_for_log = 0;
 
 bool g_register_all = false;
@@ -228,7 +227,7 @@ bool CodecEncoder::InitEncoder(const CodecParam &param) {
   av_codec_tx_->gop_size = 30;
 
   av_codec_tx_->time_base.num = 1;
-  av_codec_tx_->time_base.den = 15;
+  av_codec_tx_->time_base.den = 15;  // taylor to check
 
   av_codec_tx_->qmin = 10;
   av_codec_tx_->qmax = 51;

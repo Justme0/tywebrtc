@@ -1,11 +1,17 @@
 #include "rtmp/rtmp_handler.h"
 
+#include <poll.h>
+
 #include <cassert>
 
-#include "log/log.h"
+#include "colib/co_routine.h"
 #include "tylib/time/timer.h"
 
-RtmpHandler::RtmpHandler() : flvAssist(*this) {}
+#include "global_tmp/global_tmp.h"
+#include "log/log.h"
+
+RtmpHandler::RtmpHandler(PeerConnection &pc)
+    : belongingPeerConnection_(pc), flvAssist(*this) {}
 
 RtmpHandler::~RtmpHandler() {
   if (mRtmpInstance != NULL) {
@@ -37,9 +43,9 @@ int RtmpHandler::InitProtocolHandler(const std::string &rtmpUrl) {
   return 0;
 }
 
-bool RtmpHandler::InitSucc() const { return nullptr != this->mRtmpInstance; }
+bool RtmpHandler::InitSucc() const { return initSucc_; }
 
-// to cancle repeat
+// to cancle wrap
 int RtmpHandler::SendAudioFrame(const std::vector<char> &audioFrame,
                                 uint64_t frameMs) {
   return flvAssist.SendAudioFrame(audioFrame, frameMs);
@@ -48,54 +54,6 @@ int RtmpHandler::SendAudioFrame(const std::vector<char> &audioFrame,
 int RtmpHandler::SendVideoFrame(const std::vector<char> &h264Frame,
                                 uint64_t frameMs) {
   return flvAssist.SendVideoFrame(h264Frame, frameMs);
-
-  //   if (!RTMP_IsConnected(
-  //           mRtmpInstance) /*&& reconnect(push_key, outip, selfPort) != 0*/)
-  //           {
-  //     return -2;
-  //   }
-
-  /*
-    if (NULL == flvTag || flvTagLength < 11) {
-      return -3;
-    }
-
-  #if 0
-          if (flvTagLength > mMaxRtmpPacketLength)
-          {
-                  RTMPPacket_Free(mRtmpPacket);
-                  mMaxRtmpPacketLength = flvTagLength * 2;
-                  RTMPPacket_Alloc(mRtmpPacket, mMaxRtmpPacketLength);
-                  RTMPPacket_Reset(mRtmpPacket);
-          }
-
-          unsigned char tmp[12] = { 0 };
-          memcpy(tmp, flvTag, 11);
-
-          mRtmpPacket->m_headerType              = RTMP_PACKET_SIZE_LARGE;
-          mRtmpPacket->m_packetType               = flvTag[0];
-          mRtmpPacket->m_nChannel                   = 0x04;
-          mRtmpPacket->m_nBodySize                 = 0 | flvTag[1] << 16 |
-  flvTag[2] << 8 | flvTag[3];
-          if (mRtmpPacket->m_nBodySize > flvTagLength - 11)
-          {
-                  return -4;
-          }
-          mRtmpPacket->m_nTimeStamp            = 0 |  flvTag[4] << 16 |
-  flvTag[5] << 8 | flvTag[6];
-          mRtmpPacket->m_hasAbsTimestamp = flvTag[7];
-          mRtmpPacket->m_nInfoField2               = mRtmpInstance->m_stream_id;
-          memcpy(mRtmpPacket->m_body, flvTag + 11, mRtmpPacket->m_nBodySize);
-
-          int ret = RTMP_SendPacket(mRtmpInstance, mRtmpPacket, 0);
-  #else
-    int ret = RTMP_Write(mRtmpInstance, (char *)flvTag, flvTagLength);
-  #endif
-
-    tylog("Try to send rtmp pkg(Len=%u), Ret=%d", flvTagLength, ret);
-
-    return ret < 1 ? -5 : 0;
-    */
 }
 
 // now no use
@@ -123,6 +81,7 @@ int RtmpHandler::RecvRtmpPacket(std::vector<char> *o_recvBuf) {
   return 0;
 }
 
+// no network operation
 int RtmpHandler::InitRtmp_() {
   if (mRtmpInstance != NULL) {
     return 0;
@@ -138,6 +97,7 @@ int RtmpHandler::InitRtmp_() {
   return 0;
 }
 
+// no network operation
 int RtmpHandler::SetupRtmp_(std::string rtmpUrl, bool writeable,
                             uint32_t timeout, const bool liveSource) {
   if (NULL == mRtmpInstance) {
@@ -206,7 +166,6 @@ int RTMP_SwitchToNonBlocking(RTMP *r)
 }
 */
 
-// return error code
 int RtmpHandler::ConnectRtmp_() {
   if (NULL == mRtmpInstance) {
     return -1;
@@ -222,24 +181,50 @@ int RtmpHandler::ConnectRtmp_() {
     mRtmpUrl.clear();
     return -2;
   }
+  assert(RTMP_IsConnected(mRtmpInstance));
 
   uint64_t timeEnd = g_now_ms;  // same as timeBegin?
   uint64_t costTime = timeEnd - timeBegin;
-  tylog("RTMP_Connect success, timecost:%lu (ms)", costTime);
+  tylog("RTMP_Connect success, timecostMs=%lu, fd=%d.", costTime,
+        mRtmpInstance->m_sb.sb_socket);
   if (1000 < costTime) {
     tylog("RTMP_Connect cost too long, timecost:%lu (ms)", costTime);
   }
 
-  timeBegin = g_now_ms;
-  if (!RTMP_ConnectStream(mRtmpInstance, 0)) {
-    tylog("RTMP_ConnectStream fail");
-    RTMP_Close(mRtmpInstance);
-    RTMP_Free(mRtmpInstance);
-    mRtmpInstance = NULL;
-    mRtmpUrl.clear();
-    assert(!"not playing");
+  // OPT: should set in RTMP_Connect
+  // ret = SetNonBlock(mRtmpInstance->m_sb.sb_socket);
+  // if (ret) {
+  //   tylog("setNonBlock ret=%d.", ret);
 
-    return -3;
+  //   return ret;
+  // }
+
+  timeBegin = g_now_ms;
+
+  // struct pollfd pf = {0, 0, 0};
+  // pf.fd = mRtmpInstance->m_sb.sb_socket;
+  // pf.events = (POLLIN | POLLERR | POLLHUP | POLLOUT);
+  // co_poll(co_get_epoll_ct(), &pf, 1, 10000);
+
+  // may stop when ConnectStream
+  if (!RTMP_IsConnected(mRtmpInstance)) {
+    tylog("rtmp is not connected, not connectStream, return");
+    // TODO: how to free self?
+    return -24;
+  }
+
+  ok = RTMP_ConnectStream(mRtmpInstance, 0);
+  if (!ok) {
+    if (errno == EAGAIN) {
+      tylog("rtmp connectStream not ok (block mode)");
+
+      return -233;
+    } else {
+      tylog("connectStream err, stop connect, errno=%d[%s], rtmp=%s.", errno,
+            strerror(errno), RTMPToString(*mRtmpInstance).data());
+      // should close rtmp?
+      return -928;
+    }
   }
 
   // if (RTMP_SwitchToNonBlocking(mRtmpInstance)) {
@@ -254,9 +239,12 @@ int RtmpHandler::ConnectRtmp_() {
     tylog("connect cost too long=%ld.", costTime);
   }
 
+  initSucc_ = true;
+
   return 0;
 }
 
+// now no use
 int RtmpHandler::ReconnectRtmp_() {
   int ret = SetupRtmp_(mRtmpUrl, mWriteable, mTimeOut, mLiveSource);
   if (ret != 0) {

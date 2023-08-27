@@ -34,7 +34,8 @@ std::shared_ptr<PeerConnection> PCManager::GetPeerConnection(
     // Use lb as a hint to insert, so it can avoid another lookup
     // OPT: ICE未选上的地址也会为它生成PC，可优化为PC池
     auto i = client2PC_.emplace_hint(
-        lb, std::make_pair(clientSrcId, std::make_shared<PeerConnection>()));
+        lb, std::make_pair(clientSrcId,
+                           std::make_shared<PeerConnection>(ip, port)));
     assert(nullptr != i->second);
     i->second->StoreClientIPPort(ip, port);
 

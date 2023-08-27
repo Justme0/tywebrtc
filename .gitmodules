@@ -1,6 +1,7 @@
 [submodule "third_party/tylib"]
 	path = third_party/tylib
-	url = git@github.com:justme0/tylib
+	url = https://github.com/justme0/tylib
+    branch = main
 [submodule "third_party/usrsctp"]
 	path = third_party/usrsctp
 	url = https://github.com/sctplab/usrsctp
@@ -13,6 +14,7 @@
 [submodule "third_party/libvpx"]
 	path = third_party/libvpx
 	url = https://github.com/webmproject/libvpx
+	branch = main
 [submodule "third_party/srt"]
 	path = third_party/srt
 	url = https://github.com/Haivision/srt

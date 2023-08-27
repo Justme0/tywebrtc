@@ -23,6 +23,7 @@ class PullHandler {
                       std::function<int()> handlePacket,
                       std::function<int()> closeFunc);
 
+  // no use
   bool InitSucc() const { return initRet_ == 0; };
 
   // maybe should input packet blob

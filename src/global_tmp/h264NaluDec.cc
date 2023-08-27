@@ -148,7 +148,7 @@ int bs_read_ue(bs_t *s) {
   return ((1 << i) - 1 + bs_read(s, i));
 }
 
-int GetFrameType(unsigned char *pNalu, int Len) {
+WebVideoFrameType GetFrameType(unsigned char *pNalu, int Len) {
   bs_t s;
   bs_init(&s, pNalu + 1, Len - 1);
 
@@ -180,5 +180,5 @@ int GetFrameType(unsigned char *pNalu, int Len) {
       return WEB_VIDEO_FRAME_TYPE_I;
   }
 
-  return 1;
+  return WEB_VIDEO_FRAME_TYPE_P;
 }

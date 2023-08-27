@@ -46,6 +46,7 @@ cc_test(
   deps = [
     "@com_google_googletest//:gtest_main",
     "@tylib//:tylib",
+    "@librtmp//:librtmp_package",
     "@com_github_jupp0r_prometheus_cpp//pull",
   ],
 )

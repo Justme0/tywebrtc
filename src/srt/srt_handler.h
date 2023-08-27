@@ -4,17 +4,11 @@
 #include <string>
 #include <vector>
 
-#include "push/push_handler.h"
-
-#ifdef __cplusplus
 extern "C" {
-#endif
-
 #include "libavformat/avformat.h"
-
-#ifdef __cplusplus
 }
-#endif
+
+#include "push/push_handler.h"
 
 // create SRT server:
 // ffmpeg -loglevel debug -f mpegts -i srt://127.0.0.1:9001?mode=listener -c
@@ -34,8 +28,7 @@ class SrtHandler : public PushHandler {
                       AVDictionary*& options);
   int AddVideoStream_(uint32_t width, uint32_t height, AVDictionary*& options);
 
-  int SendFrame_(const std::vector<char>& h264Frame, uint64_t frameMs,
-                 bool bAudio);
+  int SendFrame_(const std::vector<char>& frame, uint64_t frameMs, bool bAudio);
 
  private:
   int audioStreamIndex_ = 0;

@@ -28,7 +28,8 @@ void RtpSender::Enqueue(RtpBizPacket&& rtpBizPacket) {
 }
 
 // To avoid copy, return value points to internal memory, note concurrent
-// problem, output only modify pointer
+// problem, output only modify pointer.
+// OPT: use optional to indicate NULL
 const std::vector<char>* RtpSender::GetSeqPacket(PowerSeqT powerSeq) const {
   auto it = sendQueue_.find(powerSeq);
   if (it == sendQueue_.end()) {

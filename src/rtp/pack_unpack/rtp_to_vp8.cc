@@ -4,6 +4,7 @@
 #include "rtp/pack_unpack/rtp_to_vp8.h"
 
 #include "log/log.h"
+#include "rtp/rtp_handler.h"
 
 static int ParseVP8Descriptor(RTP_HEADER_INFO_VP8* vp8, const void* void_data,
                               int data_length) {
@@ -92,7 +93,7 @@ bool RtpDepacketizerVp8::IsIdrFrame(char* buf, int buf_len) {
     return false;
   }
 
-  int PayoadLen = buf_len - h->getHeaderLength();
+  int PayloadLen = buf_len - h->getHeaderLength();
   RTP_HEADER_INFO_VP8 RtpHeadInfoVp8;
   RtpHeadInfoVp8.NonReference = false;
   RtpHeadInfoVp8.PictureId = NO_PIC_IDX;
@@ -103,10 +104,10 @@ bool RtpDepacketizerVp8::IsIdrFrame(char* buf, int buf_len) {
   RtpHeadInfoVp8.PartitionId = 0;
   RtpHeadInfoVp8.BeginningOfPartition = false;
   const int DescriptorSize = ParseVP8Descriptor(
-      &RtpHeadInfoVp8, (const uint8_t*)buf + h->getHeaderLength(), PayoadLen);
-  if (DescriptorSize == -1) {
-    tylog("Parse VP8Descriptor failed, HeadLen %d,PayoadLen %d",
-          h->getHeaderLength(), PayoadLen);
+      &RtpHeadInfoVp8, (const uint8_t*)buf + h->getHeaderLength(), PayloadLen);
+  if (DescriptorSize < 0) {
+    tylog("parseVP8Descriptor ret=%d, HeadLen %d,PayloadLen %d", DescriptorSize,
+          h->getHeaderLength(), PayloadLen);
     return false;
   }
   if (RtpHeadInfoVp8.PartitionId > 8) {
@@ -119,7 +120,7 @@ bool RtpDepacketizerVp8::IsIdrFrame(char* buf, int buf_len) {
 
   bool IsFirstPacket =
       RtpHeadInfoVp8.BeginningOfPartition && RtpHeadInfoVp8.PartitionId == 0;
-  int Vp8PayloadSize = PayoadLen - DescriptorSize;
+  int Vp8PayloadSize = PayloadLen - DescriptorSize;
   if (Vp8PayloadSize == 0) {
     tylog("Empty vp8 payload");
     return false;
@@ -135,7 +136,8 @@ bool RtpDepacketizerVp8::IsIdrFrame(char* buf, int buf_len) {
   return true;
 }
 
-RtpDepacketizerVp8::RtpDepacketizerVp8() {
+RtpDepacketizerVp8::RtpDepacketizerVp8(RtpHandler& rtpHandler)
+    : belongingRtpHandler_(rtpHandler) {
   Init();
   decoder = NULL;
   encoder = NULL;
@@ -187,21 +189,20 @@ void RtpDepacketizerVp8::Init() {
 
   m_UnPackParams.RequestKeyFrame = true;
   m_UnPackParams.PackSeqNo = 0xFFFFFFFF;
-
-  return;
 }
 
 int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
     const char* pData, int Length, std::vector<std::string>* o_h264Frames) {
+  int ret = 0;
+
   if (!pData || Length == 0) {
+    tylog("data null");
+    assert(0);  // tmp assert for debug
     return -1;
   }
 
   RtpHeader* pRtp = (RtpHeader*)(pData);
   unsigned short Seq = pRtp->getSeqNumber();
-  unsigned int RtpTimestamp = pRtp->getTimestamp();
-  unsigned int Ssrc = pRtp->getSSRC();
-  uint16_t PayLoad = pRtp->getPayloadType();
   unsigned char PaddingLen = 0;
   if (pRtp->hasPadding()) {
     // should check length
@@ -215,19 +216,24 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
   //   return -2;
   // }
   int HeadLen = pRtp->getHeaderLength();  //  sizeof(RtpHeader) + extOffet;
-  int PayoadLen = Length - HeadLen - PaddingLen;
-  if (PayoadLen == 0) {
-    tylog("payload=0, may be probe packet (all padding)");
+  int PayloadLen = Length - HeadLen - PaddingLen;
+  if (PayloadLen <= 0) {
+    tylog(
+        "payloadLen=%d, may be probe packet (all padding), NOTE: update shit "
+        "PackSeqNo",
+        PayloadLen);
+
+    m_UnPackParams.PackSeqNo = Seq;
+
     return 0;
   }
 
   InitRTPVideoHeaderVP8();
   const int DescriptorSize =
-      ParseVP8Descriptor(&m_RtpHeadInfoVp8, pData + HeadLen, PayoadLen);
-  if (DescriptorSize == -1) {
-    tylog(
-        "err: Parse VP8Descriptor failed,HeadLen %d,PaddingLen %d,PayoadLen %d",
-        HeadLen, PaddingLen, PayoadLen);
+      ParseVP8Descriptor(&m_RtpHeadInfoVp8, pData + HeadLen, PayloadLen);
+  if (DescriptorSize < 0) {
+    tylog("parseVP8Descriptor ret=%d, HeadLen %d,PaddingLen %d,PayloadLen %d",
+          DescriptorSize, HeadLen, PaddingLen, PayloadLen);
     assert(0);  // tmp assert for debug
     return -3;
   }
@@ -243,7 +249,7 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
 
   bool IsFirstPacket = m_RtpHeadInfoVp8.BeginningOfPartition &&
                        m_RtpHeadInfoVp8.PartitionId == 0;
-  int Vp8PayloadSize = PayoadLen - DescriptorSize;
+  int Vp8PayloadSize = PayloadLen - DescriptorSize;
   if (Vp8PayloadSize == 0) {
     tylog("Empty vp8 payload");
     return -5;
@@ -256,6 +262,8 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
     if (Vp8PayloadSize < 10) {
       // For an I-frame we should always have the uncompressed VP8 header
       // in the beginning of the partition.
+      tylog("vp8 payload size=%d < 10, err", Vp8PayloadSize);
+
       return -6;
     }
     Width_ = ((Vp8Payload[7] << 8) + Vp8Payload[6]) & 0x3FFF;
@@ -276,8 +284,8 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
     int LostPktCnt = ((Seq - m_UnPackParams.PackSeqNo - 1 + 0x10000) & 0xFFFF);
 
     if (0 < LostPktCnt) {
-      // tylog("Chn %llu,lost %d packets, pre_seq_num(%u), CurSeqNum(%u)!",
-      //  LostPktCnt, UnPackParams.PackSeqNo, Seq);
+      tylog("lost %d packets, pre_seq_num(%u), CurSeqNum(%u)!", LostPktCnt,
+            m_UnPackParams.PackSeqNo, Seq);
 
       m_UnPackParams.RequestKeyFrame = true;
       // TODO: req I frame
@@ -287,6 +295,7 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
       // }
       m_RawDataLen = 0;
       is_key_frame = false;
+
       return -7;
     }
   }
@@ -303,7 +312,8 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
   }
 
   if (pRtp->getMarker()) {
-    // end of frame
+    // end of frame, or should use ts change to check if new frame?
+    // https://github.com/meetecho/janus-gateway/blob/master/src/postprocessing/pp-webm.c#L349
     if (decoder == NULL) {
       decoder = new CodecDecoder();
       CodecParam Param;
@@ -319,6 +329,16 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
         tylog("InitDecoder failed");
       }
     }
+
+    ret = this->belongingRtpHandler_.WriteWebmFile(
+        {m_Vp8RawData, m_Vp8RawData + m_RawDataLen}, pRtp->getTimestamp(),
+        kMediaTypeVideo, is_key_frame);
+    if (ret) {
+      tylog("write webm video file ret=%d.", ret);
+
+      return ret;
+    }
+
     AVFrame* yuvFrame = decoder->Decode((uint8_t*)m_Vp8RawData, m_RawDataLen);
     bool ChangeResolution = false;
     if (yuvFrame) {
@@ -377,10 +397,7 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
     is_key_frame = false;
   }
 
-  m_UnPackParams.TimeStmp = RtpTimestamp;
   m_UnPackParams.PackSeqNo = Seq;
-  m_UnPackParams.Ssrc = Ssrc;
-  m_UnPackParams.PayLoad = PayLoad;
 
   return 0;
 }

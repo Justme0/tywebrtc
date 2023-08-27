@@ -111,7 +111,7 @@ class H264Unpacketizer {
   FrameBuffer frame_buffer_;
   VideoUnPackParam unpack_params_;
   bool started_ = false;
-  uint16_t last_seq_num_ = 0;
+  uint16_t expect_seq_num_ = 0;
   FILE *rtp_2_h264_file_ = nullptr;
 };
 

@@ -320,6 +320,7 @@ void CrossPlatformNetworkIO() {
 
 #elif __linux__
 
+/*
 #include <sys/epoll.h>
 
 int g_efd;  // tmp
@@ -409,6 +410,8 @@ void CrossPlatformNetworkIO() {
     }
   }
 }
+*/
+
 #endif
 
 static void InitTimer() {
@@ -548,8 +551,7 @@ void* mytimer(void*) {
   co_enable_hook_sys();
 
   for (;;) {
-    g_now.ComputeNow();
-    TimerManager::Instance()->UpdateTimers(g_now);
+    TimerManager::Instance()->UpdateTimers(Time());
     // sleep 1ms
     poll(NULL, 0, 1);
   }

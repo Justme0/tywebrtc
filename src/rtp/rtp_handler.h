@@ -4,6 +4,10 @@
 #include <unordered_map>
 #include <vector>
 
+extern "C" {
+#include "libavformat/avformat.h"
+}
+
 #include "codec/audio_codec.h"
 #include "push/push_handler.h"
 #include "rtmp/rtmp_handler.h"
@@ -43,11 +47,14 @@ struct SSRCInfo {
 class RtpHandler {
  public:
   explicit RtpHandler(PeerConnection &pc);
+  ~RtpHandler();
 
   int HandleRtpPacket(const std::vector<char> &vBufReceive);
   // int GetUpAudioSSRC(uint32_t& ssrc) const;
   // int GetUpVideoSSRC(uint32_t& ssrc) const;
   int DumpPacket(const std::vector<char> &packet, H264Unpacketizer &unpacker);
+  int WriteWebmFile(const std::string &frame, uint32_t rtpTs,
+                    const std::string &mediaType, bool bKeyFrame);
 
   std::string ToString() const;
 
@@ -67,7 +74,26 @@ class RtpHandler {
   // downlink may have multiple
   SrsAudioTranscoder audioTranscoderDownlink_;
 
+  // OPT: use struct
+  // write uplink stream to WebM file.
+  // FIX: close in destructor
+  // Write trailer
+  // av_write_trailer(formatContext);
+  // Cleanup
+  // avio_close(formatContext->pb);
+  // avformat_free_context(formatContext);
+  AVFormatContext *uplinkFileCtx_ = nullptr;
+  int audioStreamIndex_ = 0;
+  int videoStreamIndex_ = 0;
+
+  // FIX: only support 2^32/90000/3600=13 hours,
+  // should use extend RTP timestamp in 64bit
+  // what if RTP TS roll back?
+  uint32_t firstRtpVideoTs_ = 0;
+  uint32_t firstRtpAudioTs_ = 0;
+
  private:
+  // uplink
   SrsAudioTranscoder audioTranscoder_;
   RtpDepacketizerVp8 videoTranscoder_;
 };

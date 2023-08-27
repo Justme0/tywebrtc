@@ -14,9 +14,11 @@
 
 const uint32_t DEFAULT_TIMEOUT = 30;  // 30 seconds
 
+class PeerConnection;
+
 class RtmpHandler {
  public:
-  RtmpHandler();
+  explicit RtmpHandler(PeerConnection &pc);
 
   // note assignment and copy constructor
   ~RtmpHandler();
@@ -40,6 +42,7 @@ class RtmpHandler {
   int ReconnectRtmp_();
 
  private:
+  PeerConnection &belongingPeerConnection_;
   FlvAssist flvAssist;
   uint32_t mMaxRtmpPacketLength = 0;
 
@@ -47,8 +50,7 @@ class RtmpHandler {
   bool mWriteable = false;
   uint32_t mTimeOut = 30;  // second
   bool mLiveSource = false;
-
-  // RTMPPacket* mRtmpPacket = nullptr;
+  bool initSucc_ = false;
 
  public:
   // tmp public, indicate if rtmp setup is ok (not null)

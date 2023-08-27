@@ -2,14 +2,9 @@
 
 #include <cassert>
 
+#include "global_tmp/global_tmp.h"
 #include "log/log.h"
-
-// C++ compile av_err2str err
-// https://ffmpeg.org/pipermail/libav-user/2013-January/003458.html
-#define av_err2string(errnum)                                         \
-  av_make_error_string(                                               \
-      static_cast<char*>(__builtin_alloca(AV_ERROR_MAX_STRING_SIZE)), \
-      AV_ERROR_MAX_STRING_SIZE, errnum)
+#include "tylib/time/time_util.h"
 
 SrtHandler::~SrtHandler() {
   if (nullptr == formatContext_) {
@@ -197,7 +192,7 @@ int SrtHandler::SendVideoFrame(const std::vector<char>& videoFrame,
 }
 
 // last param should be replaced with AVStream to get its index
-int SrtHandler::SendFrame_(const std::vector<char>& h264Frame, uint64_t frameMs,
+int SrtHandler::SendFrame_(const std::vector<char>& frame, uint64_t frameMs,
                            bool bAudio) {
   int ret = 0;
 
@@ -209,20 +204,28 @@ int SrtHandler::SendFrame_(const std::vector<char>& h264Frame, uint64_t frameMs,
     return -1;
   }
 
-  pkt->data = reinterpret_cast<uint8_t*>(const_cast<char*>(h264Frame.data()));
-  pkt->size = h264Frame.size();
-  pkt->dts = frameMs;
-  pkt->pts = frameMs;
+  pkt->data = reinterpret_cast<uint8_t*>(const_cast<char*>(frame.data()));
+  pkt->size = frame.size();
+  pkt->dts = frameMs * 90;  // TS audio also 90kHz?
+  pkt->pts = frameMs * 90;
   // pkt->pos = -1;
   // pkt->duration = 0;
   pkt->stream_index = bAudio ? audioStreamIndex_ : videooStreamIndex_;
   pkt->time_base = AVRational{1, bAudio ? 90000 : 90000};
+
+  tylog("stmIdx=%d, timebase %d / %d, now_ms=%s, frameMs=%lu, pts=%ld.",
+        pkt->stream_index,
+        formatContext_->streams[pkt->stream_index]->time_base.num,
+        formatContext_->streams[pkt->stream_index]->time_base.den,
+        tylib::MilliSecondToLocalTimeString(g_now_ms).data(), frameMs,
+        pkt->pts);
 
   ret = av_interleaved_write_frame(formatContext_, pkt);
   if (ret < 0) {
     tylog("interleaved_write_frame ret=%d[%s].", ret, av_err2string(ret));
 
     av_packet_free(&pkt);
+
     return ret;
   }
 

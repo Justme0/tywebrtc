@@ -1,21 +1,24 @@
 #ifndef RTP_PACK_UNPACK_RTP_TO_VP8_H_
 #define RTP_PACK_UNPACK_RTP_TO_VP8_H_
 
+extern "C" {
+#include "libavformat/avformat.h"
+}
+
 #include "codec/video_codec.h"
 #include "rtp/rtp_parser.h"
 
+class RtpHandler;
+
 // tmp
 typedef struct tagVideoVp8UnPackParam {
-  unsigned int TimeStmp;
   unsigned int PackSeqNo;
-  unsigned int Ssrc;
-  uint16_t PayLoad;
   bool RequestKeyFrame;
 } VIDEO_VP8_UNPACK_PARAMS;
 
 class RtpDepacketizerVp8 {
  public:
-  RtpDepacketizerVp8();
+  explicit RtpDepacketizerVp8(RtpHandler& rtpHandler);
   ~RtpDepacketizerVp8();
 
   int VideoUnPackVp8RtpStm(const char* pData, int Length,
@@ -49,6 +52,7 @@ class RtpDepacketizerVp8 {
   uint32_t encoder_height;
   uint64_t last_receive_frame_time;
   void* m_pfOutfpH264;
+  RtpHandler& belongingRtpHandler_;
 };
 
 #endif  // RTP_PACK_UNPACK_RTP_TO_VP8_H_

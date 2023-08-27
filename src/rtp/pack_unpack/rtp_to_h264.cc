@@ -364,26 +364,28 @@ int H264Unpacketizer::Unpacketize(const std::vector<char> &vBufReceive,
 
   if (!started_) {
     started_ = true;
-    last_seq_num_ = rtpHeader.getSeqNumber();
+    expect_seq_num_ = rtpHeader.getSeqNumber();
   }
 
-  if (AheadOf(last_seq_num_, rtpHeader.getSeqNumber())) {
+  if (AheadOf(expect_seq_num_, rtpHeader.getSeqNumber())) {
     tylog("warning: last seq num=%d > current seq=%d, should be <=",
-          last_seq_num_, rtpHeader.getSeqNumber());
+          expect_seq_num_, rtpHeader.getSeqNumber());
+    assert(!"should not use assert :)");
 
     return -1;
   }
 
-  if (last_seq_num_ != rtpHeader.getSeqNumber()) {
+  if (expect_seq_num_ != rtpHeader.getSeqNumber()) {
     tylog(
         "NOTE: find lost pkt(%d), last pkt(%d), have fus, buf still not find "
         "fu-end!",
-        rtpHeader.getSeqNumber(), last_seq_num_ + 1);  // ?
+        rtpHeader.getSeqNumber(), expect_seq_num_);
 
-    last_seq_num_ = rtpHeader.getSeqNumber() + 1;
+    // drop incomplete frames
+    frame_buffer_.frames.clear();
     // return frames;
   }
-  ++last_seq_num_;  // ?
+  expect_seq_num_ = rtpHeader.getSeqNumber() + 1;
 
   // status_.in_buf_cnt++; // just for monitor
   // VideoUnPackCheckLost(rtp_data, rtp_len, lost_pkt_cnt);
@@ -391,7 +393,7 @@ int H264Unpacketizer::Unpacketize(const std::vector<char> &vBufReceive,
   unpack_params_.cur_rtp_seq_no =
       (unpack_params_.cur_rtp_seq_no + lost_pkt_cnt) & 0x00FFFF;
 
-  //发现webrtc收到全padding的数据，此数据非264数据，丢弃
+  // 发现webrtc收到全padding的数据，此数据非264数据，丢弃
   if (static_cast<int>(vBufReceive.size()) <=
       getRtpPaddingLength(vBufReceive) + rtpHeader.getHeaderLength() + 1) {
     tylog("maybe all padding data");
@@ -471,7 +473,7 @@ int H264Unpacketizer::UpdataPps_(const char *data, size_t len) {
 int H264Unpacketizer::DumpRawStream(const std::string &rawStream,
                                     uint32_t ssrc) {
   if (rtp_2_h264_file_ == nullptr) {
-    // /for debug, not use ssrc
+    // for debug, not use ssrc,
     // now allow only one pc
     const std::string &name = tylib::format_string("uplink_ssrc_%u.h264", ssrc);
     rtp_2_h264_file_ = fopen(name.data(), "wb+");

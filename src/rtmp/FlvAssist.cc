@@ -50,7 +50,9 @@ int FlvAssist::SendVideoFrame(const std::vector<char>& h264Frame,
       static_cast<enVideoH264NaluType>(pRawDataBuff[NalHeadPos] & 0x1F);
 
   if (kVideoNaluUnitDelimiterRbsp == NaluType) {
-    if (0 == (pRawDataBuff[NalHeadPos + 1] & 0xE0)) NaluType = kVideoNaluIdr;
+    if (0 == (pRawDataBuff[NalHeadPos + 1] & 0xE0)) {
+      NaluType = kVideoNaluIdr;
+    }
   }
 
   /*没有收到I帧立即请求I帧，并设置请求I帧标志位置，后续由定时器触发请求*/

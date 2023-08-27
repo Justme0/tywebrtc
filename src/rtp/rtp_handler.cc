@@ -6,9 +6,6 @@
 #include <cstring>
 #include <string>
 
-#include "tylib/ip/ip.h"
-#include "tylib/string/any_to_string.h"
-
 #include "global_tmp/global_tmp.h"
 #include "log/log.h"
 #include "pc/peer_connection.h"
@@ -16,13 +13,19 @@
 #include "rtp/rtcp/rtcp_parser.h"
 #include "rtp/rtp_parser.h"
 #include "timer/timer.h"
+#include "tylib/ip/ip.h"
+#include "tylib/string/any_to_string.h"
 
 // string enum, for print convenience
 const std::string kMediaTypeRtcp = "rtcp";
 const std::string kMediaTypeVideo = "video";
 const std::string kMediaTypeAudio = "audio";
 
-RtpHandler::RtpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
+const AVRational kAudioTimebase{1, 48000};
+const AVRational kVideoTimebase{1, 90000};
+
+RtpHandler::RtpHandler(PeerConnection &pc)
+    : belongingPeerConnection_(pc), videoTranscoder_(*this) {
   // opt: may have no audio
   SrsAudioCodecId from = SrsAudioCodecIdOpus;  // TODO: From SDP?
   SrsAudioCodecId to = SrsAudioCodecIdAAC;     // The output audio codec.
@@ -43,6 +46,80 @@ RtpHandler::RtpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
     tylog("init downlink audio transcoder ret=%d", ret);
 
     assert(!"init downlink audio transcoder fail, should not use assert :)");
+  }
+
+  // init uplink file, should be class or function
+  // check file cmd:
+  // mediainfo filename.webm
+  // ffmpeg -i filename.webm -f null -
+  const std::string &webmFilename = tylib::format_string(
+      "uplink.%s_%d.webm", belongingPeerConnection_.clientIP_.data(),
+      belongingPeerConnection_.clientPort_);
+  avformat_alloc_output_context2(&uplinkFileCtx_, nullptr, "webm",
+                                 webmFilename.data());
+
+  if (nullptr == uplinkFileCtx_) {
+    tylog("init uplinkFile fail, should not use assert :)");
+    assert(!"init uplinkFile fail, should not use assert :)");
+  }
+
+  // Add video stream
+  AVStream *video_stream = avformat_new_stream(uplinkFileCtx_, nullptr);
+  if (!video_stream) {
+    tylog("init uplinkFile fail, should not use assert :)");
+    assert(!"init uplinkFile fail, should not use assert :)");
+  }
+  video_stream->codecpar->codec_id = AV_CODEC_ID_VP8;
+  video_stream->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
+  // OPT: use const or config
+  video_stream->codecpar->width = 450;
+  video_stream->codecpar->height = 450;
+  videoStreamIndex_ = video_stream->index;
+  tylog("video stream index=%d.", videoStreamIndex_);
+
+  // Add audio stream
+  AVStream *audio_stream = avformat_new_stream(uplinkFileCtx_, nullptr);
+  if (!audio_stream) {
+    tylog("init uplinkFile fail, should not use assert :)");
+    assert(!"init uplinkFile fail, should not use assert :)");
+  }
+  audio_stream->codecpar->codec_id = AV_CODEC_ID_OPUS;
+  audio_stream->codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
+  audio_stream->codecpar->sample_rate = 48000;
+  // OPT: use const or config
+  audio_stream->codecpar->channel_layout = AV_CH_LAYOUT_MONO;
+  audio_stream->codecpar->channels =
+      av_get_channel_layout_nb_channels(audio_stream->codecpar->channel_layout);
+  audioStreamIndex_ = audio_stream->index;
+  tylog("audio stream index=%d.", audioStreamIndex_);
+
+  // Open the output file
+  assert(!(uplinkFileCtx_->oformat->flags & AVFMT_NOFILE));
+  ret = avio_open(&uplinkFileCtx_->pb, uplinkFileCtx_->url, AVIO_FLAG_WRITE);
+  if (ret < 0) {
+    tylog("cannot open avio, url=%s, ret=%d[%s]", uplinkFileCtx_->url, ret,
+          av_err2string(ret));
+
+    // use goto error?
+    avformat_free_context(uplinkFileCtx_);
+    uplinkFileCtx_ = nullptr;
+
+    assert(!"init uplinkFile fail, should not use assert :)");
+  }
+
+  // Write the file header
+  ret = avformat_write_header(uplinkFileCtx_, nullptr);
+  if (ret < 0) {
+    tylog("write header ret=%d[%s]", ret, av_err2string(ret));
+    assert(!"init uplinkFile fail, should not use assert :)");
+  }
+}
+
+RtpHandler::~RtpHandler() {
+  if (uplinkFileCtx_ != nullptr) {
+    av_write_trailer(uplinkFileCtx_);
+    avio_close(uplinkFileCtx_->pb);
+    avformat_free_context(uplinkFileCtx_);
   }
 }
 
@@ -81,6 +158,55 @@ extern int g_sock_fd;
 //   tylog("%s", arr);
 // }
 
+// write to file, should add more check
+int RtpHandler::WriteWebmFile(const std::string &frame, uint32_t rtpTs,
+                              const std::string &mediaType, bool bKeyFrame) {
+  int ret = 0;
+
+  int rtpPTS = 0;
+  int streamIndex = 0;
+  AVRational timebase;
+  if (kMediaTypeAudio == mediaType) {
+    rtpPTS = rtpTs - firstRtpAudioTs_;
+    streamIndex = audioStreamIndex_;
+    timebase = kAudioTimebase;
+  } else {
+    rtpPTS = rtpTs - firstRtpVideoTs_;
+    streamIndex = videoStreamIndex_;
+    timebase = kVideoTimebase;
+  }
+
+  AVPacket avPacket;  // not alloc,may memory leak?
+  av_init_packet(&avPacket);
+  avPacket.data = reinterpret_cast<uint8_t *>(const_cast<char *>(frame.data()));
+  avPacket.size = frame.size();
+  if (bKeyFrame) {
+    avPacket.flags |= AV_PKT_FLAG_KEY;
+  }
+  avPacket.stream_index = streamIndex;
+  // avPacket.time_base = AVRational{1, 1000};
+
+  const int64_t pts = av_rescale_q(
+      rtpPTS, timebase, uplinkFileCtx_->streams[streamIndex]->time_base);
+  avPacket.pts = pts;
+  avPacket.dts = pts;
+
+  tylog("stmIdx=%d, rtpPTS=%d, timebase %d / %d, now_ms=%s, pts=%ld.",
+        streamIndex, rtpPTS,
+        uplinkFileCtx_->streams[streamIndex]->time_base.num,
+        uplinkFileCtx_->streams[streamIndex]->time_base.den,
+        tylib::MilliSecondToLocalTimeString(g_now_ms).data(), pts);
+
+  ret = av_interleaved_write_frame(uplinkFileCtx_, &avPacket);
+  if (ret < 0) {
+    tylog("vp8 interleaved_write_frame ret=%d[%s].", ret, av_err2string(ret));
+
+    return ret;
+  }
+
+  return 0;
+}
+
 // dump 264 or rtmp push
 int RtpHandler::DumpPacket(const std::vector<char> &packet,
                            H264Unpacketizer &unpacker) {
@@ -91,6 +217,10 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
   std::string mediaType = rtpHeader.GetMediaType();
 
   if (mediaType == kMediaTypeVideo) {
+    if (0 == firstRtpVideoTs_) {
+      firstRtpVideoTs_ = rtpHeader.getTimestamp();
+    }
+
     std::vector<std::string> h264Frames;  // should with dts
     const bool isvp8 = true;              // tmp
     if (isvp8) {
@@ -125,7 +255,8 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
       }
 
       ret = this->belongingPeerConnection_.pushHandler_.SendVideoFrame(
-          std::vector<char>(frame.begin(), frame.end()), g_now_ms * 90);
+          std::vector<char>(frame.begin(), frame.end()),
+          (rtpHeader.getTimestamp() - firstRtpVideoTs_) / 90);
       if (ret) {
         tylog("push send video ret=%d", ret);
 
@@ -133,6 +264,10 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
       }
     }
   } else {
+    if (0 == firstRtpAudioTs_) {
+      firstRtpAudioTs_ = rtpHeader.getTimestamp();
+    }
+
     assert(mediaType == kMediaTypeAudio);
 
     const char *payloadBegin = packet.data() + rtpHeader.getHeaderLength();
@@ -144,6 +279,14 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
     tylog("before audio transcode, time(ms)=%ld, opus size=%ld.", nowMs,
           payloadEnd - payloadBegin);
     assert(payloadBegin < payloadEnd);  // may have probe packet(size=0) ?
+
+    ret = WriteWebmFile({payloadBegin, payloadEnd}, rtpHeader.getTimestamp(),
+                        kMediaTypeAudio, false);
+    if (ret) {
+      tylog("write webm audio file ret=%d.", ret);
+
+      return ret;
+    }
 
     SrsAudioFrame f;
     // OPT: avoid copy
@@ -199,7 +342,7 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
       WriteFile(adts_frame);
 
       ret = this->belongingPeerConnection_.pushHandler_.SendAudioFrame(
-          adts_frame, g_now_ms * 90);
+          adts_frame, (rtpHeader.getTimestamp() - firstRtpAudioTs_) / 48);
       if (ret) {
         tylog("rtmp send audio ret=%d", ret);
         return ret;
@@ -327,10 +470,12 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     if (nullptr != url) {
       tylog("push url=%s", url);
 
-      RtmpHandler &rtmpPusher = *new RtmpHandler;  // FIXME
+      RtmpHandler &rtmpPusher =
+          *new RtmpHandler(this->belongingPeerConnection_);  // FIXME
 
       ret = this->belongingPeerConnection_.pushHandler_.InitPushHandler(
           std::bind(&RtmpHandler::InitProtocolHandler, &rtmpPusher, url),
+          std::bind(&RtmpHandler::InitSucc, &rtmpPusher),
           std::bind(&RtmpHandler::SendAudioFrame, &rtmpPusher,
                     std::placeholders::_1, std::placeholders::_2),
           std::bind(&RtmpHandler::SendVideoFrame, &rtmpPusher,
@@ -344,28 +489,27 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       tylog("push url env var not exist");
     }
 
-    // if pull fail, retry ? but current branch is run only once
-    if (!this->belongingPeerConnection_.pullHandler_.InitSucc()) {
-      const char *url = std::getenv("TY_PULL_URL");
-      if (nullptr != url) {
-        tylog("pull url=%s", url);
+    // if pull fail, retry?
+    // but current branch is run only once
+    url = std::getenv("TY_PULL_URL");
+    if (nullptr != url) {
+      tylog("pull url=%s", url);
 
-        RtmpPuller &rtmpPuller =
-            *new RtmpPuller(this->belongingPeerConnection_);  // FIXME
+      RtmpPuller &rtmpPuller =
+          *new RtmpPuller(this->belongingPeerConnection_);  // FIXME
 
-        ret = this->belongingPeerConnection_.pullHandler_.InitPullHandler(
-            &rtmpPuller.rtmp_.m_sb.sb_socket,
-            std::bind(&RtmpPuller::InitProtocolHandler, &rtmpPuller, url),
-            std::bind(&RtmpPuller::HandlePacket, &rtmpPuller),
-            std::bind(&RtmpPuller::CloseStream, &rtmpPuller));
-        if (ret) {
-          tylog("Handler.handshakeTo ret=%d.", ret);
+      ret = this->belongingPeerConnection_.pullHandler_.InitPullHandler(
+          &rtmpPuller.rtmp_.m_sb.sb_socket,
+          std::bind(&RtmpPuller::InitProtocolHandler, &rtmpPuller, url),
+          std::bind(&RtmpPuller::HandlePacket, &rtmpPuller),
+          std::bind(&RtmpPuller::CloseStream, &rtmpPuller));
+      if (ret) {
+        tylog("Handler.handshakeTo ret=%d.", ret);
 
-          // return ret;
-        }
-      } else {
-        tylog("pull url env var not exist");
+        // return ret;
       }
+    } else {
+      tylog("pull url env var not exist");
     }
 
     // 收到RTP后定时请求I帧
@@ -521,7 +665,10 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     tylog("pop jitter's OrderedPackets size=%zu", orderedPackets.size());
 
     for (RtpBizPacket &packet : orderedPackets) {
+      // push to other server
       if (this->belongingPeerConnection_.pushHandler_.InitSucc()) {
+        // OPT: first frame should be I frame; if lost packet should drop the
+        // gop
         ret = DumpPacket(packet.rtpRawPacket, ssrcInfo.h264Unpacketizer);
         if (ret) {
           tylog("dump uplink packet ret=%d, not return err :)", ret);
@@ -529,6 +676,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         }
       }
 
+      // send to peer
       ret = SendToPeer_(packet);
       if (ret) {
         tylog("send to peer ret=%d", ret);

@@ -5,20 +5,17 @@
 // @brief setup connection and set av functor
 // or set functor in constructor?
 int PushHandler::InitPushHandler(
-    std::function<int(void)> initFunc,
+    std::function<int(void)> initFunc, std::function<bool(void)> initSuccFunc,
     std::function<int(const std::vector<char> &frame, uint64_t frameMs)>
         sendAudioFrame,
     std::function<int(const std::vector<char> &frame, uint64_t frameMs)>
         sendVideoFrame) {
   initFunc_ = initFunc;
+  initSuccFunc_ = initSuccFunc;
   sendAudioFrameFunc_ = sendAudioFrame;
   sendVideoFrameFunc_ = sendVideoFrame;
 
-  initRet_ = initFunc_();
-  if (initRet_) {
-    tylog("init func ret=%d", initRet_);
-    return initRet_;
-  }
+  initFunc_();
 
   return 0;
 }

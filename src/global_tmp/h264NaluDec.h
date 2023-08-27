@@ -1,4 +1,5 @@
 #pragma once
+
 typedef enum WebVideoFrameType {
   WEB_VIDEO_FRAME_TYPE_I = 0x0,
   WEB_VIDEO_FRAME_TYPE_P = 0x1,
@@ -21,4 +22,4 @@ typedef struct Tag_bs_t {
                // available(可用的)位
 } bs_t;
 
-int GetFrameType(unsigned char *pNalu, int Len);
+WebVideoFrameType GetFrameType(unsigned char *pNalu, int Len);

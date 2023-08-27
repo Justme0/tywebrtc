@@ -16,10 +16,10 @@
 #include <iostream>
 #include <sstream>
 
-#include <openssl/md5.h>
 #include "colib/co_routine.h"
 #include "librtmp/log.h"
 #include "librtmp/rtmp_sys.h"
+#include "openssl/md5.h"
 
 #include "global_tmp/global_tmp.h"
 #include "global_tmp/h264NaluDec.h"
@@ -695,7 +695,7 @@ inline int CopyNalUnit(Client* pClient, const RTMPPacket* pPkg,
 
   /*B帧识别不能通过nalutype决定*/
   if (WEB_VIDEO_FRAME_TYPE_P == FrameType) {
-    int RealSliceType = GetFrameType(pNalu, NaluLen);
+    WebVideoFrameType RealSliceType = GetFrameType(pNalu, NaluLen);
     if (WEB_VIDEO_FRAME_TYPE_B == RealSliceType) {
       if (0 == pClient->RecvBframeNum % 60) {
         tylog("Recv Unsupport B-frame m_nTimeStamp:%u", pPkg->m_nTimeStamp);
@@ -776,6 +776,12 @@ RtmpPuller::RtmpPuller(PeerConnection& pc) : belongingPeerConnection_(pc) {
   RTMP_Init(&rtmp_);
 }
 
+RtmpPuller::~RtmpPuller() {
+  // what if rtmp_ is empty
+  RTMP_Close(&rtmp_);
+  RTMP_Free(&rtmp_);
+}
+
 extern int g_efd;
 
 void* MyRtmpHandle(void* pRtmpPuller) {
@@ -789,7 +795,7 @@ void* MyRtmpHandle(void* pRtmpPuller) {
 
   for (;;) {
     struct pollfd pf = {0, 0, 0};
-    pf.fd = rtmpPuller.rtmp_.m_sb.sb_socket;
+    pf.fd = pRtmp->m_sb.sb_socket;
     pf.events = (POLLIN | POLLERR | POLLHUP);
     co_poll(co_get_epoll_ct(), &pf, 1, 10000);
 
@@ -807,7 +813,8 @@ void* MyRtmpHandle(void* pRtmpPuller) {
 
         continue;
       } else {
-        tylog("connectStream not ok, may be err, stop connect");
+        tylog("connectStream err, stop connect, errno=%d[%s], rtmp=%s.", errno,
+              strerror(errno), RTMPToString(*pRtmp).data());
         // should close rtmp?
         return nullptr;
       }
@@ -827,7 +834,8 @@ void* MyRtmpHandle(void* pRtmpPuller) {
 
   struct stat tStat;
   if (-1 == fstat(pRtmp->m_sb.sb_socket, &tStat)) {
-    tylog("fstat fd:%d error:%s\n", pRtmp->m_sb.sb_socket, strerror(errno));
+    tylog("fstat fd:%d error=%d[%s]", pRtmp->m_sb.sb_socket, errno,
+          strerror(errno));
     // to destruct client
     // may should not use assert
     assert(!"shit rtmp fd");
@@ -884,6 +892,7 @@ int RtmpPuller::InitProtocolHandler(const std::string& Url) {
 
   // RTMP_EnableWrite(rtmp); // KEY: means push stream, not play!
 
+  // create socket(fd)
   // OPT: use non-block connect
   // int ret = RTMP_Connect_NonBlock(pRtmp);
   ok = RTMP_Connect(pRtmp, nullptr);
@@ -895,6 +904,7 @@ int RtmpPuller::InitProtocolHandler(const std::string& Url) {
   assert(RTMP_IsConnected(pRtmp));
   tylog("rtmp fd=%d connect ok", pRtmp->m_sb.sb_socket);
 
+  // OPT: should set in RTMP_Connect
   ret = SetNonBlock(pRtmp->m_sb.sb_socket);
   if (ret) {
     tylog("setNonBlock ret=%d.", ret);
@@ -912,7 +922,7 @@ int RtmpPuller::InitProtocolHandler(const std::string& Url) {
 
   tylog("co_resume done, this=%p.", this);
 
-  // co_release(co);
+  // co_release(co); ?
 
   return 0;
 }
@@ -1736,7 +1746,7 @@ int RtmpPuller::HandleVideoSliceStartCodeMod(Client* pClient,
 
     /*B帧识别不能通过nalutype决定*/
     if (WEB_VIDEO_FRAME_TYPE_P == FrameType) {
-      int RealSliceType = GetFrameType(pNalu, NaluLen);
+      WebVideoFrameType RealSliceType = GetFrameType(pNalu, NaluLen);
 
       if (WEB_VIDEO_FRAME_TYPE_B == RealSliceType) {
         if (0 == pClient->RecvBframeNum % 60) {
@@ -2243,25 +2253,6 @@ int RtmpPuller::HandleControl(RTMP*, RTMPPacket* pPkg) {
 _CTRL_ERR_:
   tylog("Not enough bytes in control packet");
   return RTMP_ERROR;
-}
-
-std::string RTMPChunkToString(const RTMPChunk& chunk) {
-  // print head?
-  return tylib::format_string("{headerSize=%d, chunkSize=%d, chunk=%p}",
-                              chunk.c_headerSize, chunk.c_chunkSize,
-                              chunk.c_chunk);
-}
-
-std::string RTMPPacketToString(const RTMPPacket& pkg) {
-  return tylib::format_string(
-      "{headerType=%s, packetType=%s, hasAbsTimestamp=%d, channel=%d, "
-      "timeStamp=%u, infoField2=%d, bodySize=%u, bytesRead=%u, chunk=%s, "
-      "body=%p}",
-      RtmpHeaderTypeToString(pkg.m_headerType).data(),
-      RtmpPacketTypeToString(pkg.m_packetType).data(), pkg.m_hasAbsTimestamp,
-      pkg.m_nChannel, pkg.m_nTimeStamp, pkg.m_nInfoField2, pkg.m_nBodySize,
-      pkg.m_nBytesRead,
-      pkg.m_chunk ? RTMPChunkToString(*pkg.m_chunk).data() : "", pkg.m_body);
 }
 
 int RtmpPuller::HandleRtmpPacket(Client* pClient, RTMPPacket* pPkg) {

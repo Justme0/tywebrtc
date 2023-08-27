@@ -5,8 +5,10 @@
 #include "tylib/time/time_util.h"
 #include "tylib/time/timer.h"
 
-PeerConnection::PeerConnection()
+PeerConnection::PeerConnection(const std::string &ip, int port)
     : stateMachine_(EnumStateMachine::GOT_CANDIDATE),  // sdp has candiate
+      clientIP_(ip),
+      clientPort_(port),
       sdpHandler_(*this),
       iceHandler_(*this),
       dtlsHandler_(*this, false),  // taylor 写死 dtls client
@@ -95,6 +97,9 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
 
     default:
       tylog("unknown packet type %s", PacketTypeToString(packType).data());
+      std::string echoStr("Hello guy :)");
+      this->SendToClient({echoStr.begin(), echoStr.end()});
+
       break;
   }
 
@@ -110,6 +115,8 @@ std::string PeerConnection::ToString() const {
 }
 
 std::shared_ptr<PeerConnection> PeerConnection::FindPeerPC() const {
+  std::shared_ptr<PeerConnection> pc;
+
   for (const auto &p : Singleton<PCManager>::Instance().client2PC_) {
     if (clientIP_ == p.first.ip && clientPort_ == p.first.port) {
       continue;
@@ -119,10 +126,16 @@ std::shared_ptr<PeerConnection> PeerConnection::FindPeerPC() const {
       continue;
     }
 
-    tylog("found peer=%s.", p.second->ToString().data());
-    return p.second;
+    if (nullptr == pc || pc->initTimeMs_ < p.second->initTimeMs_) {
+      pc = p.second;
+    }
   }
 
-  tylog("not found peer");
-  return nullptr;
+  if (nullptr != pc) {
+    tylog("found peer=%s.", pc->ToString().data());
+  } else {
+    tylog("not found peer");
+  }
+
+  return pc;
 }
