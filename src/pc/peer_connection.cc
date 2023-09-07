@@ -100,6 +100,11 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
       std::string echoStr("Hello guy :)");
       this->SendToClient({echoStr.begin(), echoStr.end()});
 
+      if (std::string(vBufReceive.begin(), vBufReceive.end()) == "Hello Qt!") {
+        this->stateMachine_ = EnumStateMachine::GOT_RTP;
+        this->bNotUseSrtp = true;
+      }
+
       break;
   }
 

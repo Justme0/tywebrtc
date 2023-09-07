@@ -131,6 +131,8 @@ class PeerConnection {
 
   PLITimer pliTimer_;
   DTLSTimer dtlsTimer_;
+
+  bool bNotUseSrtp = false;
 };
 
 #endif  // PC_PEER_CONNECTION_H_

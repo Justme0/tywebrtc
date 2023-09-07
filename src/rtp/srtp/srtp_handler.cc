@@ -10,6 +10,7 @@
 #include "tylib/codec/codec.h"
 
 #include "log/log.h"
+#include "pc/peer_connection.h"
 
 bool SrtpHandler::isInitSrtp_ = false;
 
@@ -122,6 +123,10 @@ bool SrtpHandler::SetRtpParams(const std::string &sending_key,
 // Encrypted portion is only payload.
 // https://mp.weixin.qq.com/s/u7eStMiCGxNyEWsYkG8UYg
 int SrtpHandler::ProtectRtp(std::vector<char> *io_vBufForSrtp) {
+  if (this->belongingPeerConnection_.bNotUseSrtp) {
+    return 0;
+  }
+
   if (!active_) {
     tylog("error active=%d", active_);
     return -1;
@@ -150,6 +155,10 @@ int SrtpHandler::ProtectRtp(std::vector<char> *io_vBufForSrtp) {
 }
 
 int SrtpHandler::UnprotectRtp(std::vector<char> *io_vBufForSrtp) {
+  if (this->belongingPeerConnection_.bNotUseSrtp) {
+    return 0;
+  }
+
   if (!active_) {
     tylog("error active=%d", active_);
     return -1;
@@ -183,6 +192,10 @@ int SrtpHandler::UnprotectRtp(std::vector<char> *io_vBufForSrtp) {
 // Encrypt portion after header, so sender SSRC isn't encrypted.
 // https://mp.weixin.qq.com/s/u7eStMiCGxNyEWsYkG8UYg
 int SrtpHandler::ProtectRtcp(std::vector<char> *io_vBufForSrtp) {
+  if (this->belongingPeerConnection_.bNotUseSrtp) {
+    return 0;
+  }
+
   if (!active_) {
     tylog("error active=%d", active_);
     return -1;
@@ -215,6 +228,10 @@ int SrtpHandler::ProtectRtcp(std::vector<char> *io_vBufForSrtp) {
 
 // taylor may error
 int SrtpHandler::UnprotectRtcp(std::vector<char> *io_vBufForSrtp) {
+  if (this->belongingPeerConnection_.bNotUseSrtp) {
+    return 0;
+  }
+
   if (!active_) {
     tylog("error active=%d", active_);
     return -1;
