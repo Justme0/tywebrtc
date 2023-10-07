@@ -678,6 +678,7 @@ class RtpHeader {
       case 99:
       case 100:
       case 101:
+      case 106:
       case 107:
       case 116:
       case 117:

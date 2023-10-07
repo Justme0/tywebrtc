@@ -616,8 +616,12 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         // case 2 recv old, but is last cycle
         if (ssrcInfo.biggestCycle <= 0) {
           // todo more logic, should return?
-          tylog("recv shit packet, ignore it=%s.", rtpHeader.ToString().data());
-          assert(!"should not reach here unless hacker attacks us, now we assert it");
+          tylog("recv shit packet(usually sender not browser, e.g. server)=%s.",
+                rtpHeader.ToString().data());
+          // web browser first seq is always AheadOf 0
+          // assert(!"should not reach here unless hacker attacks us, now we
+          // assert it");
+          itemCycle = 0;
         } else {
           itemCycle = ssrcInfo.biggestCycle - 1;  // notice
           tylog("recv old packet=%s. also old cycle",

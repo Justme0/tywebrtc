@@ -11,8 +11,6 @@
 // variable.
 // uint64_t g_ffmpeg_codec_tinyid_for_log = 0;
 
-bool g_register_all = false;
-
 // for Decoder
 CodecDecoder::CodecDecoder() {
   av_codec_tx_ = NULL;
@@ -50,13 +48,6 @@ bool CodecDecoder::InitDecoder(const CodecParam &param) {
   if (!param.codecName || strcmp(param.codecName, "") == 0) {
     tylog("CodecDecoder codecName is NULL");
     return false;
-  }
-
-  if (!g_register_all) {
-    // av_register_all();
-    // http://ffmpeg.org/pipermail/ffmpeg-devel/2018-February/225051.html
-    // avcodec_register_all();
-    g_register_all = true;
   }
 
   const AVCodec *codec = avcodec_find_decoder_by_name(param.codecName);
@@ -193,12 +184,6 @@ bool CodecEncoder::InitEncoder(const CodecParam &param) {
   }
 
   Reset();
-  if (!g_register_all) {
-    // av_register_all();
-    // http://ffmpeg.org/pipermail/ffmpeg-devel/2018-February/225051.html
-    // avcodec_register_all();
-    g_register_all = true;
-  }
 
   const AVCodec *codec = avcodec_find_encoder_by_name(param.codecName);
   if (!codec) {

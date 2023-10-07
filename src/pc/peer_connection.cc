@@ -100,9 +100,32 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
       std::string echoStr("Hello guy :)");
       this->SendToClient({echoStr.begin(), echoStr.end()});
 
-      if (std::string(vBufReceive.begin(), vBufReceive.end()) == "Hello Qt!") {
+      if (std::string(vBufReceive.begin(), vBufReceive.end()) == "Hello Qt!" &&
+          stateMachine_ != EnumStateMachine::GOT_RTP) {
         this->stateMachine_ = EnumStateMachine::GOT_RTP;
         this->bNotUseSrtp = true;
+
+        // if pull fail, retry?
+        // but current branch is run only once
+        const char *url = std::getenv("TY_PULL_URL");
+        if (nullptr != url) {
+          tylog("pull url=%s", url);
+
+          RtmpPuller &rtmpPuller = *new RtmpPuller(*this);  // FIXME
+
+          ret = pullHandler_.InitPullHandler(
+              &rtmpPuller.rtmp_.m_sb.sb_socket,
+              std::bind(&RtmpPuller::InitProtocolHandler, &rtmpPuller, url),
+              std::bind(&RtmpPuller::HandlePacket, &rtmpPuller),
+              std::bind(&RtmpPuller::CloseStream, &rtmpPuller));
+          if (ret) {
+            tylog("Handler.handshakeTo ret=%d.", ret);
+
+            // return ret;
+          }
+        } else {
+          tylog("pull url env var not exist");
+        }
       }
 
       break;

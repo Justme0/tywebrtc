@@ -916,6 +916,7 @@ int RtmpPuller::InitProtocolHandler(const std::string& Url) {
   ret = co_create(&co, nullptr, MyRtmpHandle, this);
   if (ret) {
     tylog("co create ret=%d.", ret);
+
     return ret;
   }
   co_resume(co);
@@ -1678,6 +1679,9 @@ int RtmpPuller::GetFrameTypeAndPrepareSpsPps(Client* pClient,
 // 兼容非RTMP规范, 暂不处理
 int RtmpPuller::HandleVideoSliceStartCodeMod(Client* pClient,
                                              const RTMPPacket* pPkg) {
+  tylog("monitor shit");
+  assert(!"monitor shit");
+
   static unsigned char SendBuff[VIDEO_RAW_STM_MAX_LEN];
 
   if (9 >= pPkg->m_nBodySize) {
@@ -2317,11 +2321,9 @@ int RtmpPuller::HandlePacket() {
   Client* pClient = &this->m_Clients[0];
   pClient->ActiveTime = g_now_ms;
 
-  RTMP* pRtmp = &rtmp_;
-
-  tylog("rtmp sb_socket=%d.", pRtmp->m_sb.sb_socket);
+  tylog("rtmp sb_socket=%d.", rtmp_.m_sb.sb_socket);
   // OPT: use non-block connect
-  assert(RTMP_IsConnected(pRtmp));
+  assert(RTMP_IsConnected(&rtmp_));
 
   for (;;) {
     struct pollfd pf = {0, 0, 0};
@@ -2332,17 +2334,25 @@ int RtmpPuller::HandlePacket() {
     RTMPPacket rtmpPacket;
     memset(&rtmpPacket, 0, sizeof(RTMPPacket));
     // internal call RTMPSockBuf_Fill
-    bool ok = RTMP_ReadPacket(pRtmp, &rtmpPacket);
+    bool ok = RTMP_ReadPacket(&rtmp_, &rtmpPacket);
     if (!ok) {
       if (errno == EAGAIN) {
-        tylog("RTMP ReadPacket return EAGAIN, not error");
-        // FIXME
+        tylog("RTMP ReadPacket ret EAGAIN, not error, rtmp fd=%d.",
+              rtmp_.m_sb.sb_socket);
+
+        if (!RTMP_IsConnected(&rtmp_)) {
+          tylog(
+              "rtmp not connected, may close rtmp in "
+              "CleanTimeoutPeerConnection, exit!");
+
+          return -1;
+        }
 
         continue;
       } else {
         tylog("RTMP ReadPacket err errno=%d[%s]", errno, strerror(errno));
         // should free rtmpPacket?
-        return -1;
+        return -2;
       }
     }
 

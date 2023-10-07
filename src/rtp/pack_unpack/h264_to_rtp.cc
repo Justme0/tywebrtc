@@ -6,9 +6,6 @@
 #include "rtp/pack_unpack/pack_unpack_common.h"
 #include "rtp/rtp_parser.h"
 
-// H.264 nalu header type mask.
-const uint8_t kNalTypeMask = 0x1F;
-
 // @see: https://tools.ietf.org/html/rfc6184#section-5.8
 
 // to refactor, cancle the struct
@@ -100,7 +97,7 @@ int H264Packetizer::PacketStapA(const uint32_t timestamp,
   }
 
   uint8_t header = sps_[0];
-  uint8_t nal_type = header & kNalTypeMask;
+  uint8_t nal_type = header & kH264TypeMask;
 
   std::vector<char> packet(MAX_PKT_BUF_SIZE);
   RtpHeader& rtp_header = *reinterpret_cast<RtpHeader*>(packet.data());
@@ -124,7 +121,7 @@ int H264Packetizer::PacketStapA(const uint32_t timestamp,
 
   // stap-a header
   uint8_t stap_a_header = kH264StapA;
-  stap_a_header |= (nal_type & (~kNalTypeMask));
+  stap_a_header |= (nal_type & (~kH264TypeMask));
   *dst++ = stap_a_header;
 
   WriteBigEndian(dst, sps_.size(), 2);
@@ -150,19 +147,19 @@ int H264Packetizer::PacketSingleNalu(
     const char* frame, const int len, const uint32_t timestamp,
     const std::vector<std::shared_ptr<Extension>>& extensions,
     std::vector<RtpBizPacket>& rtpBizPackets) {
-  if ((frame[0] & kNalTypeMask) == 0x07) {
+  if ((frame[0] & kH264TypeMask) == 0x07) {
     sps_.assign(reinterpret_cast<const char*>(frame), len);
     pps_.clear();
     // return 0;
   }
 
-  if ((frame[0] & kNalTypeMask) == 0x08) {
+  if ((frame[0] & kH264TypeMask) == 0x08) {
     pps_.append(reinterpret_cast<const char*>(frame), len);
     // pps_.assign(reinterpret_cast<const char*>(frame), len);
     // return 0;
   }
 
-  if ((frame[0] & kNalTypeMask) == 0x05) {
+  if ((frame[0] & kH264TypeMask) == 0x05) {
     PacketStapA(timestamp, extensions, rtpBizPackets);
   }
 
