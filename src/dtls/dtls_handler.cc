@@ -224,19 +224,12 @@ long DtlsOutBIOCallback(BIO* bio, int cmd, const char* argp, int argi,
 void DtlsHandler::InitOpensslAndCert() {
 #if (OPENSSL_VERSION_NUMBER > 0x10100000L)
   OPENSSL_init_ssl(0, nullptr);
-  tylog("shit 2");
   OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS, nullptr);
-  tylog("shit ");
   OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_DIGESTS, nullptr);
-  tylog("shit ");
 #else
-  tylog("shit ok");
   SSL_library_init();
-  tylog("shit ok");
   SSL_load_error_strings();
-  tylog("shit ok");
   ERR_load_crypto_strings();
-  tylog("shit ok");
 #endif
   int ret = GetCertificateAndKey(DtlsHandler::mCert, DtlsHandler::privkey);
   if (ret) {

@@ -202,7 +202,7 @@ cc_library(
 """
 )
 
-# 11. libco
+# libco
 # doc https://blog.csdn.net/GreyBtfly/article/details/83688996
 # new_local_repository(
 #     name = "libco",

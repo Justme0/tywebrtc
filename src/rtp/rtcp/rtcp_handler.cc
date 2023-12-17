@@ -236,8 +236,17 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
               break;
             }
 
+            if (peerPC->rtpHandler_.upVideoSSRC == 0) {
+              tylog(
+                  "peerPC upVideo SSRC=0(maybe in begin time), so not transfer "
+                  "video req to it. peerPC=%s.",
+                  peerPC->ToString().data());
+
+              // should continue handle other rtcp?
+              return 0;
+            }
+
             RtcpHeader *rsphead = const_cast<RtcpHeader *>(chead);
-            assert(peerPC->rtpHandler_.upVideoSSRC != 0);
             rsphead->setMediaSourceSSRC(peerPC->rtpHandler_.upVideoSSRC);
 
             // OPT: handle other type of RTCP source ssrc

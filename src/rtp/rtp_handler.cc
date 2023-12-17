@@ -560,6 +560,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         *reinterpret_cast<const RtpHeader *>(vBufReceive.data());
     tylog("recv rtp=%s.", rtpHeader.ToString().data());
 
+    // OPT: SSRC should be assigned from SDP, now should to check
     if (mediaType == kMediaTypeAudio) {
       this->upAudioSSRC = rtpHeader.getSSRC();
     } else if (mediaType == kMediaTypeVideo) {
@@ -701,5 +702,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
 }
 
 std::string RtpHandler::ToString() const {
-  return tylib::format_string("ssrcMapSize=%zu.", ssrcInfoMap_.size());
+  return tylib::format_string(
+      "upAudioSSRC=%u, upVideoSSRC=%u, ssrcMapSize=%zu.", upAudioSSRC,
+      upVideoSSRC, ssrcInfoMap_.size());
 }

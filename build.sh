@@ -43,14 +43,14 @@ cd $g_dst_dir
 # force format code :)
 # not emit failure if no clang-format
 # mac (FreeBSD style) find cmd must specify directory
-find src third_party/tylib | egrep ".+\.(cc|h)$" | xargs clang-format -i || true
+find src third_party/tylib third_party/rsfec-cpp | egrep ".+\.(cc|cpp|h)$" | xargs clang-format -i || true
 
 # compile
 # make V=1
 kServerName="tywebrtc" # svr name is same in Makefile
 
 # unit test important
-bazel test --verbose_failures --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --cxxopt="-std=c++14" --test_output=all //src:tywebrtc_test
+bazel test --verbose_failures --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --cxxopt="-std=c++17" --test_output=all //src:tywebrtc_test
 
 # -Wfatal-errors
 #  --cxxopt="-Weffc++" \
@@ -65,7 +65,7 @@ bazel test --verbose_failures --sandbox_debug --subcommands --explain=bazel_buil
 bazel build \
   --compilation_mode dbg \
   --copt="-g" \
-  --cxxopt="-std=c++14" \
+  --cxxopt="-std=c++17" \
   --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --verbose_failures --test_output=all //src:$kServerName
 
 rm -rf $kServerName

@@ -2359,7 +2359,7 @@ int RtmpPuller::HandlePacket() {
     tylog("recv rtmp packet %s", RTMPPacketToString(rtmpPacket).data());
 
     // no use?
-    if (RTMP_STATE_RTMP_CONNECTED > pClient->State) {
+    if (pClient->State < RTMP_STATE_RTMP_CONNECTED) {
       pClient->State = RTMP_STATE_RTMP_CONNECTED;
     }
 

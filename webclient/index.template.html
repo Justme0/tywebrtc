@@ -69,7 +69,7 @@
     <div class="messagebox">
         <label for="message">Enter a message:
             <input type="text" name="message" id="messageid" placeholder="Message text" inputmode="latin" size=60
-                maxlength=120 disabled>
+                maxlength=2000 disabled>
         </label>
         <br />
         <br />
@@ -230,11 +230,11 @@
             pc = new RTCPeerConnection({
                 iceServers: [
                     {
-                        urls: "turns:turn.cloud-rtc.com:443?transport=tcp",
+                        urls: "turn:test12.rtc.qq.com:80?transport=tcp",
                         // username: "user01",
                         // credential: "pass01"
-                        username: "eJyrVgrxCdYrSy1SslIy0jNQ0gHzM1NS80oy0zLBwubGFuYmRlCZ4pTsxIKCzBQlKyMDIDAyN4WIl2TmpipZGZpZmFuYGwLFIaKpFQWZRUBxMwMTCwMDqAmZ6UBDXTIM-TzTfSyTA4oCggItc5KynQPcy4stvDJL8g2dMsLzE7OSLcrK-QPDLWyVagEdZDAP",
-                        credential: "eJyrVgrxCdYrSy1SslIy0jNQ0gHzM1NS80oy0zLBwubGFuYmRlCZ4pTsxIKCzBQlKyMDIDAyN4WIl2TmpipZGZpZmFuYGwLFIaKpFQWZRUBxMwMTCwMDqAmZ6UBDXTIM-TzTfSyTA4oCggItc5KynQPcy4stvDJL8g2dMsLzE7OSLcrK-QPDLWyVagEdZDAP",
+                        username: "eJw8jl8LgjAUR7-LfQ67m23ZoJegJJRAVlK9Wa649kfTUYvou0cmvf4OnN95wTLWnnEV1QYUE0JwROy1K*XmaulApgYFNnuey7rcNfCDTX7KqopyUGyAyILAl7IjdAQFDxnzIhGb8uaKhZumYaqDbWKiSbR3a4t9zfksDJmv56txp7R0*TbIEWdD9tfd23vuIbw-AQAA---IVDJ0",
+                        credential: "eJw8jl8LgjAUR7-LfQ67m23ZoJegJJRAVlK9Wa649kfTUYvou0cmvf4OnN95wTLWnnEV1QYUE0JwROy1K*XmaulApgYFNnuey7rcNfCDTX7KqopyUGyAyILAl7IjdAQFDxnzIhGb8uaKhZumYaqDbWKiSbR3a4t9zfksDJmv56txp7R0*TbIEWdD9tfd23vuIbw-AQAA---IVDJ0",
                         // credential: "eJw1jV0LgjAYRv*K7LawTd2UoJuEPgcGBumltE1eTBs6LYn*e2l2ex7OeV7ozGO7gRwtLVS2UF2UT-okDB-JXl4LHS02kWmD*LjjNGWnWafXW34Q6QrNrVGVTw21-NqEUupgjCfeiCLTGsSweBiTIHAZm7ZO1sOdY*N-xUA5NpjPPM91CJ04CFkZUPATTNbf7rVSpZY5en8A4RI1zA__",
                     },
                     // {
@@ -425,7 +425,7 @@ a=max-message-size:262144
         // Set up an event listener which will run the startup
         // function once the page is done loading.
         window.addEventListener('load', publish, false);
-        // setTimeout(function () {window.location.reload()}, 5000);
+        // setTimeout(function () { window.location.reload(1) }, 20000);
     </script>
 </body>
 

@@ -65,6 +65,7 @@ class RtpHandler {
  public:
   PeerConnection &belongingPeerConnection_;
 
+  // OPT: should assign from SDP
   uint32_t upAudioSSRC = 0;
   uint32_t upVideoSSRC = 0;
 
