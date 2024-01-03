@@ -1,7 +1,11 @@
 [submodule "third_party/tylib"]
 	path = third_party/tylib
 	url = https://github.com/justme0/tylib
-    branch = main
+	branch = main
+[submodule "third_party/rsfec-cpp"]
+	path = third_party/rsfec-cpp
+	url = https://github.com/justme0/rsfec-cpp
+	branch = main
 [submodule "third_party/usrsctp"]
 	path = third_party/usrsctp
 	url = https://github.com/sctplab/usrsctp

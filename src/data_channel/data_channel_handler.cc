@@ -417,6 +417,7 @@ void DataChannelHandler::HandleDataChannelPacket(const char* buf,
   usrsctp_conninput(reinterpret_cast<void*>(id_), buf, nb_buf, 0);
 }
 
+// now no use
 int DataChannelHandler::CreateDataChannel(const std::string& label) {
   DataChannel data_channel;
   data_channel.label_ = label;

@@ -1,3 +1,5 @@
+compile_commands.events.json
+output/
 *.log
 tywebrtc
 
