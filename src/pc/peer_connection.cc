@@ -104,6 +104,7 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
           stateMachine_ != EnumStateMachine::GOT_RTP) {
         this->stateMachine_ = EnumStateMachine::GOT_RTP;
         this->bNotUseSrtp = true;
+        this->bUseRsfec = true;
 
         // if pull fail, retry?
         // but current branch is run only once

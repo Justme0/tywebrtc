@@ -17,15 +17,15 @@
 #include <sstream>
 
 #include "colib/co_routine.h"
-#include "librtmp/log.h"
-#include "librtmp/rtmp_sys.h"
-#include "openssl/md5.h"
-
 #include "global_tmp/global_tmp.h"
 #include "global_tmp/h264NaluDec.h"
 #include "global_tmp/h264SpsDec.h"
+#include "librtmp/log.h"
+#include "librtmp/rtmp_sys.h"
 #include "log/log.h"
+#include "openssl/md5.h"
 #include "pc/peer_connection.h"
+#include "rsfec/rsfec.h"
 #include "rtmp/DomainResolve.h"
 #include "rtp/pack_unpack/pack_unpack_common.h"
 
@@ -386,7 +386,7 @@ void RtmpPuller::WriteFileH264(FILE* pfOutfpH264, const RTMPPacket* pPacket) {
       pTmpBuff[3] = 1;
       WriteFile(pTmpBuff, 4, pfOutfpH264);
       WriteFile(pNalu, NaluLen, pfOutfpH264);
-      TotalLen = TotalLen + NaluLen + 4;  //加上四字节长度描述
+      TotalLen = TotalLen + NaluLen + 4;  // 加上四字节长度描述
 
       if (TotalLen < pPacket->m_nBodySize) {
         pNalu = pNalu + NaluLen + 4;
@@ -885,7 +885,7 @@ int RtmpPuller::InitProtocolHandler(const std::string& Url) {
   // pRtmp->Link.tcUrl.av_val = (char*)Tcurl.c_str();
   // pRtmp->Link.tcUrl.av_len = Tcurl.length();
 
-  //设置直播标志
+  // 设置直播标志
   pRtmp->Link.lFlags |= RTMP_LF_LIVE;
 
   RTMP_SetBufferMS(pRtmp, 4 * 3600 * 1000);
@@ -1167,7 +1167,7 @@ int RtmpPuller::SendonResult(RTMP* pRtmp, double Txn) {
 }
 
 int RtmpPuller::SendMateData(Client*) {
-  //封装matedata发送
+  // 封装matedata发送
   RTMPPacket Packet;
   char pBuf[2048];
   char* pEnd = pBuf + sizeof(pBuf);
@@ -1633,7 +1633,7 @@ int RtmpPuller::GetFrameTypeAndPrepareSpsPps(Client* pClient,
                                              unsigned int& SendLen) {
   int NaluType = (pNalu[0] & 0x1F);
 
-  if (kVideoNaluUnitDelimiterRbsp == NaluType) {
+  if (kVideoNaluDelimiterRbsp == NaluType) {
     if (0 == (pNalu[1] & 0xE0)) {
       NaluType = kVideoNaluIdr;
     } else {
@@ -1667,7 +1667,7 @@ int RtmpPuller::GetFrameTypeAndPrepareSpsPps(Client* pClient,
   if ((kVideoNaluSps == NaluType) || (kVideoNaluPps == NaluType) ||
       (kVideoNaluIdr == NaluType)) {
     FrameType = WEB_VIDEO_FRAME_TYPE_I;
-  } else if (kVideoNaluUnitDelimiterRbsp == NaluType) {
+  } else if (kVideoNaluDelimiterRbsp == NaluType) {
     if (0 == (pNalu[1] & 0xE0)) {
       FrameType = WEB_VIDEO_FRAME_TYPE_I;
     }
@@ -1775,7 +1775,7 @@ int RtmpPuller::HandleVideoSliceStartCodeMod(Client* pClient,
     TotalLen += SkipLen;
 
     if (TotalLen < pPkg->m_nBodySize) {
-      pNalu = pNalu + NaluLen + 4;  //加上四字节长度描述
+      pNalu = pNalu + NaluLen + 4;  // 加上四字节长度描述
       NaluLen = htonl(*(unsigned int*)(pNalu - 4));
       SkipLen = 0;
       First4Bytes = (pNalu[0] << 24) | (pNalu[0 + 1] << 16) |
@@ -1794,6 +1794,84 @@ int RtmpPuller::HandleVideoSliceStartCodeMod(Client* pClient,
 
   // PackVideoData(SendBuff, SendLen, pPkg->m_nTimeStamp, FrameType, pClient);
   return 0;
+}
+
+std::vector<std::vector<char>> RtmpPuller::EncodeFec_(
+    const std::vector<RtpBizPacket>& rtpBizPackets) {
+  rsfec::CRSFec rsfec;
+  const int originalNum = rtpBizPackets.size();
+  assert(originalNum <= kMatrixMaxSize);  // FIXME: allow large frame
+  const int fecNum = ceil(kFecRate * originalNum);
+  assert(fecNum >= 1);
+  assert(fecNum <= kMatrixMaxSize);  // FIXME: allow more FEC
+  // OPT: init encode matrix once
+  int ret = rsfec.SetNM(originalNum, fecNum);
+  if (ret) {
+    tylog("setNM ret=%d, originalNum=%d, fecNum=%d.", ret, originalNum, fecNum);
+    assert(0);  // should not use assert, for debug
+
+    return {};
+  }
+
+  tylog("setNM originalNum=%d, fecNum=%d.", originalNum, fecNum);
+
+  size_t maxPacketSize = 0;
+  for (int i = 0; i < originalNum; ++i) {
+    if (rtpBizPackets[i].rtpRawPacket.size() > maxPacketSize) {
+      maxPacketSize = rtpBizPackets[i].rtpRawPacket.size();
+    }
+  }
+
+  std::vector<const void*> inPtr(originalNum);
+  std::vector<std::vector<char>> supplement(originalNum);
+  for (int i = 0; i < originalNum; ++i) {
+    if (rtpBizPackets[i].rtpRawPacket.size() < maxPacketSize) {
+      supplement[i] = rtpBizPackets[i].rtpRawPacket;
+      supplement[i].resize(maxPacketSize);
+      inPtr[i] = supplement[i].data();
+    } else {
+      assert(rtpBizPackets[i].rtpRawPacket.size() == maxPacketSize);
+      inPtr[i] = rtpBizPackets[i].rtpRawPacket.data();
+    }
+  }
+
+  std::vector<void*> outPtr(fecNum);
+  std::vector<std::vector<uint8_t>> fecData(fecNum);
+  for (int i = 0; i < fecNum; ++i) {
+    fecData[i].resize(maxPacketSize);
+    outPtr[i] = fecData[i].data();
+  }
+
+  ret = rsfec.CalculateFEC(maxPacketSize, inPtr, outPtr);
+  if (ret) {
+    tylog("calculateFEC ret=%d.", ret);
+    assert(0);  // should not use assert, for debug
+    return {};
+  }
+
+  std::vector<std::vector<char>> fecPackets;
+
+  for (int i = 0; i < fecNum; ++i) {
+    std::vector<char> packet(MAX_PKT_BUF_SIZE);
+    RtpHeader& header = *reinterpret_cast<RtpHeader*>(packet.data());
+    header.setVersion(2);    // fix number
+    header.setTimestamp(0);  // no use
+    header.setSSRC(kDownlinkVideoFecSsrc);
+    header.setSeqNumber(0);                           // should use seq
+    header.setPayloadType(kDownlinkH264PayloadType);  // same as video
+    header.setMarker(i == fecNum - 1 ? 1 : 0);
+    header.setExtension(0);  // taylor
+
+    const int headLen = header.getHeaderLength();
+    packet.resize(headLen + fecData[i].size());
+
+    assert(maxPacketSize == fecData[i].size());
+    memcpy(packet.data() + headLen, fecData[i].data(), fecData[i].size());
+
+    fecPackets.emplace_back(packet);
+  }
+
+  return fecPackets;
 }
 
 // param to use string view
@@ -1835,6 +1913,7 @@ int RtmpPuller::DownlinkPackAndSend(bool bAudio,
     }
   }
 
+  // S1: encrypt original data
   for (RtpBizPacket& rtpBizPacket : rtpBizPackets) {
     tylog("rtmp to rtp(biz)=%s", rtpBizPacket.ToString().data());
 
@@ -1847,17 +1926,42 @@ int RtmpPuller::DownlinkPackAndSend(bool bAudio,
 
       return ret;
     }
+  }
 
-    // OPT: avoid copy
-    std::vector<char> saveRtp = rtpBizPacket.rtpRawPacket;
+  // S2: do fec for encrypted original data
+  // 1) ts identify protecting same packets
+  // 2) seq self-increasing
+  // 3) extend head add n:m
+  // 4) last RTP add tail zero number
+  std::vector<std::vector<char>> fecPackets;
+  if (bAudio) {
+  } else {
+    fecPackets = EncodeFec_(rtpBizPackets);
+  }
 
-    ssrcInfo.rtpSender.Enqueue(std::move(rtpBizPacket));
-    assert(rtpBizPacket.rtpRawPacket.empty());
-
-    ret = this->belongingPeerConnection_.SendToClient(saveRtp);
+  // S3: send original data
+  for (RtpBizPacket& rtpBizPacket : rtpBizPackets) {
+    ret =
+        this->belongingPeerConnection_.SendToClient(rtpBizPacket.rtpRawPacket);
     if (ret) {
       tylog("send to peer ret=%d", ret);
 
+      // should continue :)
+      return ret;
+    }
+
+    ssrcInfo.rtpSender.Enqueue(std::move(rtpBizPacket));
+    assert(rtpBizPacket.rtpRawPacket.empty());
+  }
+
+  // S4: send FEC data
+  for (const std::vector<char>& fecPacket : fecPackets) {
+    // not save fec to sender queue, not ARQ FEC
+    ret = this->belongingPeerConnection_.SendToClient(fecPacket);
+    if (ret) {
+      tylog("send to peer ret=%d", ret);
+
+      // should not return?
       return ret;
     }
   }
@@ -1959,8 +2063,8 @@ int RtmpPuller::HandleVideoSlice(Client* pClient, const RTMPPacket* pPkg) {
   unsigned int First4Bytes = (pNalu[0] << 24) | (pNalu[0 + 1] << 16) |
                              (pNalu[0 + 2] << 8) | (pNalu[0 + 3]);
 
-  //这里可能会有两种携带模式，一种是整包的slice通过头长度来指定，一种是通过0x0001来处理，需要区分处理
-  //携带了0x00001的模式
+  // 这里可能会有两种携带模式，一种是整包的slice通过头长度来指定，一种是通过0x0001来处理，需要区分处理
+  // 携带了0x00001的模式
   if ((First4Bytes == 0x00000001) ||
       ((First4Bytes & 0xFFFFFF00) == 0x00000100)) {
     return HandleVideoSliceStartCodeMod(pClient, pPkg);

@@ -136,13 +136,42 @@ int H264Unpacketizer::ParseFuaNalu_(const std::vector<char> &vBufReceive) {
     // +---------------+
     // https://datatracker.ietf.org/doc/html/rfc6184#section-5.3
     // https://segmentfault.com/a/1190000006698552?utm_source=sf-backlinks
-    // The first bit of this sequence ( which is a 0 ) is the forbidden zero and
-    // is used to verify if errors where encountered during the transmission of
-    // the packet.
+    //
+    // F:    1 bit
+    //   forbidden_zero_bit.  A value of 0 indicates that the NAL unit
+    //   type octet and payload should not contain bit errors or other
+    //   syntax violations.  A value of 1 indicates that the NAL unit
+    //   type octet and payload may contain bit errors or other syntax
+    //   violations.
+    //   MANEs SHOULD set the F bit to indicate detected bit errors in
+    //   the NAL unit.  The H.264 specification requires that the F bit
+    //   be equal to 0.  When the F bit is set, the decoder is advised
+    //   that bit errors or any other syntax violations may be present
+    //   in the payload or in the NAL unit type octet.  The simplest
+    //   decoder reaction to a NAL unit in which the F bit is equal to 1
+    //   is to discard such a NAL unit and to conceal the lost data in
+    //   the discarded NAL unit.
     const int kFBit = 0x80;
-    // The following 2 bits ( the 11 ) are called nal_ref_idc and they indicates
-    // if NAL unit is a reference field, frame or picture.
+
+    // NRI:  2 bits
+    //   nal_ref_idc.  The semantics of value 00 and a non-zero value
+    //   remain unchanged from the H.264 specification.  In other words,
+    //   a value of 00 indicates that the content of the NAL unit is not
+    //   used to reconstruct reference pictures for inter picture
+    //   prediction.  Such NAL units can be discarded without risking
+    //   the integrity of the reference pictures.  Values greater than
+    //   00 indicate that the decoding of the NAL unit is required to
+    //   maintain the integrity of the reference pictures.
+
+    //   In addition to the specification above, according to this RTP
+    //   payload specification, values of NRI indicate the relative
+    //   transport priority, as determined by the encoder.  MANEs can
+    //   use this information to protect more important NAL units better
+    //   than they do less important NAL units.  The highest transport
+    //   priority is 11, followed by 10, and then by 01; finally, 00 is
+    //   the lowest.
     const int kNriMask = 0x60;
+
     uint8_t fnri = payload[0] & (kFBit | kNriMask);  // taylor not payload[1] ?
 
     char original_nal_header = fnri | original_nal_type;
@@ -240,7 +269,7 @@ int H264Unpacketizer::ParseStapAOrSingleNalu_(
   enVideoH264NaluType nal_type =
       static_cast<enVideoH264NaluType>(payload[0] & kH264TypeMask);
   std::vector<size_t> nalu_start_offsets;
-  if (nal_type == kH264StapA) {
+  if (nal_type == kVideoNaluStapA) {
     // Skip the StapA header (StapA NAL type + length).
     if (length <= kStapAHeaderSize) {
       tylog("error: length=%d <= kStapAHeaderSize=%d", length,
@@ -329,13 +358,13 @@ int H264Unpacketizer::ParseStapAOrSingleNalu_(
         break;
       // Slices below don't contain SPS or PPS ids.
       case kVideoNaluSei:
-      case kVideoNaluUnitDelimiterRbsp:
-      case kVideoNaluUnitEoseq:
-      case kVideoNaluUnitEostm:
-      case kVideoNaluUnitSpsExtn:
+      case kVideoNaluDelimiterRbsp:
+      case kVideoNaluEoseq:
+      case kVideoNaluEostm:
+      case kVideoNaluSpsExtn:
         break;
-      case kH264StapA:
-      case kH264FuA:
+      case kVideoNaluStapA:
+      case kVideoNaluFuA:
         tylog("error: after parse, recv %s",
               enVideoH264NaluTypeToString(nalu.type).data());
         return -4;
@@ -417,7 +446,7 @@ int H264Unpacketizer::Unpacketize(const std::vector<char> &vBufReceive,
       static_cast<enVideoH264NaluType>(payload[0] & kH264TypeMask);
   tylog("nalu type=%d[%s]", nal_type,
         enVideoH264NaluTypeToString(nal_type).data());
-  if (nal_type == kH264FuA) {
+  if (nal_type == kVideoNaluFuA) {
     ret = ParseFuaNalu_(vBufReceive);
     if (ret) {
       tylog("parseFuaNalu ret=%d, hexString=%s.", ret,

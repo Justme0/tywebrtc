@@ -49,7 +49,7 @@ int FlvAssist::SendVideoFrame(const std::vector<char>& h264Frame,
   enVideoH264NaluType NaluType =
       static_cast<enVideoH264NaluType>(pRawDataBuff[NalHeadPos] & 0x1F);
 
-  if (kVideoNaluUnitDelimiterRbsp == NaluType) {
+  if (kVideoNaluDelimiterRbsp == NaluType) {
     if (0 == (pRawDataBuff[NalHeadPos + 1] & 0xE0)) {
       NaluType = kVideoNaluIdr;
     }

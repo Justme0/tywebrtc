@@ -474,9 +474,10 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   LeftLen -= EncLen;
 
   // ok
-  /*根据 pre-RFC3489bis-07 以及之后的协议要求,计算MESSAGE-INTEGRITY和FINGERPRINT
-     的时候，MESSAGE-INTEGRITY长度包含在计算中，FINGERPRINT的长度不包含在计算中，
-     参考pjlib实现*/
+  // 根据 pre-RFC3489bis-07
+  // 以及之后的协议要求,计算MESSAGE-INTEGRITY和FINGERPRINT
+  // 的时候，MESSAGE-INTEGRITY长度包含在计算中，FINGERPRINT的长度不包含在计算中，
+  // 参考pjlib实现
   int MsgLen = EncLen + sizeof(STUN_MSG_INTEGRITY);
   pHeadRes->MsgLen = ntohs(MsgLen);
   int PartLen = (int)(pOffset - SndBuff);

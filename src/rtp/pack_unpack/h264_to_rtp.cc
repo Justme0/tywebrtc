@@ -8,7 +8,7 @@
 
 // @see: https://tools.ietf.org/html/rfc6184#section-5.8
 
-// to refactor, cancle the struct
+// to refactor, use string/string_view, cancle the struct
 struct Nalu {
   const char* data;
   int size;
@@ -120,7 +120,7 @@ int H264Packetizer::PacketStapA(const uint32_t timestamp,
   char* dst = packet.data() + rtp_header.getHeaderLength();
 
   // stap-a header
-  uint8_t stap_a_header = kH264StapA;
+  uint8_t stap_a_header = kVideoNaluStapA;
   stap_a_header |= (nal_type & (~kH264TypeMask));
   *dst++ = stap_a_header;
 
@@ -155,6 +155,7 @@ int H264Packetizer::PacketSingleNalu(
 
   if ((frame[0] & kH264TypeMask) == 0x08) {
     pps_.append(reinterpret_cast<const char*>(frame), len);
+    // why not using assign?
     // pps_.assign(reinterpret_cast<const char*>(frame), len);
     // return 0;
   }
@@ -191,6 +192,7 @@ int H264Packetizer::PacketFuA(
     const char* frame, const int len, const uint32_t timestamp,
     const std::vector<std::shared_ptr<Extension>>& extensions,
     std::vector<RtpBizPacket>& rtpBizPackets) {
+  assert(len > kGuessMtuByte);
   // WEBRTC_ERROR_CHECK(stream_id_.c_str(), (nullptr == frame), 0,
   //                    "Chn %" PRIu64 " rtp buf is nullptr!", ssrc_);
   // WEBRTC_ERROR_CHECK(stream_id_.c_str(), (VIDEO_NALU_HEADER_LTH >= len), 0,
@@ -201,25 +203,19 @@ int H264Packetizer::PacketFuA(
   }
 
   int32_t data_len = len - VIDEO_NALU_HEADER_LTH;
+  assert(data_len >= kGuessMtuByte);
+
   const int RTP_HEADER_LTH = 12;
   int32_t slice_len = kGuessMtuByte - RTP_HEADER_LTH;
-  assert(slice_len > 0);
+
   int32_t pkt_num = data_len / slice_len;
 
-  if (0 >= pkt_num) {
-    pkt_num = 0;
-    slice_len = data_len;
-  }
+  assert(pkt_num >= 1);
 
   int32_t last_pkt_len = data_len - pkt_num * slice_len;
   pkt_num += ((0 < last_pkt_len) ? 1 : 0);
 
-  if (0 < pkt_num) {
-    slice_len = (data_len + (pkt_num >> 1)) / pkt_num;
-  } else {
-    pkt_num = 1;
-    slice_len = data_len;
-  }
+  slice_len = (data_len + (pkt_num >> 1)) / pkt_num;
 
   const char* nalu = frame + VIDEO_NALU_HEADER_LTH;
   uint8_t fu_indicator = (frame[0] & 0xE0) | 28;  // FU-A

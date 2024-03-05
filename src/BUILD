@@ -9,9 +9,12 @@ cc_binary(
     # OPT: remove error=old-style-cast
     # shit sctp header file use condition compile
 	  copts = ["-D SCTP_DEBUG", "-I src", "-Werror", "-Wall", "-Wextra", "-Wno-error=old-style-cast", "-Wno-error=deprecated-declarations"],
-    linkopts = ["-l dl -pthread -l z"],
+
+    # ffmpeg need bz2 tls drm, should be in WORKSPACE ffmpeg dep lib
+    linkopts = ["-l dl -pthread -l z -l bz2 -l gnutls -l drm"],
     deps = [
         "@tylib//:tylib",
+        "@rsfec//:rsfec",
         "@sctp//:sctp_package",
         "@librtmp//:librtmp_package",
         "@srtp//:libsrtp_package",

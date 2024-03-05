@@ -13,6 +13,7 @@
 #include "pull/pull_handler.h"
 #include "rtmp/FlvAssist.h"
 #include "rtmp/MediaBuffer.h"
+#include "rtp/rtp_parser.h"
 
 #define MAX_CLIENT (256)  //单进程最大支持128路连接
 
@@ -516,6 +517,8 @@ class RtmpPuller {
                           uint32_t rtpTime);
 
  private:
+  std::vector<std::vector<char>> EncodeFec_(
+      const std::vector<RtpBizPacket>& rtpBizPackets);
   // int GetRtmpSocket() const {return rtmp_.m_sb.sb_socket;}
 
   int WriteFile(unsigned char* pBuffer, unsigned int Len, FILE* fpFlv);

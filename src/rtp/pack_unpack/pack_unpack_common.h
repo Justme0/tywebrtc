@@ -51,13 +51,25 @@ enum enVideoH264NaluType {
   kVideoNaluSei = 6,
   kVideoNaluSps = 7,
   kVideoNaluPps = 8,
-  kVideoNaluUnitDelimiterRbsp = 9,
-  kVideoNaluUnitEoseq = 10,
-  kVideoNaluUnitEostm = 11,
-  kVideoNaluUnitFillerData = 12,
-  kVideoNaluUnitSpsExtn = 13,
-  kH264StapA = 24,
-  kH264FuA = 28,
+  kVideoNaluDelimiterRbsp = 9,
+  kVideoNaluEoseq = 10,
+  kVideoNaluEostm = 11,
+  kVideoNaluFillerData = 12,
+  kVideoNaluSpsExtn = 13,
+  kVideoNaluPrefix = 14,
+  kVideoNaluSubSps = 15,
+  kVideoNaluSliceAux = 19,
+  kVideoNaluSliceExt = 20,
+  kVideoNaluSliceExtDepth = 21,
+  // https://datatracker.ietf.org/doc/html/rfc6184#section-5.2
+  kVideoNaluStapA = 24,
+  kVideoNaluStapB = 25,
+  kVideoNaluMtap16 = 26,
+  kVideoNaluMtap24 = 27,
+  kVideoNaluFuA = 28,
+  kVideoNaluFuB = 29,
+  kVideoNaluPacsi = 30,
+  kVideoNaluExt = 31,
 };
 
 inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
@@ -80,37 +92,48 @@ inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
       return "NAL unit - Sequence parameter set";
     case kVideoNaluPps:
       return "NAL unit - Picture parameter set";
-    case kVideoNaluUnitDelimiterRbsp:
+    case kVideoNaluDelimiterRbsp:
       return "NAL unit - Access unit delimiter";
-    case kVideoNaluUnitEoseq:
+    case kVideoNaluEoseq:
       return "NAL unit - End of sequence";
-    case kVideoNaluUnitEostm:
+    case kVideoNaluEostm:
       return "NAL unit - End of stream";
-    case kVideoNaluUnitFillerData:
+    case kVideoNaluFillerData:
       return "NAL unit - Filler data";
-    case kVideoNaluUnitSpsExtn:
+    case kVideoNaluSpsExtn:
       return "NAL unit - Sequence parameter set extension";
-    // "NAL unit - Prefix" // 14
-    // "NAL unit - Subset sequence parameter set" // 15
+    case kVideoNaluPrefix:
+      return "NAL unit - Prefix";
+    case kVideoNaluSubSps:
+      return "NAL unit - Subset sequence parameter set";
     // "NAL unit - Reserved" // 16
     // "NAL unit - Reserved" // 17
     // "NAL unit - Reserved" // 18
-    // "NAL unit - Coded slice of an auxiliary coded picture without
-    // partitioning" // 19
-    // "NAL unit - Coded slice extension" // 20
-    // "NAL unit - Coded slice extension for depth view components" // 21
+    case kVideoNaluSliceAux:
+      return "NAL unit - Coded slice of an auxiliary coded picture without "
+             "partitioning";
+    case kVideoNaluSliceExt:
+      return "NAL unit - Coded slice extension";
+    case kVideoNaluSliceExtDepth:
+      return "NAL unit - Coded slice extension for depth view components";
     // "NAL unit - Reserved" // 22
     // "NAL unit - Reserved" // 23
-    case kH264StapA:
+    case kVideoNaluStapA:
       return "Single-time aggregation packet A (STAP-A)";
-    //  "Single-time aggregation packet B (STAP-B)" // 25
-    // "Multi-time aggregation packet 16 (MTAP16)" // 26
-    // "Multi-time aggregation packet 24 (MTAP24)" // 27
-    case kH264FuA:
+    case kVideoNaluStapB:
+      return "Single-time aggregation packet B (STAP-B)";
+    case kVideoNaluMtap16:
+      return "Multi-time aggregation packet 16 (MTAP16)";
+    case kVideoNaluMtap24:
+      return "Multi-time aggregation packet 24 (MTAP24)";
+    case kVideoNaluFuA:
       return "Fragmentation unit A (FU-A)";
-    // "Fragmentation unit B (FU-B)" // 29
-    // "NAL unit - Payload Content Scalability Information (PACSI)" // 30
-    // "NAL unit - Extended NAL Header" // 31
+    case kVideoNaluFuB:
+      return "Fragmentation unit B (FU-B)";
+    case kVideoNaluPacsi:
+      return "NAL unit - Payload Content Scalability Information (PACSI)";
+    case kVideoNaluExt:
+      return "NAL unit - Extended NAL Header";
     default:
       return tylib::format_string("Unknown[%d]", v);
   }

@@ -861,7 +861,7 @@ int DtlsHandler::OnTime() {
     ++m_ReSendTime;
 
     for (int i = 0; i < m_SendBuffNum; ++i) {
-      tylog("OnTime rewriteDtlsPacket, i=%d buffer len=%d", i,
+      tylog("OnTime rewrite DtlsPacket, i=%d buffer len=%d", i,
             m_SendBuff[i].len);
 
       ret = rewriteDtlsPacket(m_SendBuff[i].buff, m_SendBuff[i].len);

@@ -22,8 +22,17 @@
 
 const int kUplossRateMul100 = 0;
 const int kDownlossRateMul100 = 0;
-const int kPCDeadTimeoutMs = 2 * 1000;
 
+// should be from BWE
+const double kFecRate = 0.1;
+
+const int kPCDeadTimeoutMs = 3 * 1000;
+
+// https://qr.ae/pK6JH5
+// https://qr.ae/pK6Jkf
+// MTU by itself is meaningless, but usually means the L2 (link layer) MTU, the
+// total size of a frame that can be sent on a specific networking medium,
+// excluding the preamble and FCS (CRC).
 const int kGuessMtuByte = 1200;
 
 extern prometheus::Family<prometheus::Gauge>* g_startServer;
@@ -35,8 +44,11 @@ extern int g_dumpSendSockfd;
 
 const int kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
 const int kDownlinkAudioPayloadType = 111;
-const constexpr int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
+
+const int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
 const int kDownlinkH264PayloadType = 106;
+
+const int kDownlinkVideoFecSsrc = 13697341;  // taylor to make dynamic
 
 class PeerConnection;
 

@@ -133,6 +133,7 @@ class PeerConnection {
   DTLSTimer dtlsTimer_;
 
   bool bNotUseSrtp = false;
+  bool bUseRsfec = false;
 };
 
 #endif  // PC_PEER_CONNECTION_H_
