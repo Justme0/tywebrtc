@@ -405,10 +405,10 @@ int SrsAudioTranscoder::encode(std::vector<SrsAudioFrame> &pkts) {
       out_frame.s.assign(enc_packet_->data,
                          enc_packet_->data + enc_packet_->size);
       tylog(
-          "after enc to aac (succ), packet dts=%lu, pts=%lu, nowMs=%lu, pkt "
+          "after enc (succ), packet dts=%lu, pts=%lu, nowMs=%lu, pkt "
           "size=%d.",
           enc_packet_->dts, enc_packet_->pts, g_now_ms, enc_packet_->size);
-      assert(enc_packet_->dts == enc_packet_->pts);  // have no B frame
+      assert(enc_packet_->dts == enc_packet_->pts);  // audio
       out_frame.ts_ms = enc_packet_->dts;
 
       pkts.push_back(out_frame);

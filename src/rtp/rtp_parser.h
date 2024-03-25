@@ -766,7 +766,7 @@ struct RtpBizPacket {
   std::string ToString() const {
     assert(!rtpRawPacket.empty());
     return tylib::format_string(
-        "{rtp=%s, cycle=%ld, enterTs=%s, waitMs=%ld}",
+        "{rtp=%zuB:%s, cycle=%ld, enterTs=%s, waitMs=%ld}", rtpRawPacket.size(),
         reinterpret_cast<const RtpHeader*>(rtpRawPacket.data())
             ->ToString()
             .data(),
