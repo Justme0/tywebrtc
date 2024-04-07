@@ -52,12 +52,13 @@ inline typename std::enable_if<(M == 0), T>::type ForwardDiff(T a, T b) {
   return b - a;
 }
 
+// @return "b - a"
 template <typename T>
 inline T ForwardDiff(T a, T b) {
   return ForwardDiff<T, 0>(a, b);
 }
 
-// @return if "a > b"
+// @return if "a >= b"
 template <typename T, T M>
 inline typename std::enable_if<(M == 0), bool>::type AheadOrAt(T a, T b) {
   static_assert(std::is_unsigned<T>::value,
@@ -67,6 +68,7 @@ inline typename std::enable_if<(M == 0), bool>::type AheadOrAt(T a, T b) {
   return ForwardDiff(b, a) < maxDist;  // 0 < a-b < maxDist
 }
 
+// @return if "a >= b"
 template <typename T>
 inline bool AheadOrAt(T a, T b) {
   return AheadOrAt<T, 0>(a, b);
@@ -718,6 +720,7 @@ class RtpHeader {
   uint8_t hasextension : 1;
   uint8_t padding : 1;
   uint8_t version : 2;
+
   uint8_t payloadtype : 7;
   uint8_t marker : 1;
 
@@ -766,7 +769,7 @@ struct RtpBizPacket {
   std::string ToString() const {
     assert(!rtpRawPacket.empty());
     return tylib::format_string(
-        "{rtp=%zuB:%s, cycle=%ld, enterTs=%s, waitMs=%ld}", rtpRawPacket.size(),
+        "{rtp=%zu B:%s, cycle=%ld, enterTs=%s, waitMs=%ld}", rtpRawPacket.size(),
         reinterpret_cast<const RtpHeader*>(rtpRawPacket.data())
             ->ToString()
             .data(),

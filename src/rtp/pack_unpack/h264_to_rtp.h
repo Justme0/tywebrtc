@@ -19,9 +19,10 @@ class H264Packetizer {
                 const std::vector<std::shared_ptr<Extension>> &extensions,
                 std::vector<RtpBizPacket> &rtpBizPackets);
 
- private:
+  // also used for FEC encoder
   PowerSeqT GeneratePowerSequence() { return ++powerSequence_; }
 
+ private:
   int PacketStapA(const uint32_t timestamp,
                   const std::vector<std::shared_ptr<Extension>> &extensions,
                   std::vector<RtpBizPacket> &rtpBizPackets);

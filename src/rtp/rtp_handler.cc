@@ -6,6 +6,10 @@
 #include <cstring>
 #include <string>
 
+#include "rsfec/rsfec.h"
+#include "tylib/ip/ip.h"
+#include "tylib/string/any_to_string.h"
+
 #include "global_tmp/global_tmp.h"
 #include "log/log.h"
 #include "pc/peer_connection.h"
@@ -13,8 +17,6 @@
 #include "rtp/rtcp/rtcp_parser.h"
 #include "rtp/rtp_parser.h"
 #include "timer/timer.h"
-#include "tylib/ip/ip.h"
-#include "tylib/string/any_to_string.h"
 
 // string enum, for print convenience
 const std::string kMediaTypeRtcp = "rtcp";
@@ -359,6 +361,167 @@ SSRCInfo::SSRCInfo(RtpHandler &belongingRtpHandler)
     : rtpReceiver(*this),
       rtpSender(*this),
       belongingRtpHandler(belongingRtpHandler) {}
+
+std::vector<std::vector<char>> SSRCInfo::EncodeFec(
+    uint32_t thisSSRC, const std::vector<RtpBizPacket> &rtpBizPackets) {
+  const int originalNum = rtpBizPackets.size();
+  if (originalNum == 0) {
+    tylog("warn: originalNum=0");
+
+    return {};
+  }
+
+  if (originalNum > kMatrixMaxSize) {
+    // taylor to support
+    tylog("warn: originalNum=%d>%d, not encode fec.", originalNum,
+          kMatrixMaxSize);
+
+    return {};
+  }
+
+  const RtpHeader &first = *reinterpret_cast<const RtpHeader *>(
+      rtpBizPackets.front().rtpRawPacket.data());
+  const uint16_t firstSeq = first.getSeqNumber();
+  const RtpHeader &last = *reinterpret_cast<const RtpHeader *>(
+      rtpBizPackets.back().rtpRawPacket.data());
+  const uint16_t lastSeq = last.getSeqNumber();
+  const uint32_t originalSSRC = first.getSSRC();
+
+  const int fecNum = ceil(kFecRate * originalNum);
+  assert(fecNum >= 1);
+  assert(fecNum <= kMatrixMaxSize);  // FIXME: allow more FEC
+
+  // OPT: init encode matrix once
+  rsfec::CRSFec rsfec;
+  rsfec.SetVandermondeMatrix();
+  int ret = rsfec.SetNM(originalNum, fecNum);
+  if (ret) {
+    tylog("setNM ret=%d, originalNum=%d, fecNum=%d.", ret, originalNum, fecNum);
+    assert(0);  // should not use assert, for debug
+
+    return {};
+  }
+
+  tylog("setNM originalNum=%d, fecNum=%d.", originalNum, fecNum);
+
+  size_t maxPacketSize = 0;  // will also be fec payload length
+  for (int i = 0; i < originalNum; ++i) {
+    if (rtpBizPackets[i].rtpRawPacket.size() > maxPacketSize) {
+      maxPacketSize = rtpBizPackets[i].rtpRawPacket.size();
+    }
+  }
+
+  std::vector<const void *> inPtr(originalNum);
+  std::vector<std::vector<char>> supplement(originalNum);
+  std::vector<int> srcPktLengths(originalNum);
+  for (int i = 0; i < originalNum; ++i) {
+    srcPktLengths[i] = rtpBizPackets[i].rtpRawPacket.size();
+
+    if (rtpBizPackets[i].rtpRawPacket.size() < maxPacketSize) {
+      supplement[i] = rtpBizPackets[i].rtpRawPacket;
+      supplement[i].resize(maxPacketSize);
+      inPtr[i] = supplement[i].data();
+    } else {
+      assert(rtpBizPackets[i].rtpRawPacket.size() == maxPacketSize);
+      inPtr[i] = rtpBizPackets[i].rtpRawPacket.data();
+    }
+  }
+
+  std::vector<void *> outPtr(fecNum);
+  std::vector<std::vector<uint8_t>> fecData(fecNum);
+  for (int i = 0; i < fecNum; ++i) {
+    fecData[i].resize(maxPacketSize);
+    outPtr[i] = fecData[i].data();
+  }
+
+  ret = rsfec.CalculateFEC(maxPacketSize, inPtr, outPtr);
+  if (ret) {
+    tylog("calculateFEC ret=%d.", ret);
+    assert(0);  // should not use assert, for debug
+    return {};
+  }
+
+  std::vector<std::vector<char>> fecPackets;
+
+  const int kFecHeadLen = 2 + 2 + 4 + 2 + 2 + (srcPktLengths.size() * 2);
+  const int kAllLen = kRtpHeaderLenByte + kFecHeadLen + maxPacketSize;
+  tylog("kAllLen=%d(%d+%d+%zu).", kAllLen, kRtpHeaderLenByte, kFecHeadLen,
+        maxPacketSize);
+  if (kAllLen > MAX_PKT_BUF_SIZE) {
+    tylog("error: fec pkt too large, size=%d > %d.", kAllLen, MAX_PKT_BUF_SIZE);
+    // should use monitor
+    assert(!"fec pkt too large");
+    return {};
+  }
+
+  for (int i = 0; i < fecNum; ++i) {
+    std::vector<char> packet(kAllLen);
+
+    RtpHeader &header = *reinterpret_cast<RtpHeader *>(packet.data());
+    header.setVersion(2);                      // fix number
+    header.setTimestamp(last.getTimestamp());  // same as last pkt
+    header.setSSRC(thisSSRC);
+    header.setSeqNumber(
+        h264Packetizer.GeneratePowerSequence());          // should use seq
+    header.setPayloadType(kDownlinkVideoFecPayloadType);  // same as video
+    header.setMarker(i == fecNum - 1 ? 1 : 0);
+    header.setExtension(0);  // use user-defined extension
+
+    assert(kRtpHeaderLenByte == header.getHeaderLength());
+
+    // have no CSRC, not use extension, use user defined:
+    // wide is 32B
+    // fec header:
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // | FEC number            |     FEC index (0-based)   |
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // |        protected ssrc                             |
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // | protected first seq   | protected last seq        |
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // | protected data pkt len ...         | length is (last - first + 1) * 2B
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // |    FEC payload ...                        |
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++
+    //
+    // FEC number:  一组FEC一共几个包
+    // FEC index:  FEC组里当前的index
+    // protect ssrc:  保护的媒体的ssrc
+    // first protect seq number 和 last protect seq number:
+    // 这个FEC包是哪几个媒体包生成的
+
+    char *fecHeader = packet.data() + kRtpHeaderLenByte;
+
+    *reinterpret_cast<uint16_t *>(fecHeader) = htons(fecNum);
+    fecHeader += 2;
+    *reinterpret_cast<uint16_t *>(fecHeader) = htons(i);
+    fecHeader += 2;
+
+    *reinterpret_cast<uint32_t *>(fecHeader) = htonl(originalSSRC);
+    fecHeader += 4;
+
+    *reinterpret_cast<uint16_t *>(fecHeader) = htons(firstSeq);
+    fecHeader += 2;
+    *reinterpret_cast<uint16_t *>(fecHeader) = htons(lastSeq);
+    fecHeader += 2;
+
+    // OPT: how to cancel the field:
+    for (size_t srcLen : srcPktLengths) {
+      assert(srcLen <= std::numeric_limits<uint32_t>::max());
+      *reinterpret_cast<uint16_t *>(fecHeader) = htons(srcLen);
+      fecHeader += 2;
+    }
+
+    char *fecPayload = fecHeader;
+
+    assert(maxPacketSize == fecData[i].size());
+    memcpy(fecPayload, fecData[i].data(), fecData[i].size());
+
+    fecPackets.emplace_back(packet);
+  }
+
+  return fecPackets;
+}
 
 std::string SSRCInfo::ToString() const {
   return tylib::format_string("{biggestSeq=%u, biggestCycle=%ld}", biggestSeq,

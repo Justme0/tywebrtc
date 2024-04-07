@@ -26,6 +26,10 @@ class RtpHandler;
 struct SSRCInfo {
   explicit SSRCInfo(RtpHandler &belongingRtpHandler);
 
+  // OPT: use a fec handler
+  std::vector<std::vector<char>> EncodeFec(
+      uint32_t thisSSRC, const std::vector<RtpBizPacket> &rtpBizPackets);
+
   std::string ToString() const;
 
   // why define ssrc's unpacketizer: save unpacked frame e.g. FU-A

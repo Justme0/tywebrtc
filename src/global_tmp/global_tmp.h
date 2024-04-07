@@ -48,8 +48,8 @@ const int kDownlinkAudioPayloadType = 111;
 const int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
 const int kDownlinkH264PayloadType = 106;
 
-const int kDownlinkVideoFecSsrc = 13697341;  // taylor to make dynamic
-const int kDownlinkVideoFecPayloadType = 107;
+// const int kDownlinkVideoFecSsrc = 13697341;  // taylor to make dynamic
+const int kDownlinkVideoFecPayloadType = 127;
 
 class PeerConnection;
 
