@@ -45,12 +45,14 @@ cd $g_dst_dir
 # mac (FreeBSD style) find cmd must specify directory
 find src third_party/tylib third_party/rsfec-cpp | egrep ".+\.(cc|cpp|h)$" | xargs clang-format -i || true
 
+ln -sf ../srtp.h third_party/libsrtp/include/srtp2/srtp.h
+
 # compile
 # make V=1
 kServerName="tywebrtc" # svr name is same in Makefile
 
 # unit test important
-bazel test --verbose_failures --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --cxxopt="-std=c++17" --test_output=all //src:tywebrtc_test
+bazel test --verbose_failures --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --cxxopt="-std=c++17" --test_output=all //:tywebrtc_test
 
 # -Wfatal-errors
 #  --cxxopt="-Weffc++" \
@@ -66,10 +68,10 @@ bazel build \
   --compilation_mode dbg \
   --copt="-g" \
   --cxxopt="-std=c++17" \
-  --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --verbose_failures --test_output=all //src:$kServerName
+  --sandbox_debug --subcommands --explain=bazel_build.log --verbose_explanations --verbose_failures --test_output=all //:$kServerName
 
 rm -rf $kServerName
-cp bazel-bin/src/$kServerName .
+cp bazel-bin/$kServerName .
 
 # deploy
 # rsync --port=22222 -vzrtp --progress --password-file=/data/home/taylorjiang/rsync/rsync.pass $kServerName devsync@9.218.129.75::workspace || true

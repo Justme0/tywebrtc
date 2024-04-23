@@ -1,10 +1,8 @@
-#ifndef RTP_SRTP_SRTP_HANDLER_H_
-#define RTP_SRTP_SRTP_HANDLER_H_
+#ifndef SRC_RTP_SRTP_SRTP_HANDLER_H_
+#define SRC_RTP_SRTP_SRTP_HANDLER_H_
 
 #include <string>
 #include <vector>
-
-#include "srtp.h"
 
 class PeerConnection;
 

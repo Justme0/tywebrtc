@@ -5,8 +5,8 @@ extern "C" {
 #include "libavformat/avformat.h"
 }
 
-#include "codec/video_codec.h"
-#include "rtp/rtp_parser.h"
+#include "src/codec/video_codec.h"
+#include "src/rtp/rtp_parser.h"
 
 class RtpHandler;
 

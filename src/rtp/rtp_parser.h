@@ -1,4 +1,13 @@
-// from licode
+// Copyright (c) 2024 The tywebrtc project authors. All Rights Reserved.
+//
+// Use of this source code is governed by a MIT license
+// that can be found in the LICENSE file in the root of the source
+// tree. An additional intellectual property rights grant can be found
+// in the file PATENTS.  All contributing project authors may
+// be found in the AUTHORS file in the root of the source tree.
+
+// From licode
+// https://github.com/lynckia/licode/blob/master/erizo/src/erizo/rtp/RtpHeaders.h
 
 #ifndef RTP_RTP_PARSER_H_
 #define RTP_RTP_PARSER_H_
@@ -14,9 +23,11 @@
 #include "tylib/string/format_string.h"
 #include "tylib/time/time_util.h"
 
-#include "global_tmp/global_tmp.h"
-#include "log/log.h"
-#include "rtp/rtcp/rtcp_parser.h"
+#include "src/global_tmp/global_tmp.h"
+#include "src/log/log.h"
+#include "src/rtp/rtcp/rtcp_parser.h"
+
+namespace tywebrtc {
 
 // define cycle as int64_t (use 47 bit at most, most significant bit for sign
 // if need), first value is 0. e.g. 8Mbps, each video packet is 1000 Byte, so
@@ -664,7 +675,8 @@ class RtpHeader {
   // bug:
   // if the char is RTP payload 95, mark = 1, then char is 223,
   // checked to rtcp type: RTCP_MAX_PT(223)
-  std::string GetMediaType() const {
+  // OPT: use cache
+  std::string ComputeMediaType() const {
     uint8_t payloadTypeChar = reinterpret_cast<const char*>(this)[1];
     bool bRtcp = isRtcp(static_cast<RtcpPacketType>(payloadTypeChar));
     if (bRtcp) {
@@ -769,7 +781,8 @@ struct RtpBizPacket {
   std::string ToString() const {
     assert(!rtpRawPacket.empty());
     return tylib::format_string(
-        "{rtp=%zu B:%s, cycle=%ld, enterTs=%s, waitMs=%ld}", rtpRawPacket.size(),
+        "{rtp=%zu B:%s, cycle=%ld, enterTs=%s, waitMs=%ld}",
+        rtpRawPacket.size(),
         reinterpret_cast<const RtpHeader*>(rtpRawPacket.data())
             ->ToString()
             .data(),
@@ -970,5 +983,7 @@ struct RTP_HEADER_INFO_VP8 {
   // True if this packet is the first in a VP8 partition. Otherwise false
   bool BeginningOfPartition;
 };
+
+}  // namespace tywebrtc
 
 #endif  // RTP_RTP_PARSER_H_

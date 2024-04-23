@@ -1,8 +1,8 @@
-#include "codec/video_codec.h"
+#include "src/codec/video_codec.h"
 
 #include <sstream>
 
-#include "log/log.h"
+#include "src/log/log.h"
 
 // Tinyid for FFmpeg log to ULS
 // VideoRfc7741::VideoUnPackVp8RtpStm() is single thread, so use global tinyid

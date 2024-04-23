@@ -3,8 +3,8 @@
 
 #include <cstdint>
 
-#include "rtmp/FlvCommon.h"
-#include "rtp/pack_unpack/pack_unpack_common.h"
+#include "src/rtmp/FlvCommon.h"
+#include "src/rtp/pack_unpack/pack_unpack_common.h"
 
 class MediaBuffer {
  public:

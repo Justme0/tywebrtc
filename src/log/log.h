@@ -1,7 +1,15 @@
+// Copyright (c) 2024 The tywebrtc project authors. All Rights Reserved.
+//
+// Use of this source code is governed by a MIT license
+// that can be found in the LICENSE file in the root of the source
+// tree. An additional intellectual property rights grant can be found
+// in the file PATENTS.  All contributing project authors may
+// be found in the AUTHORS file in the root of the source tree.
+
 // A poor but simple log
 
-#ifndef LOG_LOG_H_
-#define LOG_LOG_H_
+#ifndef SRC_LOG_LOG_H_
+#define SRC_LOG_LOG_H_
 
 #include <cstdarg>
 #include <cstdio>
@@ -12,6 +20,8 @@
 
 #include "tylib/log/log.h"
 #include "tylib/time/timer.h"
+
+namespace tywebrtc {
 
 // https://stackoverflow.com/questions/478898/how-do-i-execute-a-command-and-get-the-output-of-the-command-within-c-using-po
 // inline std::string ExecLinuxCmd(const char *cmd) {
@@ -147,4 +157,6 @@ inline void tylogWithMoreInfo(const char *fileName, int lineNumber,
   printf(format, ##arg);                       \
   std::cout << std::endl
 
-#endif  // LOG_LOG_H_
+}  // namespace tywebrtc
+
+#endif  // SRC_LOG_LOG_H_

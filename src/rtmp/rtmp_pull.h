@@ -10,10 +10,10 @@
 #include "librtmp/log.h"
 #include "librtmp/rtmp_sys.h"
 
-#include "pull/pull_handler.h"
-#include "rtmp/FlvAssist.h"
-#include "rtmp/MediaBuffer.h"
-#include "rtp/rtp_parser.h"
+#include "src/pull/pull_handler.h"
+#include "src/rtmp/FlvAssist.h"
+#include "src/rtmp/MediaBuffer.h"
+#include "src/rtp/rtp_parser.h"
 
 #define MAX_CLIENT (256)  //单进程最大支持128路连接
 

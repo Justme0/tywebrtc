@@ -8,9 +8,11 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "rtp/rtp_parser.h"
+#include "src/rtp/rtp_parser.h"
 
 #include "gtest/gtest.h"
+
+namespace tywebrtc {
 
 TEST(RtpParserTest, PowerSeq) {
   PowerSeqT powerSeq = 0;
@@ -31,3 +33,5 @@ TEST(RtpParserTest, PowerSeq) {
   EXPECT_EQ(p.second, 0xABCD);
   EXPECT_EQ(PowerSeqToString(powerSeq), "{50, 43981}");
 }
+
+}  // namespace tywebrtc

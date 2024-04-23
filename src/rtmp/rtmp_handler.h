@@ -7,8 +7,8 @@
 
 #include "librtmp/rtmp.h"
 
-#include "push/push_handler.h"
-#include "rtmp/FlvAssist.h"
+#include "src/push/push_handler.h"
+#include "src/rtmp/FlvAssist.h"
 
 // #include "user_basic_info_struct.h"
 

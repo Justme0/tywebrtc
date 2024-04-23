@@ -1,10 +1,20 @@
-#ifndef RTP_PACK_UNPACK_AUDIO_TO_RTP_H_
-#define RTP_PACK_UNPACK_AUDIO_TO_RTP_H_
+// Copyright (c) 2024 The tywebrtc project authors. All Rights Reserved.
+//
+// Use of this source code is governed by a MIT license
+// that can be found in the LICENSE file in the root of the source
+// tree. An additional intellectual property rights grant can be found
+// in the file PATENTS.  All contributing project authors may
+// be found in the AUTHORS file in the root of the source tree.
+
+#ifndef SRC_RTP_PACK_UNPACK_AUDIO_TO_RTP_H_
+#define SRC_RTP_PACK_UNPACK_AUDIO_TO_RTP_H_
 
 #include <cstdint>
 #include <vector>
 
-#include "rtp/rtp_parser.h"
+#include "src/rtp/rtp_parser.h"
+
+namespace tywebrtc {
 
 class AudioPacketizer {
  public:
@@ -24,4 +34,6 @@ class AudioPacketizer {
   // RtpPacket::ExtensionTypeIdMap ext_typ_map_;// rtp ext
 };
 
-#endif  // RTP_PACK_UNPACK_AUDIO_TO_RTP_H_
+}  // namespace tywebrtc
+
+#endif  // SRC_RTP_PACK_UNPACK_AUDIO_TO_RTP_H_

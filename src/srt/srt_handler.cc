@@ -1,10 +1,11 @@
-#include "srt/srt_handler.h"
+#include "src/srt/srt_handler.h"
 
 #include <cassert>
 
-#include "global_tmp/global_tmp.h"
-#include "log/log.h"
 #include "tylib/time/time_util.h"
+
+#include "src/global_tmp/global_tmp.h"
+#include "src/log/log.h"
 
 SrtHandler::~SrtHandler() {
   if (nullptr == formatContext_) {
@@ -99,7 +100,7 @@ int SrtHandler::AddAudioStream_(uint32_t sampleRate, uint32_t channels,
   par->bit_rate = 64000;
   par->sample_rate = sampleRate;
   par->channels = channels;
-  par->channel_layout = av_get_default_channel_layout(par->channels);
+  av_channel_layout_default(&par->ch_layout, par->channels);
   switch (par->codec_id) {
     case AV_CODEC_ID_AAC:  // AudioSpecificConfig 48000-2
       par->profile = 1;    // 0:main 1: LC 2: SSR

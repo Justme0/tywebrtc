@@ -5,7 +5,7 @@
 
 #include <vector>
 
-#include "rtmp/MediaBuffer.h"
+#include "src/rtmp/MediaBuffer.h"
 
 #define AAC_ADTS_HEADER_LENGTH 7
 #define DST_BUF_LEN (2048 * 1024)

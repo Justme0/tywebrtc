@@ -236,6 +236,12 @@ local_repository(
     path = "third_party/rsfec-cpp/",
 )
 
+# 14. json
+local_repository(
+    name = "nlohmann_json",
+    path = "third_party/nlohmann-json",
+)
+
 # https://github.com/naivesystems/analyze/wiki/%E5%A6%82%E4%BD%95%E6%A3%80%E6%9F%A5%E4%BD%BF%E7%94%A8-Bazel-%E6%9E%84%E5%BB%BA%E7%9A%84%E9%A1%B9%E7%9B%AE
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 

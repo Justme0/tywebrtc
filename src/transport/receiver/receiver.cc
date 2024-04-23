@@ -1,10 +1,10 @@
-#include "transport/receiver/receiver.h"
+#include "src/transport/receiver/receiver.h"
 
 #include <cassert>
 
-#include "pc/peer_connection.h"
-#include "rtp/rtcp/rtcp_nack.h"
-#include "rtp/rtp_handler.h"
+#include "src/pc/peer_connection.h"
+#include "src/rtp/rtcp/rtcp_packet/rtp_fb/rtcp_nack.h"
+#include "src/rtp/rtp_handler.h"
 
 RtpReceiver::RtpReceiver(SSRCInfo& ssrcInfo) : belongingSSRCInfo_(ssrcInfo) {}
 
@@ -60,7 +60,7 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
   const RtpBizPacket& firstPacket = jitterBuffer_.begin()->second;
   const RtpHeader& firstRtpHeader =
       *reinterpret_cast<const RtpHeader*>(firstPacket.rtpRawPacket.data());
-  const bool bAudioType = firstRtpHeader.GetMediaType() == kMediaTypeAudio;
+  const bool bAudioType = firstRtpHeader.ComputeMediaType() == kMediaTypeAudio;
   tylog(
       "jitter detect out-of-order or lost, cannot out packets, last out "
       "packet powerSeq=%ld[%s], jitter.size=%zu, jitter first rtp=%s.",
@@ -107,7 +107,7 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
            kMediaSrcSSRC == firstRtpHeader.getSSRC());  // already recv
 
     int ret = this->belongingSSRCInfo_.belongingRtpHandler
-                  .belongingPeerConnection_.rtcpHandler_.CreateNackReportSend(
+                  .belongingPeerConnection_.rtcpHandler_.nack.CreateNackSend(
                       nackSeqs, kSelfRtcpSSRC, kMediaSrcSSRC);
 
     if (ret) {
@@ -144,7 +144,7 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
       belongingSSRCInfo_.belongingRtpHandler.upVideoSSRC;
   assert(0 != kMediaSrcSSRC);
   int ret = belongingSSRCInfo_.belongingRtpHandler.belongingPeerConnection_
-                .rtcpHandler_.CreatePLIReportSend(kSelfRtcpSSRC, kMediaSrcSSRC);
+                .rtcpHandler_.pli.CreatePLISend(kSelfRtcpSSRC, kMediaSrcSSRC);
   if (ret) {
     tylog("createPLIReportSend ret=%d", ret);
     // not return

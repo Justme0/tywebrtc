@@ -1,10 +1,10 @@
 // from SRS
 
-#include "codec/audio_codec.h"
+#include "src/codec/audio_codec.h"
 
 #include <cassert>
 
-#include "log/log.h"
+#include "src/log/log.h"
 
 static const AVCodec *srs_find_decoder_by_id(SrsAudioCodecId id) {
   if (id == SrsAudioCodecIdAAC) {
@@ -155,7 +155,7 @@ int SrsAudioTranscoder::init_dec(SrsAudioCodecId src_codec) {
     return -1;
   }
 
-  dec_->channel_layout = av_get_default_channel_layout(dec_->channels);
+  av_channel_layout_default(&dec_->ch_layout, dec_->ch_layout.nb_channels);
 
   dec_frame_ = av_frame_alloc();
   if (!dec_frame_) {
@@ -188,8 +188,8 @@ int SrsAudioTranscoder::init_enc(SrsAudioCodecId dst_codec, int dst_channels,
   }
 
   enc_->sample_rate = dst_samplerate;
-  enc_->channels = dst_channels;
-  enc_->channel_layout = av_get_default_channel_layout(dst_channels);
+  enc_->ch_layout.nb_channels = dst_channels;
+  av_channel_layout_default(&enc_->ch_layout, dst_channels);
   enc_->bit_rate = dst_bit_rate;
   enc_->sample_fmt = codec->sample_fmts[0];
   enc_->time_base.num = 1;
@@ -216,7 +216,7 @@ int SrsAudioTranscoder::init_enc(SrsAudioCodecId dst_codec, int dst_channels,
 
   enc_frame_->format = enc_->sample_fmt;
   enc_frame_->nb_samples = enc_->frame_size;
-  enc_frame_->channel_layout = enc_->channel_layout;
+  enc_frame_->ch_layout = enc_->ch_layout;
 
   if (av_frame_get_buffer(enc_frame_, 0) < 0) {
     tylog("Could not get audio frame buffer");
@@ -234,9 +234,9 @@ int SrsAudioTranscoder::init_enc(SrsAudioCodecId dst_codec, int dst_channels,
 }
 
 int SrsAudioTranscoder::init_swr(AVCodecContext *decoder) {
-  swr_ = swr_alloc_set_opts(NULL, enc_->channel_layout, enc_->sample_fmt,
-                            enc_->sample_rate, decoder->channel_layout,
-                            decoder->sample_fmt, decoder->sample_rate, 0, NULL);
+  swr_alloc_set_opts2(&swr_, &enc_->ch_layout, enc_->sample_fmt,
+                      enc_->sample_rate, &decoder->ch_layout,
+                      decoder->sample_fmt, decoder->sample_rate, 0, nullptr);
   if (!swr_) {
     tylog("alloc swr");
     return -1;
@@ -256,14 +256,14 @@ int SrsAudioTranscoder::init_swr(AVCodecContext *decoder) {
   * channels (although it may be NULL for interleaved formats).
   */
   if (!(swr_data_ = static_cast<uint8_t **>(
-            calloc(enc_->channels, sizeof(*swr_data_))))) {
+            calloc(enc_->ch_layout.nb_channels, sizeof(*swr_data_))))) {
     tylog("alloc swr buffer");
     return -1;
   }
 
   /* Allocate memory for the samples of all channels in one consecutive
   * block for convenience. */
-  if ((error = av_samples_alloc(swr_data_, NULL, enc_->channels,
+  if ((error = av_samples_alloc(swr_data_, NULL, enc_->ch_layout.nb_channels,
                                 enc_->frame_size, enc_->sample_fmt, 0)) < 0) {
     tylog("alloc swr buffer(%d:%s)", error,
           av_make_error_string(err_buf, AV_ERROR_MAX_STRING_SIZE, error));
@@ -275,7 +275,8 @@ int SrsAudioTranscoder::init_swr(AVCodecContext *decoder) {
 }
 
 int SrsAudioTranscoder::init_fifo() {
-  if (!(fifo_ = av_audio_fifo_alloc(enc_->sample_fmt, enc_->channels, 1))) {
+  if (!(fifo_ = av_audio_fifo_alloc(enc_->sample_fmt,
+                                    enc_->ch_layout.nb_channels, 1))) {
     tylog("Could not allocate FIFO");
     return -1;
   }

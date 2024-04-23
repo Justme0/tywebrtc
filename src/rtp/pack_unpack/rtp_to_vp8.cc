@@ -1,10 +1,10 @@
 // from
 // https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/modules/rtp_rtcp/source/video_rtp_depacketizer_vp8.cc
 
-#include "rtp/pack_unpack/rtp_to_vp8.h"
+#include "src/rtp/pack_unpack/rtp_to_vp8.h"
 
-#include "log/log.h"
-#include "rtp/rtp_handler.h"
+#include "src/log/log.h"
+#include "src/rtp/rtp_handler.h"
 
 static int ParseVP8Descriptor(RTP_HEADER_INFO_VP8* vp8, const void* void_data,
                               int data_length) {

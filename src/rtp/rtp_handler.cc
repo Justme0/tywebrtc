@@ -1,4 +1,4 @@
-#include "rtp/rtp_handler.h"
+#include "src/rtp/rtp_handler.h"
 
 #include <arpa/inet.h>
 
@@ -10,13 +10,13 @@
 #include "tylib/ip/ip.h"
 #include "tylib/string/any_to_string.h"
 
-#include "global_tmp/global_tmp.h"
-#include "log/log.h"
-#include "pc/peer_connection.h"
-#include "rtp/pack_unpack/rtp_to_h264.h"
-#include "rtp/rtcp/rtcp_parser.h"
-#include "rtp/rtp_parser.h"
-#include "timer/timer.h"
+#include "src/global_tmp/global_tmp.h"
+#include "src/log/log.h"
+#include "src/pc/peer_connection.h"
+#include "src/rtp/pack_unpack/rtp_to_h264.h"
+#include "src/rtp/rtcp/rtcp_parser.h"
+#include "src/rtp/rtp_parser.h"
+#include "src/timer/timer.h"
 
 // string enum, for print convenience
 const std::string kMediaTypeRtcp = "rtcp";
@@ -216,7 +216,7 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
   const RtpHeader &rtpHeader =
       *reinterpret_cast<const RtpHeader *>(packet.data());
 
-  std::string mediaType = rtpHeader.GetMediaType();
+  std::string mediaType = rtpHeader.ComputeMediaType();
 
   if (mediaType == kMediaTypeVideo) {
     if (0 == firstRtpVideoTs_) {
@@ -434,7 +434,7 @@ std::vector<std::vector<char>> SSRCInfo::EncodeFec(
     outPtr[i] = fecData[i].data();
   }
 
-  ret = rsfec.CalculateFEC(maxPacketSize, inPtr, outPtr);
+  ret = rsfec.EncodeFEC(maxPacketSize, inPtr, outPtr);
   if (ret) {
     tylog("calculateFEC ret=%d.", ret);
     assert(0);  // should not use assert, for debug
@@ -543,7 +543,7 @@ int RtpHandler::SendToPeer_(RtpBizPacket &rtpBizPacket) {
 
   RtpHeader &downlinkRtpHeader =
       *reinterpret_cast<RtpHeader *>(rtpBizPacket.rtpRawPacket.data());
-  std::string mediaType = downlinkRtpHeader.GetMediaType();
+  std::string mediaType = downlinkRtpHeader.ComputeMediaType();
   tylog("downlink send media type=%s.", mediaType.data());
 
   if (mediaType == kMediaTypeAudio) {
@@ -683,7 +683,8 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   assert(belongingPeerConnection_.stateMachine_ == EnumStateMachine::GOT_RTP);
 
   std::string mediaType =
-      reinterpret_cast<const RtpHeader *>(vBufReceive.data())->GetMediaType();
+      reinterpret_cast<const RtpHeader *>(vBufReceive.data())
+          ->ComputeMediaType();
   tylog("receive %s", mediaType.data());
 
   // should refactor if else for media type

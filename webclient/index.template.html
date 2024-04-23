@@ -19,6 +19,13 @@
             font-family: "Lucida Grande", "Arial", sans-serif;
             font-size: 16px;
         }
+        
+        .statBoxCSS {
+            border: 1px solid black;
+            padding: 5px;
+            width: 450px;
+            height: 212px;
+        }
 
         .messagebox {
             border: 1px solid black;
@@ -66,6 +73,13 @@
 
     <br />
     <br />
+    <div class="statBoxCSS" id="statBoxID">
+        network status:
+        <br />
+    </div>
+
+    <br />
+    <br />
     <div class="messagebox">
         <label for="message">Enter a message:
             <input type="text" name="message" id="messageid" placeholder="Message text" inputmode="latin" size=60
@@ -77,6 +91,7 @@
             Send
         </button>
     </div>
+
     <br />
     <br />
     <div class="messagebox" id="receivebox">
@@ -92,6 +107,56 @@
         var sendButton = null;
         var messageInputBox = null;
         var g_vp8Payload = null;
+
+        // @return obj
+        async function getStat() {
+            if (pc == null) {
+                console.log("pc is nil")
+                return null
+            }
+
+            // let dtlsTransport =  pc.getSenders[0].transport
+            // let iceTransport = dtlsTransport.iceTransport
+            // let candidatePair = iceTransport.getSelectedCandidatePair();
+            // shit candidatePair cannot get the name of the pair
+
+            // https://developer.mozilla.org/en-US/docs/Web/API/RTCStatsReport#the_statistic_types
+            let activeCandidatePair;
+            const stats = await pc.getStats();
+            stats.forEach(report => {
+                console.log(`stat report=${report}`)
+                if (report.type === 'transport') {
+                    activeCandidatePair = stats.get(report.selectedCandidatePairId);
+                }
+            });
+
+            return activeCandidatePair
+        }
+
+        async function printStat() {
+            const candidatePair = await getStat()
+
+            // Create a new message element
+            const messageElement = document.createElement('div');
+            if (null == candidatePair) {
+                messageElement.textContent = `${new Date().toLocaleTimeString()} no data`;
+            } else {
+                messageElement.textContent = `${new Date().toLocaleTimeString()} Your RTT is ${candidatePair.currentRoundTripTime * 1000} ms, STUN s/r ${candidatePair.requestsSent}/${candidatePair.responsesReceived}`;
+            }
+
+            statBox = document.getElementById('statBoxID');
+            // Add the new message to the message box
+            statBox.appendChild(messageElement);
+
+            let messages = statBox.querySelectorAll('div');
+            while (messages.length > 10) {
+                // Remove the first (oldest) message element
+                statBox.removeChild(messages[0]);
+                // Update the messages NodeList
+                // messages = statBox.querySelectorAll('div');
+            }
+        }
+        const rttInterval = setInterval(printStat, 1000);
 
         async function getRemoteStream(e) {
             let videoElement = document.getElementById('video_container_subscribe');
@@ -202,12 +267,16 @@
                 return;
             }
 
-            // ref https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
+            // constraint https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints
             // NOT https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints/facingMode
+            //
+            // 3A
+            // AGC: Automatic gain control; ANS: Adaptive noise suppression; AEC: Acoustic echo cancellation
+            // https://mp.weixin.qq.com/s?src=11&timestamp=1713594196&ver=5211&signature=KizqdEOtOO5H0AMm3ukCg0x9fw7nY2AvYWeDKqmIIxKVAvJFz6htLUgFyA7ZgNmmVcRtCmX2CxqcKdATO9R191gDYZaTMEXUZl1Cylec66fGGJplZnyMXDxL81hAqM-z&new=1
             const constraints = {
                 video: {
                     facingMode: { ideal: 'user' },
-                    frameRate: { max: 13, ideal: 13 },
+                    frameRate: { max: 12, ideal: 12 },
                     width: { max: 450, ideal: 450 },
                     height: { max: 450, ideal: 450 },
                     aspectRatio: 1,
@@ -222,12 +291,17 @@
             }
 
             console.log(`to get media, constraints=${JSON.stringify(constraints, null, 2)}`)
+            // getUserMedia https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
             console.log("to get media done")
             videoElement.srcObject = stream;
 
-            pc = new RTCPeerConnection();
+            pc = new RTCPeerConnection({
+                iceServers: [
+                ],
+                iceTransportPolicy: "all"
+            });
 
             sendChannel = pc.createDataChannel("sendChannel");
             sendChannel.onopen = handleSendChannelStatusChange;

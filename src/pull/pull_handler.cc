@@ -1,8 +1,8 @@
-#include "pull/pull_handler.h"
+#include "src/pull/pull_handler.h"
 
 #include <cassert>
 
-#include "log/log.h"
+#include "src/log/log.h"
 
 PullHandler::PullHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {}
 

@@ -37,3 +37,9 @@
 [submodule "third_party/opus"]
 	path = third_party/opus
 	url = https://github.com/xiph/opus
+[submodule "third_party/nlohmann-json"]
+	path = third_party/nlohmann-json
+	url = https://github.com/nlohmann/json
+[submodule "third_party/protobuf"]
+	path = third_party/protobuf
+	url = https://github.com/protocolbuffers/protobuf

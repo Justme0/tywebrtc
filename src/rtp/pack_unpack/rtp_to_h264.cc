@@ -1,5 +1,5 @@
 
-#include "rtp/pack_unpack/rtp_to_h264.h"
+#include "src/rtp/pack_unpack/rtp_to_h264.h"
 
 #include <cassert>
 #include <cinttypes>
@@ -7,8 +7,8 @@
 #include <cstring>
 #include <vector>
 
-#include "rtp/pack_unpack/pack_unpack_common.h"
-#include "rtp/rtp_parser.h"
+#include "src/rtp/pack_unpack/pack_unpack_common.h"
+#include "src/rtp/rtp_parser.h"
 
 static const uint8_t kNalHeaderSize = 1;
 static const uint8_t kFuAHeaderSize = 2;

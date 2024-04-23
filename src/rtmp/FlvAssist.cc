@@ -1,14 +1,14 @@
-#include "rtmp/FlvAssist.h"
+#include "src/rtmp/FlvAssist.h"
 
 #include <cassert>
 #include <climits>
 #include <cstdio>
 #include <cstring>
 
-#include "global_tmp/h264SpsDec.h"
-#include "log/log.h"
-#include "rtmp/CommonAssist.h"
-#include "rtmp/rtmp_handler.h"
+#include "src/global_tmp/h264SpsDec.h"
+#include "src/log/log.h"
+#include "src/rtmp/CommonAssist.h"
+#include "src/rtmp/rtmp_handler.h"
 
 FlvAssist::FlvAssist(RtmpHandler& belongingRtmpHandler)
     : belongingRtmpHandler_(belongingRtmpHandler) {

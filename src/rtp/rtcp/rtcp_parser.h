@@ -1,5 +1,17 @@
-#ifndef RTP_RTCP_RTCP_PARSER_H_
-#define RTP_RTCP_RTCP_PARSER_H_
+// Copyright (c) 2024 The tywebrtc project authors. All Rights Reserved.
+//
+// Use of this source code is governed by a MIT license
+// that can be found in the LICENSE file in the root of the source
+// tree. An additional intellectual property rights grant can be found
+// in the file PATENTS.  All contributing project authors may
+// be found in the AUTHORS file in the root of the source tree.
+
+// https://datatracker.ietf.org/doc/html/rfc3550#section-6
+// From licode
+// https://github.com/lynckia/licode/blob/master/erizo/src/erizo/rtp/RtpHeaders.h
+
+#ifndef SRC_RTP_RTCP_RTCP_PARSER_H_
+#define SRC_RTP_RTCP_RTCP_PARSER_H_
 
 #include <netinet/in.h>
 
@@ -7,10 +19,12 @@
 
 #include "tylib/string/format_string.h"
 
-#include "log/log.h"
+#include "src/log/log.h"
 
-// #define RRTR_BT 4
-// #define DLRR_BT 5
+namespace tywebrtc {
+
+#define RRTR_BT 4
+#define DLRR_BT 5
 
 // payload type is 205
 enum class RtcpGenericFeedbackFormat {
@@ -45,51 +59,43 @@ inline std::string RtcpPayloadSpecificFormatToString(
   }
 }
 
-// if add new enum, modify ToString and rtcp handler switch case
+// if add new enum, modify ToString and rtcp handler switch case.
 // should use polymorphism?
 // https://datatracker.ietf.org/doc/html/rfc5760#section-5
 // note: in RFC, "PT" in RTP is called "payload type", in RTCP is "packet type".
 // per https://tools.ietf.org/html/rfc5761
-// #define RTCP_MIN_PT         194
-// #define RTCP_MAX_PT         223
 enum class RtcpPacketType : uint8_t {
-  RTCP_MIN_PT = 192,        // for FIR
-  kFullIntraRequest = 192,  // use 206
-  // kNACK = 193, // use 205
-  kExtendedJitterReport = 195,
+  RTCP_MIN_PT = 192,  // for FIR
   kSenderReport = 200,
   kReceiverReport = 201,
-  kSDES = 202,
+  kSourceDescription = 202,
   kBye = 203,
-  kApp = 204,
-  kGenericRtpFeedback = 205,  // NACK  RFC3550
+  kApplicationDefined = 204,
+  kGenericRtpFeedback = 205,  // NACK RFC3550
   kPayloadSpecificFeedback = 206,
-  kXrExtend = 207,
+  kExtendedReports = 207,
   RTCP_MAX_PT = 223,  // include
 };
 
+// https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-rtcp.c#L147
 inline std::string RtcpPacketTypeToString(RtcpPacketType type) {
   switch (type) {
-    case RtcpPacketType::kFullIntraRequest:
-      return "FullIntraRequest";
-    case RtcpPacketType::kExtendedJitterReport:
-      return "ExtendedJitterReport";
     case RtcpPacketType::kSenderReport:
       return "SenderReport";
     case RtcpPacketType::kReceiverReport:
       return "ReceiverReport";
-    case RtcpPacketType::kSDES:
-      return "SDES";
+    case RtcpPacketType::kSourceDescription:
+      return "SourceDescription";
     case RtcpPacketType::kBye:
       return "Bye";
-    case RtcpPacketType::kApp:
-      return "App";
+    case RtcpPacketType::kApplicationDefined:
+      return "ApplicationDefined";
     case RtcpPacketType::kGenericRtpFeedback:
       return "GenericRtpFeedback";
     case RtcpPacketType::kPayloadSpecificFeedback:
       return "PayloadSpecificFeedback";
-    case RtcpPacketType::kXrExtend:
-      return "XrExtend";
+    case RtcpPacketType::kExtendedReports:
+      return "ExtendedReports";
     default:
       return "Unknowon[" + std::to_string(static_cast<int>(type)) + "]";
   }
@@ -258,12 +264,13 @@ class RtcpHeader {
  public:
   // maybe FMT for payload specific feedback
   uint32_t blockcount : 5;
-
   uint32_t padding : 1;
   uint32_t version : 2;
+
   RtcpPacketType packettype : 8;
   uint32_t length : 16;
-  uint32_t senderSSRC;
+
+  uint32_t ssrc;
 
   union report_t {
     struct receiverReport_t {
@@ -311,6 +318,8 @@ class RtcpHeader {
       uint32_t reserved : 24;
     } fir;
 
+    // Extended Reports (XR)
+    // https://datatracker.ietf.org/doc/html/rfc3611
     struct XR_DLRR_t {
       uint32_t blocktype : 8;
       uint32_t reserved : 8;
@@ -327,7 +336,6 @@ class RtcpHeader {
       uint32_t seconds;
       uint32_t fractions;
     } xr_rrtr;
-
   } report;
 
   RtcpHeader()
@@ -336,9 +344,9 @@ class RtcpHeader {
         version(2),
         packettype(RtcpPacketType::RTCP_MIN_PT),
         length(0),
-        senderSSRC(0) {}
+        ssrc(0) {}
 
-  bool isFeedback(void) {
+  bool isFeedback(void) const {
     return (packettype == RtcpPacketType::kReceiverReport ||
             packettype == RtcpPacketType::kGenericRtpFeedback ||
             packettype == RtcpPacketType::kPayloadSpecificFeedback);
@@ -353,62 +361,74 @@ class RtcpHeader {
 
   uint16_t getLength() const { return ntohs(length); }
   void setLength(uint16_t theLength) { length = htons(theLength); }
-  uint32_t getSenderSSRC() const { return ntohl(senderSSRC); }
-  void setSSRC(uint32_t aSsrc) { senderSSRC = htonl(aSsrc); }
+
+  uint32_t getSSRC() const { return ntohl(ssrc); }
+  void setSSRC(uint32_t aSsrc) { ssrc = htonl(aSsrc); }
+
   uint32_t getMediaSourceSSRC() const {
     return ntohl(report.receiverReport.mediaSourceSSRC);
   }
   void setMediaSourceSSRC(uint32_t mediaSourceSSRC) {
     report.receiverReport.mediaSourceSSRC = htonl(mediaSourceSSRC);
   }
+
   uint8_t getFractionLost() const { return report.receiverReport.fractionlost; }
   void setFractionLost(uint8_t fractionLost) {
     report.receiverReport.fractionlost = fractionLost;
   }
+
   uint32_t getLostPackets() const {
     return ntohl(report.receiverReport.lost) >> 8;
   }
   void setLostPackets(uint32_t lost) {
     report.receiverReport.lost = htonl(lost) >> 8;
   }
+
   uint16_t getSeqnumCycles() const {
     return ntohs(report.receiverReport.seqnumcycles);
   }
   void setSeqnumCycles(uint16_t seqnumcycles) {
     report.receiverReport.seqnumcycles = htons(seqnumcycles);
   }
+
   uint16_t getHighestSeqnum() const {
     return ntohs(report.receiverReport.highestseqnum);
   }
   void setHighestSeqnum(uint16_t highest) {
     report.receiverReport.highestseqnum = htons(highest);
   }
+
   uint32_t getJitter() const { return ntohl(report.receiverReport.jitter); }
   void setJitter(uint32_t jitter) {
     report.receiverReport.jitter = htonl(jitter);
   }
+
   uint32_t getLastSr() const { return ntohl(report.receiverReport.lastsr); }
   void setLastSr(uint32_t lastsr) {
     report.receiverReport.lastsr = htonl(lastsr);
   }
+
   uint32_t getDelaySinceLastSr() const {
     return ntohl(report.receiverReport.delaysincelast);
   }
   void setDelaySinceLastSr(uint32_t delaylastsr) {
     report.receiverReport.delaysincelast = htonl(delaylastsr);
   }
+
   uint32_t getPacketsSent() const {
     return ntohl(report.senderReport.packetsent);
   }
   void setPacketsSent(uint32_t packetssent) {
     report.senderReport.packetsent = htonl(packetssent);
   }
+
   uint32_t getOctetsSent() const {
     return ntohl(report.senderReport.octetssent);
   }
   void setOctetsSent(uint32_t octets_sent) {
     report.senderReport.octetssent = htonl(octets_sent);
   }
+
   uint64_t getNtpTimestamp() const {
     return (static_cast<uint64_t>(htonl(report.senderReport.ntptimestamp))
             << 32) +
@@ -419,26 +439,31 @@ class RtcpHeader {
         (static_cast<uint64_t>(ntohl(ntp_timestamp)) << 32) +
         ntohl(ntp_timestamp >> 32);
   }
+
   uint32_t getRtpTimestamp() const { return ntohl(report.senderReport.rtprts); }
   void setRtpTimestamp(uint32_t rtp_timestamp) {
     report.senderReport.rtprts = htonl(rtp_timestamp);
   }
+
   uint32_t get32MiddleNtp() const {
     uint64_t middle = (report.senderReport.ntptimestamp << 16) >> 32;
     return ntohl(middle);
   }
+
   uint16_t getNackPid() const {
     return report.nackPacket.nack_block.getNackPid();
   }
   void setNackPid(uint16_t pid) {
     report.nackPacket.nack_block.setNackPid(pid);
   }
+
   uint16_t getNackBlp() const {
     return report.nackPacket.nack_block.getNackBlp();
   }
   void setNackBlp(uint16_t blp) {
     report.nackPacket.nack_block.setNackBlp(blp);
   }
+
   void setREMBBitRate(uint64_t bitRate) {
     uint64_t max = 0x3FFFF;  // 18 bits
     uint16_t exp = 0;
@@ -455,7 +480,6 @@ class RtcpHeader {
     report.rembPacket.brLength = htonl(line) >> 8;
   }
   uint64_t getREMBBitRate() const { return getBrMantis() << getBrExp(); }
-
   uint32_t getBrExp() const {
     // remove the 0s added by nothl (8) + the 18 bits of Mantissa
     return (ntohl(report.rembPacket.brLength) >> 26);
@@ -463,16 +487,20 @@ class RtcpHeader {
   uint32_t getBrMantis() const {
     return (ntohl(report.rembPacket.brLength) >> 8 & 0x3ffff);
   }
+
   uint8_t getREMBNumSSRC() const { return report.rembPacket.numssrc; }
   void setREMBNumSSRC(uint8_t num) { report.rembPacket.numssrc = num; }
+
   uint32_t getREMBFeedSSRC() const {
     return ntohl(report.rembPacket.ssrcfeedb);
   }
   void setREMBFeedSSRC(uint32_t ssrc) {
     report.rembPacket.ssrcfeedb = htonl(ssrc);
   }
+
   uint32_t getFCI() const { return ntohl(report.pli.fci); }
   void setFCI(uint32_t fci) { report.pli.fci = htonl(fci); }
+
   void setFIRSourceSSRC(uint32_t ssrc) { report.fir.mediasource = htonl(ssrc); }
   void setFIRSequenceNumber(uint8_t seq_number) {
     report.fir.seqnumber = seq_number;
@@ -517,9 +545,11 @@ class RtcpHeader {
     return tylib::format_string(
         "{blockCnt=%d, pad=%d, packetType=%d[%s], len=%d, senderSSRC=%u(0x%X)}",
         getBlockCount(), padding, static_cast<int>(getPacketType()),
-        RtcpPacketTypeToString(getPacketType()).data(), getLength(),
-        getSenderSSRC(), getSenderSSRC());
+        RtcpPacketTypeToString(getPacketType()).data(), getLength(), getSSRC(),
+        getSSRC());
   }
 };
 
-#endif  // RTP_RTCP_RTCP_PARSER_H_
+}  // namespace tywebrtc
+
+#endif  // SRC_RTP_RTCP_RTCP_PARSER_H_

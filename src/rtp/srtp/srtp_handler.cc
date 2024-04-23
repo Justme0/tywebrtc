@@ -1,16 +1,17 @@
 // ref
 // https://github.com/lynckia/licode/blob/master/erizo/src/erizo/SrtpChannel.cpp
 
-#include "rtp/srtp/srtp_handler.h"
+#include "src/rtp/srtp/srtp_handler.h"
 
 #include <cassert>
 #include <cstring>
 #include <mutex>
 
+#include "srtp2/srtp.h"
 #include "tylib/codec/codec.h"
 
-#include "log/log.h"
-#include "pc/peer_connection.h"
+#include "src/log/log.h"
+#include "src/pc/peer_connection.h"
 
 bool SrtpHandler::isInitSrtp_ = false;
 

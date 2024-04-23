@@ -1,6 +1,6 @@
-#include "push/push_handler.h"
+#include "src/push/push_handler.h"
 
-#include "log/log.h"
+#include "src/log/log.h"
 
 // @brief setup connection and set av functor
 // or set functor in constructor?

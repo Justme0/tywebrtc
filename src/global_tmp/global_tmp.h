@@ -18,7 +18,7 @@
 #include "prometheus/gauge.h"
 #include "tylib/string/format_string.h"
 
-#include "log/log.h"
+#include "src/log/log.h"
 
 const int kUplossRateMul100 = 0;
 const int kDownlossRateMul100 = 0;
@@ -278,6 +278,110 @@ inline std::string RTMPToString(const RTMP& r) {
       r.m_fVideoCodecs, r.m_fEncoding, r.m_fDuration, r.m_msgCounter,
       r.m_polling, r.m_resplen, r.m_unackd, AValToString(r.m_clientID).data(),
       RTMPPacketToString(r.m_write).data(), RTMPSockBufToString(r.m_sb).data());
+}
+
+// from
+// https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/system_wrappers/include/ntp_time.h
+class NtpTime {
+ public:
+  static constexpr uint64_t kFractionsPerSecond = 0x100000000;
+  NtpTime() : value_(0) {}
+  explicit NtpTime(uint64_t value) : value_(value) {}
+  NtpTime(uint32_t seconds, uint32_t fractions)
+      : value_(seconds * kFractionsPerSecond + fractions) {}
+
+  NtpTime(const NtpTime&) = default;
+  NtpTime& operator=(const NtpTime&) = default;
+
+  uint64_t GetValue() const { return value_; }
+
+  // explicit operator uint64_t() const { return value_; }
+
+  void Set(uint32_t seconds, uint32_t fractions) {
+    value_ = seconds * kFractionsPerSecond + fractions;
+  }
+  void Reset() { value_ = 0; }
+
+  int64_t ToMs() const {
+    static constexpr double kNtpFracPerMs = 4.294967296E6;  // 2^32 / 1000.
+    const double frac_ms = static_cast<double>(fractions()) / kNtpFracPerMs;
+    return 1000 * static_cast<int64_t>(seconds()) +
+           static_cast<int64_t>(frac_ms + 0.5);
+  }
+  // NTP standard (RFC1305, section 3.1) explicitly state value 0 is invalid.
+  bool Valid() const { return value_ != 0; }
+
+  uint32_t seconds() const {
+    return static_cast<uint32_t>(value_ / kFractionsPerSecond);
+  }
+  uint32_t fractions() const {
+    return static_cast<uint32_t>(value_ % kFractionsPerSecond);
+  }
+
+ private:
+  uint64_t value_;
+};
+
+inline bool operator==(const NtpTime& n1, const NtpTime& n2) {
+  return n1.GetValue() == n2.GetValue();
+}
+inline bool operator!=(const NtpTime& n1, const NtpTime& n2) {
+  return !(n1 == n2);
+}
+
+// inline NtpTime CurrentNtpTime() const override {
+//    timeval tv = CurrentTimeVal();
+//    double microseconds_in_seconds;
+//    uint32_t seconds;
+//    Adjust(tv, &seconds, &microseconds_in_seconds);
+//    uint32_t fractions = static_cast<uint32_t>(
+//        microseconds_in_seconds * kMagicNtpFractionalUnit + 0.5);
+//    return NtpTime(seconds, fractions);
+//}
+
+// January 1970, in NTP seconds.
+const uint32_t kNtpJan1970 = 2208988800UL;
+
+// Magic NTP fractional unit.
+const double kMagicNtpFractionalUnit = 4.294967296E+9;
+
+inline NtpTime MsToNtp(uint64_t timeMs) {
+  double microseconds_in_seconds = (timeMs % 1000) / 1000.0;
+  uint32_t seconds = timeMs / 1000 + kNtpJan1970;
+  uint32_t fractions = static_cast<uint32_t>(
+      microseconds_in_seconds * kMagicNtpFractionalUnit + 0.5);
+
+  return NtpTime(seconds, fractions);
+}
+
+// from
+// https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/modules/rtp_rtcp/source/time_util.h
+inline uint32_t CompactNtp(NtpTime ntp) {
+  return (ntp.seconds() << 16) | (ntp.fractions() >> 16);
+}
+
+inline int64_t DivideRoundToNearest(int64_t x, uint32_t y) {
+  // Caller ensure x is positive by converting unsigned value into it.
+  // So this Divide doesn't need to handle negative argument case.
+  return (x + y / 2) / y;
+}
+
+inline int64_t CompactNtpRttToMs(uint32_t compact_ntp_interval) {
+  // Interval to convert expected to be positive, e.g. rtt or delay.
+  // Because interval can be derived from non-monotonic ntp clock,
+  // it might become negative that is indistinguishable from very large values.
+  // Since very large rtt/delay are less likely than non-monotonic ntp clock,
+  // those values consider to be negative and convert to minimum value of 1ms.
+  if (compact_ntp_interval > 0x80000000) return 1;
+  // Convert to 64bit value to avoid multiplication overflow.
+  int64_t value = static_cast<int64_t>(compact_ntp_interval);
+  // To convert to milliseconds need to divide by 2^16 to get seconds,
+  // then multiply by 1000 to get milliseconds. To avoid float operations,
+  // multiplication and division swapped.
+  int64_t ms = DivideRoundToNearest(value * 1000, 1 << 16);
+  // Rtt value 0 considered too good to be true and increases to 1.
+  // return std::max<int64_t>(ms, 1);
+  return ms > 1 ? ms : 1;
 }
 
 // C++ compile av_err2str err
