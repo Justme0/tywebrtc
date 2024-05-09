@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <string>
 
+namespace tywebrtc {
+
 enum MediaType {
   e_MediaType_None = 0,
   e_MediaType_raw,
@@ -130,5 +132,7 @@ typedef struct Flv_header {
   unsigned int offset; /* always 9 */
 } flv_header;
 #pragma pack()
+
+}  // namespace tywebrtc
 
 #endif

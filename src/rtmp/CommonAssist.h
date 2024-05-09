@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+namespace tywebrtc {
+
 class CommonAssist {
  public:
   CommonAssist(void);
@@ -28,5 +30,7 @@ class CommonAssist {
   unsigned int mBufferLength;
   unsigned int mCurrentPos;
 };
+
+}  // namespace tywebrtc
 
 #endif

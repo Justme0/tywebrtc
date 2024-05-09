@@ -7,6 +7,8 @@
 
 #include "src/rtmp/MediaBuffer.h"
 
+namespace tywebrtc {
+
 #define AAC_ADTS_HEADER_LENGTH 7
 #define DST_BUF_LEN (2048 * 1024)
 
@@ -53,5 +55,7 @@ class FlvAssist {
   unsigned int mAudioFramecnt;
   H264Context mContext;
 };
+
+}  // namespace tywebrtc
 
 #endif  // __MEDIA_FLV_H__

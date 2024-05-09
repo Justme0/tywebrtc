@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+namespace tywebrtc {
+
 void bs_init(bs_t *s, void *p_data, int i_data) {
   //用传入的p_data首地址初始化p_start，只记下有效数据的首地址
   s->p_start = reinterpret_cast<unsigned char *>(p_data);
@@ -182,3 +184,5 @@ WebVideoFrameType GetFrameType(unsigned char *pNalu, int Len) {
 
   return WEB_VIDEO_FRAME_TYPE_P;
 }
+
+}  // namespace tywebrtc

@@ -2,6 +2,8 @@
 
 #include "src/log/log.h"
 
+namespace tywebrtc {
+
 // @brief setup connection and set av functor
 // or set functor in constructor?
 int PushHandler::InitPushHandler(
@@ -41,3 +43,5 @@ int PushHandler::SendVideoFrame(const std::vector<char> &h264Frame,
 
   return 0;
 }
+
+}  // namespace tywebrtc

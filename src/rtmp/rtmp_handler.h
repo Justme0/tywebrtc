@@ -10,6 +10,8 @@
 #include "src/push/push_handler.h"
 #include "src/rtmp/FlvAssist.h"
 
+namespace tywebrtc {
+
 // #include "user_basic_info_struct.h"
 
 const uint32_t DEFAULT_TIMEOUT = 30;  // 30 seconds
@@ -42,9 +44,9 @@ class RtmpHandler {
   int ReconnectRtmp_();
 
  private:
-  PeerConnection &belongingPeerConnection_;
+  // PeerConnection &belongingPeerConnection_;
   FlvAssist flvAssist;
-  uint32_t mMaxRtmpPacketLength = 0;
+  // uint32_t mMaxRtmpPacketLength = 0;
 
   std::string mRtmpUrl;
   bool mWriteable = false;
@@ -56,5 +58,7 @@ class RtmpHandler {
   // tmp public, indicate if rtmp setup is ok (not null)
   RTMP *mRtmpInstance = nullptr;
 };
+
+}  // namespace tywebrtc
 
 #endif  // RTMP_RTMP_HANDLER_H_

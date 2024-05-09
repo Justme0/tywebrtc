@@ -28,6 +28,8 @@
 #include "src/rtmp/DomainResolve.h"
 #include "src/rtp/pack_unpack/pack_unpack_common.h"
 
+namespace tywebrtc {
+
 void AV_erase(RTMP_METHOD* vals, int* num, int i, int freeit) {
   if (freeit) {
     free(vals[i].name.av_val);
@@ -209,25 +211,33 @@ static char m_ClientType[][20] = {"Unknow", "MiniProgram", "ThirdClient",
 static char TestCDN[][20] = {"Unknow", "CDN", "UPLOAD", "TRANS"};
 */
 
-static const AVal av_NetStream_Failed = AVC("NetStream.Failed");
-static const AVal av_NetStream_Play_Failed = AVC("NetStream.Play.Failed");
+static const AVal av_NetStream_Failed =
+    AVC(const_cast<char*>("NetStream.Failed"));
+static const AVal av_NetStream_Play_Failed =
+    AVC(const_cast<char*>("NetStream.Play.Failed"));
 static const AVal av_NetStream_Play_StreamNotFound =
-    AVC("NetStream.Play.StreamNotFound");
+    AVC(const_cast<char*>("NetStream.Play.StreamNotFound"));
 static const AVal av_NetConnection_Connect_InvalidApp =
-    AVC("NetConnection.Connect.InvalidApp");
-static const AVal av_NetStream_Play_Start = AVC("NetStream.Play.Start");
-static const AVal av_NetStream_Play_Complete = AVC("NetStream.Play.Complete");
-static const AVal av_NetStream_Play_Stop = AVC("NetStream.Play.Stop");
-static const AVal av_NetStream_Seek_Notify = AVC("NetStream.Seek.Notify");
-static const AVal av_NetStream_Pause_Notify = AVC("NetStream.Pause.Notify");
+    AVC(const_cast<char*>("NetConnection.Connect.InvalidApp"));
+static const AVal av_NetStream_Play_Start =
+    AVC(const_cast<char*>("NetStream.Play.Start"));
+static const AVal av_NetStream_Play_Complete =
+    AVC(const_cast<char*>("NetStream.Play.Complete"));
+static const AVal av_NetStream_Play_Stop =
+    AVC(const_cast<char*>("NetStream.Play.Stop"));
+static const AVal av_NetStream_Seek_Notify =
+    AVC(const_cast<char*>("NetStream.Seek.Notify"));
+static const AVal av_NetStream_Pause_Notify =
+    AVC(const_cast<char*>("NetStream.Pause.Notify"));
 static const AVal av_NetStream_Play_PublishNotify =
-    AVC("NetStream.Play.PublishNotify");
+    AVC(const_cast<char*>("NetStream.Play.PublishNotify"));
 static const AVal av_NetStream_Play_UnpublishNotify =
-    AVC("NetStream.Play.UnpublishNotify");
-static const AVal av_NetStream_Publish_Start = AVC("NetStream.Publish.Start");
-static const AVal av_NetConnection_Connect_Rejected =
-    AVC("NetConnection.Connect.Rejected");
-static const AVal av_setDataFrame = AVC("@setDataFrame");
+    AVC(const_cast<char*>("NetStream.Play.UnpublishNotify"));
+static const AVal av_NetStream_Publish_Start =
+    AVC(const_cast<char*>("NetStream.Publish.Start"));
+// static const AVal av_NetConnection_Connect_Rejected =
+// AVC(const_cast<char*>("NetConnection.Connect.Rejected"));
+static const AVal av_setDataFrame = AVC(const_cast<char*>("@setDataFrame"));
 // #define UINT32_MAX ((unsigned int)4294967295)
 
 int str2list(const std::string& str, const std::string& fs,
@@ -248,14 +258,6 @@ int str2list(const std::string& str, const std::string& fs,
 
   arr = arrRet;
   return arrRet.size();
-}
-
-static inline unsigned long long ntohll(unsigned long long n) {
-  return (((unsigned long long)ntohl(n)) << 32) | htonl(n >> 32);
-}
-
-static inline unsigned long long htonll(unsigned long long n) {
-  return (((unsigned long long)ntohl(n)) << 32) | htonl(n >> 32);
 }
 
 int RtmpPuller::CalcChannel(int stream_id, int type_offset) {
@@ -2521,3 +2523,5 @@ void RtmpPuller::SetupRtmp(int, int idx) {
   m_Clients[idx].AudioRtpTs = g_now_ms;
   m_Clients[idx].AudioRtpTsInterVal = DEFAULT_AUDIO_RTP_TS_INTERVAL;
 }
+
+}  // namespace tywebrtc

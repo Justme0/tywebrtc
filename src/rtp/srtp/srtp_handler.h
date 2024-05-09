@@ -4,6 +4,10 @@
 #include <string>
 #include <vector>
 
+#include "srtp2/srtp.h"
+
+namespace tywebrtc {
+
 class PeerConnection;
 
 class SrtpHandler {
@@ -57,5 +61,7 @@ class SrtpHandler {
   srtp_t receive_session_ = nullptr;
   bool active_ = false;
 };
+
+}  // namespace tywebrtc
 
 #endif  // RTP_SRTP_SRTP_HANDLER_H_

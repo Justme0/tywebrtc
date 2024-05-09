@@ -4,6 +4,8 @@
 
 #include "src/log/log.h"
 
+namespace tywebrtc {
+
 // Tinyid for FFmpeg log to ULS
 // VideoRfc7741::VideoUnPackVp8RtpStm() is single thread, so use global tinyid
 // is no problem.
@@ -308,3 +310,5 @@ void CodecEncoder::Reset() {
     av_codec_tx_ = NULL;
   }
 }
+
+}  // namespace tywebrtc

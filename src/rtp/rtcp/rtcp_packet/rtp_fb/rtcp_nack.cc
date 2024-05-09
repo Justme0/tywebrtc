@@ -129,12 +129,12 @@ int RtcpNack::HandleNack(const RtcpHeader &chead) {
     nackMovPointer += 4;
   }
 
-  tylog("mediaSourceSSRC=%u(0x%X), %s, nack seqs=%s.",
-        chead.getMediaSourceSSRC(), chead.getMediaSourceSSRC(),
-        chead.ToString().data(), tylib::AnyToString(seqVect).data());
+  tylog("mediaSourceSSRC=%u(0x%X), %s, nack seqs=%s.", chead.getSourceSSRC(),
+        chead.getSourceSSRC(), chead.ToString().data(),
+        tylib::AnyToString(seqVect).data());
 
   std::vector<uint16_t> failedSeqs;
-  ret = SendReqNackPkt_(seqVect, chead.getMediaSourceSSRC(), failedSeqs);
+  ret = SendReqNackPkt_(seqVect, chead.getSourceSSRC(), failedSeqs);
   if (ret) {
     tylog("sendReqNackPkt ret=%d", ret);
 
@@ -158,7 +158,7 @@ int RtcpNack::SerializeNackSend_(const std::vector<NackBlock> &nackBlokVect,
   nack.setPacketType(RtcpPacketType::kGenericRtpFeedback);
   nack.setBlockCount(1);
   nack.setSSRC(sinkSSRC);
-  nack.setMediaSourceSSRC(soucreSSRC);
+  nack.setSourceSSRC(soucreSSRC);
   nack.setLength(2 + nackBlokVect.size());
 
   if (12 + nackBlokVect.size() * 4 > 2048) {

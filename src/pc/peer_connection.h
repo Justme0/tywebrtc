@@ -15,7 +15,10 @@
 #include "src/rtp/rtp_handler.h"
 #include "src/rtp/srtp/srtp_handler.h"
 #include "src/sdp/sdp_handler.h"
+#include "src/signal/signal_handler.h"
 #include "src/timer/timer.h"
+
+namespace tywebrtc {
 
 enum class PacketType {
   STUN,
@@ -122,6 +125,7 @@ class PeerConnection {
   RtcpHandler rtcpHandler_;
   SrtpHandler srtpHandler_;
   DataChannelHandler dataChannelHandler_;
+  SignalHandler signalHandler_;
 
   PushHandler pushHandler_;
   PullHandler pullHandler_;
@@ -129,13 +133,15 @@ class PeerConnection {
   int64_t initTimeMs_ = 0;        // construct *this obj time
   int64_t lastActiveTimeMs_ = 0;  // last receive data time
 
-  DTLSTimer dtlsTimer_;
-  PLITimer pliTimer_;
   SenderReportTimer senderReportTimer_;
   ReceiverReportTimer receiverReportTimer_;
+  PLITimer pliTimer_;
+  DTLSTimer dtlsTimer_;
 
   bool bNotUseSrtp = false;
   bool bUseRsfec = false;
 };
+
+}  // namespace tywebrtc
 
 #endif  // PC_PEER_CONNECTION_H_

@@ -24,7 +24,7 @@ cc_binary(
     # ffmpeg need bz2 tls drm, should be in WORKSPACE ffmpeg dep lib
     linkopts = ["-l dl -pthread -l z -l bz2 -l gnutls -l drm"],
     deps = [
-        "@nlohmann_json//:json",
+        "//biz_proto:client_cc_proto",
         "@tylib//:tylib",
         "@rsfec//:rsfec",
         "@sctp//:sctp_package",

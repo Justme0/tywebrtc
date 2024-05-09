@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+namespace tywebrtc {
+
 class PushHandler {
  public:
   PushHandler() = default;
@@ -36,5 +38,7 @@ class PushHandler {
   std::function<int(const std::vector<char> &frame, uint64_t frameMs)>
       sendVideoFrameFunc_;
 };
+
+}  // namespace tywebrtc
 
 #endif  // PUSH_PUSH_HANDLER_H_

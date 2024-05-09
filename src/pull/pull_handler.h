@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+namespace tywebrtc {
+
 class PeerConnection;
 
 class PullHandler {
@@ -33,12 +35,14 @@ class PullHandler {
   const int *p_playSocket_ = nullptr;
 
  private:
-  PeerConnection &belongingPeerConnection_;
+  // PeerConnection &belongingPeerConnection_;
   int initRet_ = -1;  // default error
 
   std::function<int()> initFunc_;
   std::function<int()> handlePacketFunc_;
   std::function<int()> closeFunc_;
 };
+
+}  // namespace tywebrtc
 
 #endif  // PULL_PULL_HANDLER_H_

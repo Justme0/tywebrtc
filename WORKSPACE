@@ -1,3 +1,6 @@
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
 # 1. tylib
 local_repository(
     name = "tylib",
@@ -53,25 +56,24 @@ cc_library(
 
 # 4. gtest
 # doc https://google.github.io/googletest/quickstart-bazel.html#set-up-a-bazel-workspace
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
 http_archive(
     name = "com_google_googletest",
     urls = ["https://github.com/google/googletest/archive/5ab508a01f9eb089207ee87fd547d290da39d015.zip"],
     strip_prefix = "googletest-5ab508a01f9eb089207ee87fd547d290da39d015",
 )
+# git_repository(
+#     name = "com_google_googletest",
+#     remote = "https://github.com/google/googletest.git",
+#     tag = "release-1.10.0",
+# )
 
 # 5. prometheus-cpp client
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
-
 http_archive(
     name = "com_github_jupp0r_prometheus_cpp",
     strip_prefix = "prometheus-cpp-master",
     urls = ["https://github.com/jupp0r/prometheus-cpp/archive/master.zip"],
 )
-
 load("@com_github_jupp0r_prometheus_cpp//bazel:repositories.bzl", "prometheus_cpp_repositories")
-
 prometheus_cpp_repositories()
 
 # 6. sctp
@@ -237,14 +239,13 @@ local_repository(
 )
 
 # 14. json
-local_repository(
-    name = "nlohmann_json",
-    path = "third_party/nlohmann-json",
-)
+# local_repository(
+#     name = "nlohmann_json",
+#     path = "third_party/nlohmann-json",
+# )
 
+# 15. naive checker
 # https://github.com/naivesystems/analyze/wiki/%E5%A6%82%E4%BD%95%E6%A3%80%E6%9F%A5%E4%BD%BF%E7%94%A8-Bazel-%E6%9E%84%E5%BB%BA%E7%9A%84%E9%A1%B9%E7%9B%AE
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
 # Hedron's Compile Commands Extractor for Bazel
 # https://github.com/hedronvision/bazel-compile-commands-extractor
 http_archive(
@@ -258,3 +259,38 @@ http_archive(
 )
 load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
 hedron_compile_commands_setup()
+
+# 16. protobuf
+# http_archive(
+#     name = "com_google_protobuf",
+#     strip_prefix = "protobuf-3.21.3",
+#     urls = ["https://github.com/protocolbuffers/protobuf/archive/v3.21.3.tar.gz"],
+# )
+# load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
+# protobuf_deps()
+
+# rules_cc defines rules for generating C++ code from Protocol Buffers.
+http_archive(
+    name = "rules_cc",
+    sha256 = "35f2fb4ea0b3e61ad64a369de284e4fbbdcdba71836a5555abb5e194cf119509",
+    strip_prefix = "rules_cc-624b5d59dfb45672d4239422fa1e3de1822ee110",
+    urls = [
+        "https://github.com/bazelbuild/rules_cc/archive/624b5d59dfb45672d4239422fa1e3de1822ee110.tar.gz",
+    ],
+)
+load("@rules_cc//cc:repositories.bzl", "rules_cc_dependencies")
+rules_cc_dependencies()
+
+# rules_proto defines abstract rules for building Protocol Buffers.
+http_archive(
+    name = "rules_proto",
+    # strip_prefix = "rules_proto-218ffa7dfa5408492dc86c01ee637614f8695c45",
+    strip_prefix = "rules_proto-4.0.0-3.20.0",
+    urls = [
+        # "https://github.com/bazelbuild/rules_proto/archive/218ffa7dfa5408492dc86c01ee637614f8695c45.tar.gz",
+        "https://github.com/bazelbuild/rules_proto/archive/refs/tags/4.0.0-3.20.0.tar.gz",
+    ],
+)
+load("@rules_proto//proto:repositories.bzl", "rules_proto_dependencies", "rules_proto_toolchains")
+rules_proto_dependencies()
+rules_proto_toolchains()

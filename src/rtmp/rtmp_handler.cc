@@ -10,8 +10,9 @@
 #include "src/global_tmp/global_tmp.h"
 #include "src/log/log.h"
 
-RtmpHandler::RtmpHandler(PeerConnection &pc)
-    : belongingPeerConnection_(pc), flvAssist(*this) {}
+namespace tywebrtc {
+
+RtmpHandler::RtmpHandler(PeerConnection &) : flvAssist(*this) {}
 
 RtmpHandler::~RtmpHandler() {
   if (mRtmpInstance != NULL) {
@@ -261,3 +262,5 @@ int RtmpHandler::ReconnectRtmp_() {
 
   return 0;
 }
+
+}  // namespace tywebrtc

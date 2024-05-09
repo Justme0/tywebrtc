@@ -1,7 +1,8 @@
 // OPT: not use global thing as possible
 // will refactor
 
-#pragma once
+#ifndef SRC_GLOBAL_TMP_GLOBAL_TMP_H_
+#define SRC_GLOBAL_TMP_GLOBAL_TMP_H_
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -19,6 +20,8 @@
 #include "tylib/string/format_string.h"
 
 #include "src/log/log.h"
+
+namespace tywebrtc {
 
 const int kUplossRateMul100 = 0;
 const int kDownlossRateMul100 = 0;
@@ -390,3 +393,7 @@ inline int64_t CompactNtpRttToMs(uint32_t compact_ntp_interval) {
   av_make_error_string(                                               \
       static_cast<char*>(__builtin_alloca(AV_ERROR_MAX_STRING_SIZE)), \
       AV_ERROR_MAX_STRING_SIZE, errnum)
+
+}  // namespace tywebrtc
+
+#endif  // SRC_GLOBAL_TMP_GLOBAL_TMP_H_

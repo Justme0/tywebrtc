@@ -7,6 +7,8 @@
 
 #include "src/rtp/rtp_parser.h"
 
+namespace tywebrtc {
+
 // OPT: can cancel the struct ?
 class MediaData {
  public:
@@ -114,5 +116,7 @@ class H264Unpacketizer {
   uint16_t expect_seq_num_ = 0;
   FILE *rtp_2_h264_file_ = nullptr;
 };
+
+}  // namespace tywebrtc
 
 #endif  // RTP_PACK_UNPACK_RTP_TO_H264_H_

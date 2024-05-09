@@ -29,7 +29,13 @@
 #include "src/rtmp/rtmp_pull.h"
 #include "timer/timer.h"
 
-prometheus::Exposer* g_pExposer;
+using tywebrtc::g_startServer;
+using tywebrtc::g_recvPacketNum;
+using tywebrtc::g_sock_fd;
+using tywebrtc::g_dumpRecvSockfd;
+using tywebrtc::g_dumpSendSockfd;
+using tywebrtc::g_pRegistry;
+using tywebrtc::kUplossRateMul100;
 
 // TODO: use tywebrtc namespace?
 
@@ -206,8 +212,9 @@ int HandleRequest() {
 
   // get some pc according to clientip, port or ICE username (to FIX),
   // cannot handle ICE connection change
-  std::shared_ptr<PeerConnection> pc =
-      Singleton<PCManager>::Instance().GetPeerConnection(ip, port, "");
+  std::shared_ptr<tywebrtc::PeerConnection> pc =
+      tywebrtc::Singleton<tywebrtc::PCManager>::Instance().GetPeerConnection(
+          ip, port, "");
 
   // must before srtp if it's rtp, otherwise srtp_err_status_replay_fail
   // https://segmentfault.com/a/1190000040211375
@@ -227,7 +234,7 @@ int HandleRequest() {
   return 0;
 }
 
-const int kMultiplexIOMaxEventNum = 1024;
+// const int kMultiplexIOMaxEventNum = 1024;
 
 // ref:
 // https://stackoverflow.com/questions/142508/how-do-i-check-os-with-a-preprocessor-directive
@@ -413,12 +420,12 @@ void CrossPlatformNetworkIO() {
 #endif
 
 static void InitTimer() {
-  TimerManager::Instance()->AddTimer(new MonitorStateTimer);
+  TimerManager::Instance()->AddTimer(new tywebrtc::MonitorStateTimer);
 }
 
 #define INIT_LOG_V2(path, format, level, size)                        \
   do {                                                                \
-    mkdir_p(path, 0777);                                              \
+    tywebrtc::mkdir_p(path, 0777);                                    \
     tylib::MLOG_INIT(MLOG_DEF_LOGGER, level, format, path, "", size); \
   } while (0)
 
@@ -485,11 +492,11 @@ int InitDumpSock() {
 int InitMonitor() {
   // https://github.com/jupp0r/prometheus-cpp
   // create an http server
-  const int kMonitorPort = 444;
+  const int kMonitorPort = 4444;
   tylogAndPrintfln("bind prometheus http port=%d", kMonitorPort);
   // Exporser object should always alive
   // https://github.com/jupp0r/prometheus-cpp/issues/559#issuecomment-1068933850
-  g_pExposer =
+  prometheus::Exposer* g_pExposer =
       new prometheus::Exposer{tylib::format_string("0.0.0.0:%d", kMonitorPort)};
   // prometheus::Exposer exposer{{
   // "listening_ports", "127.0.0.1:8091",
@@ -636,7 +643,7 @@ int main() {
   // CrossPlatformNetworkIO();
 
   {
-    ret = SetNonBlock(g_sock_fd);
+    ret = tywebrtc::SetNonBlock(g_sock_fd);
     if (ret) {
       tylog("setNonBlock ret=%d.", ret);
       return ret;

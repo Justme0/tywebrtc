@@ -12,6 +12,8 @@
 #include "src/log/log.h"
 #include "src/pc/peer_connection.h"
 
+namespace tywebrtc {
+
 enum DataChannelMessageType {
   DataChannelMessageTypeAck = 2,
   DataChannelMessageTypeOpen = 3,
@@ -880,7 +882,7 @@ int DataChannelHandler::SendSctpDataForSid(const uint16_t sid,
   }
   lock_guard.unlock();
 
-  tylog("taylor send=%s.", bufferToSend.data());
+  tylog("sctp send=%s.", bufferToSend.data());
   ssize_t send_res = SendInternal(sid, bufferToSend);
   if (send_res < 0) {
     if (errno == EWOULDBLOCK) {
@@ -909,3 +911,5 @@ int DataChannelHandler::SendSctpDataForSid(const uint16_t sid,
 
   return 0;
 }
+
+}  // namespace tywebrtc

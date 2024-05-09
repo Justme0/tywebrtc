@@ -1,6 +1,8 @@
 #ifndef SDP_SDP_HANDLER_H_
 #define SDP_SDP_HANDLER_H_
 
+namespace tywebrtc {
+
 class PeerConnection;
 
 class SdpHandler {
@@ -15,5 +17,7 @@ class SdpHandler {
  private:
   PeerConnection &belongingPeerConnection_;
 };
+
+}  // namespace tywebrtc
 
 #endif  // SDP_SDP_HANDLER_H_

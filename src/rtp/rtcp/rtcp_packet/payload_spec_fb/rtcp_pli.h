@@ -5,6 +5,8 @@
 
 #include "src/rtp/rtcp/rtcp_parser.h"
 
+namespace tywebrtc {
+
 class RtcpHandler;
 class RtcpHeader;
 
@@ -18,5 +20,7 @@ class RtcpPLI {
  private:
   RtcpHandler &belongingRtcpHandler_;
 };
+
+}  // namespace tywebrtc
 
 #endif  // SRC_RTP_RTCP_RTCP_PLI_H_

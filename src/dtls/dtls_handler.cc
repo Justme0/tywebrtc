@@ -27,6 +27,8 @@
 #include "src/log/log.h"
 #include "src/pc/peer_connection.h"
 
+namespace tywebrtc {
+
 const int SRTP_MASTER_KEY_KEY_LEN = 16;
 const int SRTP_MASTER_KEY_SALT_LEN = 14;
 const int DTLS_MTU = 1100;
@@ -286,6 +288,8 @@ DtlsHandler::DtlsHandler(PeerConnection& pc, bool isServer)
 
   mSsl = SSL_new(mContext);
   assert(mSsl != nullptr);
+  // DTLS & MTU
+  // https://segmentfault.com/a/1190000040041788
   SSL_set_mtu(mSsl, DTLS_MTU);
   mInBio = BIO_new(BIO_s_mem());
 
@@ -912,3 +916,5 @@ std::string DtlsHandler::ToString() const {
       GetStreamDirectionString(m_StmDirect), m_IsHandshakeCanComplete,
       m_LastSslState, GetSslStateString(m_LastSslState).data(), m_startFlag);
 }
+
+}  // namespace tywebrtc

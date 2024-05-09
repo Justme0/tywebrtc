@@ -7,6 +7,8 @@
 #include "openssl/pem.h"
 #include "src/log/log.h"
 
+namespace tywebrtc {
+
 // OPT: 单例模式，服务器不用每次建PC都读文件
 int GetCertificateAndKey(X509*& outCert, EVP_PKEY*& pkey) {
   int ret = 0;
@@ -47,3 +49,5 @@ int GetCertificateAndKey(X509*& outCert, EVP_PKEY*& pkey) {
 
   return ret;
 }
+
+}  // namespace tywebrtc

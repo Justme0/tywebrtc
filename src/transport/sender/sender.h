@@ -6,6 +6,8 @@
 
 #include "src/rtp/rtp_parser.h"
 
+namespace tywebrtc {
+
 class SSRCInfo;
 
 // audio should not in pacing
@@ -33,5 +35,7 @@ class RtpSender {
   // constructor
   std::map<PowerSeqT, RtpBizPacket>::const_iterator saveLast_;
 };
+
+}  // namespace tywebrtc
 
 #endif  //   TRANSPORT_SENDER_SENDER_H_

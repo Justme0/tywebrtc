@@ -4,6 +4,8 @@
 
 #include "src/rtp/rtp_handler.h"
 
+namespace tywebrtc {
+
 RtpSender::RtpSender(SSRCInfo& ssrcInfo)
     : belongingSSRCInfo_(ssrcInfo), saveLast_(sendQueue_.end()) {}
 
@@ -74,3 +76,4 @@ std::vector<RtpBizPacket> RtpSender::Dequeue() {
 
   return packets;
 }
+}  // namespace tywebrtc

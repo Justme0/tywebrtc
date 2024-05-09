@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "src/rtp/rtcp/rtcp_packet/payload_spec_fb/rtcp_pli.h"
-#include "src/rtp/rtcp/rtcp_packet/rtcp_extended_reports.h"
 #include "src/rtp/rtcp/rtcp_packet/rtcp_receiver_report.h"
 #include "src/rtp/rtcp/rtcp_packet/rtcp_sender_report.h"
+#include "src/rtp/rtcp/rtcp_packet/rtcp_xr/rtcp_xr.h"
 #include "src/rtp/rtcp/rtcp_packet/rtp_fb/rtcp_nack.h"
 
 namespace tywebrtc {

@@ -10,6 +10,8 @@
 
 #include "usrsctplib/usrsctp.h"
 
+namespace tywebrtc {
+
 class PeerConnection;
 class DataChannelHandler;
 
@@ -144,5 +146,7 @@ class DataChannelHandler {
  public:
   PeerConnection& belongingPeerConnection_;
 };
+
+}  // namespace tywebrtc
 
 #endif  // DATA_CHANNEL_DATA_CHANNEL_HANDLER_H_

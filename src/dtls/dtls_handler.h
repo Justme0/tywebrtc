@@ -8,6 +8,8 @@
 #include "openssl/err.h"
 #include "openssl/ssl.h"
 
+namespace tywebrtc {
+
 #pragma pack(1)
 
 typedef struct TagDtlsRecordLayer {
@@ -127,5 +129,7 @@ class DtlsHandler {
   int m_LastSslState;
   bool m_startFlag;
 };
+
+}  // namespace tywebrtc
 
 #endif  // DTLS_DTLS_HANDLER_H_

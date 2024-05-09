@@ -4,7 +4,9 @@
 
 #include "src/log/log.h"
 
-PullHandler::PullHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {}
+namespace tywebrtc {
+
+PullHandler::PullHandler(PeerConnection &) {}
 
 // TODO: push handler must destructor
 PullHandler::~PullHandler() {
@@ -47,3 +49,5 @@ int PullHandler::HandlePacket() {
 
   return 0;
 }
+
+}  // namespace tywebrtc

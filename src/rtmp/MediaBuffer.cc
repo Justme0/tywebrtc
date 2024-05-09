@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <cstring>
 
+namespace tywebrtc {
+
 MediaBuffer::MediaBuffer()
     : mSrcBuffer(NULL),
       mSrcBufferLength(0),
@@ -104,3 +106,5 @@ H264Context::H264Context()
   memset(mSps, 0, sizeof(mSps));
   memset(mPps, 0, sizeof(mPps));
 }
+
+}  // namespace tywebrtc

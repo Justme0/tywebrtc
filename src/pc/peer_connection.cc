@@ -6,6 +6,8 @@
 
 #include "src/log/log.h"
 
+namespace tywebrtc {
+
 PeerConnection::PeerConnection(const std::string &ip, int port)
     : stateMachine_(EnumStateMachine::GOT_CANDIDATE),  // sdp has candiate
       clientIP_(ip),
@@ -17,12 +19,17 @@ PeerConnection::PeerConnection(const std::string &ip, int port)
       rtcpHandler_(*this),
       srtpHandler_(*this),
       dataChannelHandler_(*this),
+      signalHandler_(*this),
       pullHandler_(*this),
       initTimeMs_(g_now_ms),
+      senderReportTimer_(*this),
+      receiverReportTimer_(*this),
       pliTimer_(*this),
       dtlsTimer_(*this) {}
 
 PeerConnection::~PeerConnection() {
+  TimerManager::Instance()->KillTimer(&this->senderReportTimer_);
+  TimerManager::Instance()->KillTimer(&this->receiverReportTimer_);
   TimerManager::Instance()->KillTimer(&this->pliTimer_);
 
   // OPT: when dtls completes kill timer
@@ -170,3 +177,4 @@ std::shared_ptr<PeerConnection> PeerConnection::FindPeerPC() const {
 
   return pc;
 }
+}  // namespace tywebrtc

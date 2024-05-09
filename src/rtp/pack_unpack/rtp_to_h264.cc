@@ -10,6 +10,8 @@
 #include "src/rtp/pack_unpack/pack_unpack_common.h"
 #include "src/rtp/rtp_parser.h"
 
+namespace tywebrtc {
+
 static const uint8_t kNalHeaderSize = 1;
 static const uint8_t kFuAHeaderSize = 2;
 static const uint8_t kLengthFieldSize = 2;
@@ -522,3 +524,5 @@ int H264Unpacketizer::DumpRawStream(const std::string &rawStream,
 
   return 0;
 }
+
+}  // namespace tywebrtc

@@ -6,10 +6,7 @@
 #include <string>
 #include <vector>
 
-#ifdef __cplusplus
 extern "C" {
-#endif
-
 #include <libavcodec/avcodec.h>
 #include <libavutil/audio_fifo.h>
 #include <libavutil/channel_layout.h>
@@ -18,10 +15,9 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libavutil/samplefmt.h>
 #include <libswresample/swresample.h>
-
-#ifdef __cplusplus
 }
-#endif
+
+namespace tywebrtc {
 
 /**
  * The audio codec id.
@@ -129,5 +125,7 @@ class SrsAudioTranscoder {
   int64_t new_pkt_pts_;
   int64_t next_out_pts_;
 };
+
+}  // namespace tywebrtc
 
 #endif  // RTMP_AUDIO_CODEC_H_

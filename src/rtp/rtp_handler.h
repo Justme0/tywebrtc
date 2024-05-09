@@ -19,11 +19,14 @@ extern "C" {
 #include "src/transport/receiver/receiver.h"
 #include "src/transport/sender/sender.h"
 
+namespace tywebrtc {
+
 // don't include whole head file avoid recycle reference
 class PeerConnection;
 class RtpHandler;
 
-struct SSRCInfo {
+class SSRCInfo {
+ public:
   explicit SSRCInfo(RtpHandler &belongingRtpHandler);
 
   // OPT: use a fec handler
@@ -102,5 +105,7 @@ class RtpHandler {
   SrsAudioTranscoder audioTranscoder_;
   RtpDepacketizerVp8 videoTranscoder_;
 };
+
+}  // namespace tywebrtc
 
 #endif  // RTP_RTP_HANDLER_H_

@@ -18,6 +18,8 @@
 #include "src/rtp/rtp_parser.h"
 #include "src/timer/timer.h"
 
+namespace tywebrtc {
+
 // string enum, for print convenience
 const std::string kMediaTypeRtcp = "rtcp";
 const std::string kMediaTypeVideo = "video";
@@ -675,6 +677,12 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       tylog("pull url env var not exist");
     }
 
+    TimerManager::Instance()->AddTimer(
+        &this->belongingPeerConnection_.senderReportTimer_);
+
+    TimerManager::Instance()->AddTimer(
+        &this->belongingPeerConnection_.receiverReportTimer_);
+
     // 收到RTP后定时请求I帧
     TimerManager::Instance()->AddTimer(
         &this->belongingPeerConnection_.pliTimer_);
@@ -870,3 +878,5 @@ std::string RtpHandler::ToString() const {
       "upAudioSSRC=%u, upVideoSSRC=%u, ssrcMapSize=%zu.", upAudioSSRC,
       upVideoSSRC, ssrcInfoMap_.size());
 }
+
+}  // namespace tywebrtc

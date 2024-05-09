@@ -1,5 +1,7 @@
 #include "src/monitor/monitor.h"
 
+namespace tywebrtc {
+
 std::shared_ptr<prometheus::Registry> g_pRegistry;
 
 void DimensionAdd(const std::map<std::string, std::string>& dimensions,
@@ -31,3 +33,4 @@ void DimensionSet(const std::map<std::string, std::string>& dimensions,
 
   family->Add(dimensions).Set(value);
 }
+}  // namespace tywebrtc

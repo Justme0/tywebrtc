@@ -1,0 +1,24 @@
+syntax = "proto3";
+package client;
+
+message AllProto {
+    oneof biz_proto {
+        S2C_StateReq s2c_state_req = 1;
+        C2S_StateReq c2s_state_req = 2;
+    }
+}
+
+// S2C
+message S2C_StateReq {
+    string str_server_time_ms = 1;
+    uint32 uint32_rtt_ms = 2;
+}
+
+// C2S
+message C2S_StateReq {
+
+}
+
+message C2S_StateRsp {
+
+}

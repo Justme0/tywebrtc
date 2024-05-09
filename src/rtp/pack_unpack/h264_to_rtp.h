@@ -6,6 +6,8 @@
 
 #include "src/rtp/rtp_parser.h"
 
+namespace tywebrtc {
+
 enum enVideoRtpRfcMode {
   kH264Rfc3984Mode0 = 1,  // 模式0 Single NAL Unit
   kH264Rfc3984Mode1,      // 模式1 支持Single NAL，FU-A，STAP-A
@@ -44,5 +46,7 @@ class H264Packetizer {
   std::string pps_;
   // int mtu_size_byte_ = 1200;  // should probe using PMTU
 };
+
+}  // namespace tywebrtc
 
 #endif  // RTP_PACK_UNPACK_H264_TO_RTP_H_

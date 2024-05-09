@@ -6,7 +6,7 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
-// https://datatracker.ietf.org/doc/html/rfc3550
+// doc https://datatracker.ietf.org/doc/html/rfc3550
 
 #include "src/rtp/rtcp/rtcp_handler.h"
 
@@ -24,10 +24,11 @@ namespace tywebrtc {
 extern int g_sock_fd;
 
 RtcpHandler::RtcpHandler(PeerConnection &pc)
-    : nack(*this),
-      pli(*this),
-      receiverReport(*this),
-      senderReport(*this),
+    : senderReport_(*this),
+      receiverReport_(*this),
+      nack_(*this),
+      pli_(*this),
+      extendedReport_(*this),
       belongingPeerConnection_(pc) {}
 
 // 处理解密后的 RTCP 包
@@ -53,14 +54,14 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
     }
 
     movingBuf += rtcpLen;
-    const RtcpHeader *chead = reinterpret_cast<const RtcpHeader *>(movingBuf);
-    rtcpLen = (chead->getLength() + 1) * 4;
+    const RtcpHeader &chead = *reinterpret_cast<const RtcpHeader *>(movingBuf);
+    rtcpLen = (chead.getLength() + 1) * 4;
     totalLen += rtcpLen;
 
     tylog(
         "recv number #%d rtcp=%s. rtcpLen=%u, totalLen=%zu. (input buf "
         "len=%zu)",
-        index, chead->ToString().data(), rtcpLen, totalLen, vBufReceive.size());
+        index, chead.ToString().data(), rtcpLen, totalLen, vBufReceive.size());
     ++index;
 
     if (totalLen > vBufReceive.size()) {
@@ -72,9 +73,9 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
     }
 
     // TODO: use virtual function? instead of switch
-    switch (chead->packettype) {
+    switch (chead.getPacketType()) {
       case RtcpPacketType::kSenderReport: {
-        ret = this->senderReport.HandleSenderReport(chead);
+        ret = this->senderReport_.HandleSenderReport(chead);
         if (ret) {
           tylog("handle SR ret=%d.", ret);
           assert(!"shit");
@@ -84,7 +85,7 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
       }
 
       case RtcpPacketType::kReceiverReport: {
-        ret = this->receiverReport.HandleReceiverReport(chead);
+        ret = this->receiverReport_.HandleReceiverReport(chead);
         if (ret) {
           tylog("handle RR ret=%d.", ret);
           assert(!"shit");
@@ -98,11 +99,20 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
         break;
       }
 
+      case RtcpPacketType::kBye: {
+        tylog("recv bye block");
+        break;
+      }
+
+      case RtcpPacketType::kApplicationDefined: {
+        tylog("recv App block");
+        break;
+      }
+
       case RtcpPacketType::kGenericRtpFeedback: {
-        switch (
-            static_cast<RtcpGenericFeedbackFormat>(chead->getBlockCount())) {
+        switch (static_cast<RtcpGenericFeedbackFormat>(chead.getBlockCount())) {
           case RtcpGenericFeedbackFormat::kFeedbackNack: {
-            ret = this->nack.HandleNack(*chead);
+            ret = this->nack_.HandleNack(chead);
             if (ret) {
               tylog("handleNack ret=%d", ret);
 
@@ -130,14 +140,12 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
 
       case RtcpPacketType::kPayloadSpecificFeedback: {
         // TODO: move to ToString, use virtual function?
-        tylog(
-            "specific feedback recv type [%s]",
-            RtcpPayloadSpecificFormatToString(
-                static_cast<RtcpPayloadSpecificFormat>(chead->getBlockCount()))
-                .data());
+        tylog("specific feedback recv type [%s]",
+              RtcpPayloadSpecificFormatToString(
+                  static_cast<RtcpPayloadSpecificFormat>(chead.getBlockCount()))
+                  .data());
 
-        switch (
-            static_cast<RtcpPayloadSpecificFormat>(chead->getBlockCount())) {
+        switch (static_cast<RtcpPayloadSpecificFormat>(chead.getBlockCount())) {
           case RtcpPayloadSpecificFormat::kRtcpPLI:
           case RtcpPayloadSpecificFormat::kRtcpSLI:
           case RtcpPayloadSpecificFormat::kRtcpFIR: {
@@ -159,16 +167,16 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
               return 0;
             }
 
-            RtcpHeader *rsphead = const_cast<RtcpHeader *>(chead);
-            rsphead->setMediaSourceSSRC(peerPC->rtpHandler_.upVideoSSRC);
+            const_cast<RtcpHeader &>(chead).setSourceSSRC(
+                peerPC->rtpHandler_.upVideoSSRC);
 
             // OPT: handle other type of RTCP source ssrc
             // if (rsphead->getSourceSSRC() == kDownlinkAudioSsrc) {
             //   assert(peerPC->rtpHandler_.upAudioSSRC != 0);
-            //   rsphead->setMediaSourceSSRC(peerPC->rtpHandler_.upAudioSSRC);
+            //   rsphead->setSourceSSRC(peerPC->rtpHandler_.upAudioSSRC);
             // } else if (rsphead->getSourceSSRC() == kDownlinkVideoSsrc) {
             //   assert(peerPC->rtpHandler_.upVideoSSRC != 0);
-            //   rsphead->setMediaSourceSSRC(peerPC->rtpHandler_.upVideoSSRC);
+            //   rsphead->setSourceSSRC(peerPC->rtpHandler_.upVideoSSRC);
             // }
 
             break;
@@ -176,8 +184,10 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
 
           case RtcpPayloadSpecificFormat::kRtcpRPSI:
             break;
+
           case RtcpPayloadSpecificFormat::kRtcpREMB:
             break;
+
           default:
             // should only log
             assert(!"unknown rtcp");
@@ -187,7 +197,7 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
       }
 
       case RtcpPacketType::kExtendedReports: {
-        ret = this->extendedReport.HandleExtendedReports(chead);
+        ret = this->extendedReport_.HandleExtendedReports(chead);
         if (ret) {
           tylog("handle SR ret=%d.", ret);
           assert(!"shit");

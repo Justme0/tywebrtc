@@ -1,7 +1,6 @@
 #include "DomainResolve.h"
 
 #include <arpa/inet.h>
-#include <inttypes.h>
 #include <netdb.h>
 #include <setjmp.h>
 #include <signal.h>
@@ -12,12 +11,8 @@
 #include <string>
 #include <vector>
 #include "src/log/log.h"
-static const int initGetHostByNameFail = 2939383;
-static const int gethostbyname_timeout = 2939384;
-static const int dns_gethostbyname_hostNotFound = 2939385;
-static const int dns_gethostbyname_domainNotIpAddr = 2939386;
-static const int refreshDomainCount = 2939387;
-static const int refreshGetHostByNameFail = 2939388;
+
+namespace tywebrtc {
 
 static sigjmp_buf jmpbuf;
 
@@ -135,8 +130,6 @@ bool DomainResolve::getAddrByDomain(const std::string &domain,
 void DomainResolve::refreshDomain(uint32_t now) {
   static unsigned int last = 0;
   if (last == 0 || last + m_IntervalMs <= now) {
-    // Attr_API_Set(AttrId::DomainResolve::refreshDomainCount, 1);
-
     for (std::map<std::string, sockaddr_in>::iterator it = domainMap.begin();
          it != domainMap.end(); ++it) {
       struct hostent *host =
@@ -154,3 +147,5 @@ void DomainResolve::refreshDomain(uint32_t now) {
     last = now;
   }
 }
+
+}  // namespace tywebrtc

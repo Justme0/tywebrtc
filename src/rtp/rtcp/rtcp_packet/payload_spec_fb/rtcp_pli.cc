@@ -28,7 +28,7 @@ int RtcpPLI::CreatePLISend(uint32_t ssrc, uint32_t sourceSSRC) {
   pli.setPacketType(RtcpPacketType::kPayloadSpecificFeedback);
   pli.setBlockCount(static_cast<uint8_t>(RtcpPayloadSpecificFormat::kRtcpPLI));
   pli.setSSRC(ssrc);
-  pli.setMediaSourceSSRC(sourceSSRC);
+  pli.setSourceSSRC(sourceSSRC);
   pli.setLength(2);
 
   const char *head = reinterpret_cast<const char *>(&pli);

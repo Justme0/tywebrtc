@@ -6,6 +6,8 @@
 
 #include "src/log/log.h"
 
+namespace tywebrtc {
+
 static const AVCodec *srs_find_decoder_by_id(SrsAudioCodecId id) {
   if (id == SrsAudioCodecIdAAC) {
     return avcodec_find_decoder_by_name("aac");
@@ -455,3 +457,5 @@ void SrsAudioTranscoder::free_swr_samples() {
     swr_data_ = NULL;
   }
 }
+
+}  // namespace tywebrtc

@@ -1,15 +1,16 @@
 #ifndef __DOMAIN_RESOLVE_H__
 #define __DOMAIN_RESOLVE_H__
 
-#include <inttypes.h>
+// #include <inttypes.h>
 #include <netinet/in.h>
 #include <sys/types.h>
+
 #include <map>
 #include <sstream>
 #include <string>
 #include <vector>
 
-//#include "wbl_config_file.h"
+namespace tywebrtc {
 
 class DomainResolve {
  public:
@@ -38,5 +39,6 @@ class DomainResolve {
   uint32_t m_TimeoutMs;
   uint32_t m_IntervalMs;
 };
+}
 
 #endif

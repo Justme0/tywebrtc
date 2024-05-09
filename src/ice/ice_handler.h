@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+namespace tywebrtc {
+
 #define STUN_MSG_MAX_LEN (2048)
 #define STUN_MAGIC (0x2112A442)
 #define STUN_XOR_FINGERPRINT_MASK (0x5354554eL)
@@ -141,5 +143,7 @@ class IceHandler {
 
   ICEInfo iceInfo_;
 };
+
+}  // namespace tywebrtc
 
 #endif  // ICE_ICE_HANDLER_H_

@@ -1,25 +1,15 @@
 #ifndef RTMP_VIDEO_CODEC_H_
 #define RTMP_VIDEO_CODEC_H_
 
-#ifdef __cplusplus
+#include <cstdint>
 
-#define __STDC_CONSTANT_MACROS
-
-#ifdef _STDINT_H
-#undef _STDINT_H
-#endif
-
-#include <stdint.h>
 extern "C" {
-#endif
-
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
-
-#ifdef __cplusplus
 };
-#endif
+
+namespace tywebrtc {
 
 struct CodecParam {
   int bitRate;
@@ -78,5 +68,7 @@ class CodecEncoder {
   AVPacket* av_packet_;
   bool init_sucess_;
 };
+
+}  // namespace tywebrtc
 
 #endif  // RTMP_VIDEO_CODEC_H_

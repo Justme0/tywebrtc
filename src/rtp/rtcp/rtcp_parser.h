@@ -6,9 +6,15 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
-// https://datatracker.ietf.org/doc/html/rfc3550#section-6
-// From licode
+// RFC
+// RTP & RTCP https://datatracker.ietf.org/doc/html/rfc3550#section-6
+// XR https://datatracker.ietf.org/doc/html/rfc3611
+//
+// Ref
+// licode
 // https://github.com/lynckia/licode/blob/master/erizo/src/erizo/rtp/RtpHeaders.h
+// wireshark
+// https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-rtcp.c
 
 #ifndef SRC_RTP_RTCP_RTCP_PARSER_H_
 #define SRC_RTP_RTCP_RTCP_PARSER_H_
@@ -19,12 +25,12 @@
 
 #include "tylib/string/format_string.h"
 
-#include "src/log/log.h"
-
 namespace tywebrtc {
 
-#define RRTR_BT 4
-#define DLRR_BT 5
+enum class EnXRBlockType {
+  kXRBlockRRTR = 4,
+  kXRBlockDLRR = 5,
+};
 
 // payload type is 205
 enum class RtcpGenericFeedbackFormat {
@@ -220,7 +226,7 @@ class NackBlock {
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 //
 //
-//
+// max = mantissa*2^exp
 //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |V=2|P| FMT=15  |   PT=206      |             length            |
@@ -231,8 +237,7 @@ class NackBlock {
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |  Unique identifier 'R' 'E' 'M' 'B'                            |
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-// |  Num SSRC     | BR Exp    |  BR Mantissa                      | max=
-// mantissa*2^exp
+// |  Num SSRC     | BR Exp    |  BR Mantissa                      |
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |   SSRC feedback                                               |
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -260,6 +265,12 @@ class NackBlock {
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // :             type-specific block contents                      :
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// block length: 16 bits
+//       The length of this report block, including the header, in 32-
+//       bit words minus one.  If the block type definition permits,
+//       zero is an acceptable value, signifying a block that consists
+//       of only the BT, type-specific, and block length fields, with a
+//       null type-specific block contents field.
 class RtcpHeader {
  public:
   // maybe FMT for payload specific feedback
@@ -274,7 +285,7 @@ class RtcpHeader {
 
   union report_t {
     struct receiverReport_t {
-      uint32_t mediaSourceSSRC;
+      uint32_t ssrcsource;
       /* RECEIVER REPORT DATA*/
       uint32_t fractionlost : 8;
       int32_t lost : 24;
@@ -282,7 +293,7 @@ class RtcpHeader {
       uint32_t highestseqnum : 16;
       uint32_t jitter;
       uint32_t lastsr;
-      uint32_t delaysincelast;
+      uint32_t delaysincelast;  // DLSR
     } receiverReport;
 
     struct senderReport_t {
@@ -293,13 +304,19 @@ class RtcpHeader {
       struct receiverReport_t rrlist[1];
     } senderReport;
 
+    struct sdes_t {
+      uint32_t type : 8;
+      uint32_t length : 8;
+      char data[1];
+    } sdes;
+
     struct genericNack_t {
-      uint32_t mediaSourceSSRC;
+      uint32_t ssrcsource;
       NackBlock nack_block;
     } nackPacket;
 
     struct remb_t {
-      uint32_t mediaSourceSSRC;
+      uint32_t ssrcsource;
       uint32_t uniqueid;
       uint32_t numssrc : 8;
       uint32_t brLength : 24;
@@ -307,12 +324,12 @@ class RtcpHeader {
     } rembPacket;
 
     struct pli_t {
-      uint32_t mediaSourceSSRC;
+      uint32_t ssrcsource;
       uint32_t fci;
     } pli;
 
     struct fir_t {
-      uint32_t mediaSourceSSRC;
+      uint32_t ssrcsource;
       uint32_t mediasource;
       uint32_t seqnumber : 8;
       uint32_t reserved : 24;
@@ -321,7 +338,7 @@ class RtcpHeader {
     // Extended Reports (XR)
     // https://datatracker.ietf.org/doc/html/rfc3611
     struct XR_DLRR_t {
-      uint32_t blocktype : 8;
+      EnXRBlockType blocktype : 8;
       uint32_t reserved : 8;
       uint32_t blocklen : 16;
       uint32_t rrssrc;
@@ -330,7 +347,7 @@ class RtcpHeader {
     } xr_dlrr;
 
     struct XR_RRTR_t {
-      uint32_t blocktype : 8;
+      EnXRBlockType blocktype : 8;
       uint32_t reserved : 8;
       uint32_t blocklen : 16;
       uint32_t seconds;
@@ -365,11 +382,12 @@ class RtcpHeader {
   uint32_t getSSRC() const { return ntohl(ssrc); }
   void setSSRC(uint32_t aSsrc) { ssrc = htonl(aSsrc); }
 
-  uint32_t getMediaSourceSSRC() const {
-    return ntohl(report.receiverReport.mediaSourceSSRC);
+  // other type of rtcp first attr is also ssrcsource
+  uint32_t getSourceSSRC() const {
+    return ntohl(report.receiverReport.ssrcsource);
   }
-  void setMediaSourceSSRC(uint32_t mediaSourceSSRC) {
-    report.receiverReport.mediaSourceSSRC = htonl(mediaSourceSSRC);
+  void setSourceSSRC(uint32_t sourceSsrc) {
+    report.receiverReport.ssrcsource = htonl(sourceSsrc);
   }
 
   uint8_t getFractionLost() const { return report.receiverReport.fractionlost; }
@@ -506,8 +524,10 @@ class RtcpHeader {
     report.fir.seqnumber = seq_number;
   }
 
-  uint8_t getBlockType() const { return report.xr_dlrr.blocktype; }
-  void setBlockType(uint8_t blockType) { report.xr_dlrr.blocktype = blockType; }
+  EnXRBlockType getBlockType() const { return report.xr_dlrr.blocktype; }
+  void setBlockType(EnXRBlockType blockType) {
+    report.xr_dlrr.blocktype = blockType;
+  }
 
   uint16_t getBlockLen() const { return ntohs(report.xr_dlrr.blocklen); }
   void setBlockLen(uint16_t blockLen) {
@@ -524,19 +544,14 @@ class RtcpHeader {
   void setDLRR(uint32_t dlrr) { report.xr_dlrr.dlrr = htonl(dlrr); }
 
   uint64_t getRrtrNtp() const {
-    // return (((uint64_t)htonl(report.xr_rrtr.ntp)) << 32) +
-    // htonl(report.xr_rrtr.ntp >> 32);
-    uint64_t ntp = 0;
     uint64_t seconds = ntohl(report.xr_rrtr.seconds);
     uint32_t fractions = ntohl(report.xr_rrtr.fractions);
-
-    ntp = (seconds << 32) | fractions;
+    uint64_t ntp = (seconds << 32) | fractions;
 
     return ntp;
   }
+
   void setRrtrNtp(uint64_t ntp_timestamp) {
-    // report.xr_rrtr.ntp = (((uint64_t)ntohl(ntp_timestamp)) << 32) +
-    // ntohl(ntp_timestamp >> 32);
     report.xr_rrtr.seconds = htonl(ntp_timestamp >> 32);
     report.xr_rrtr.fractions = htonl(ntp_timestamp & 0xFFFFFFFF);
   }

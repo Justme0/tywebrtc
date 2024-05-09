@@ -7,6 +7,8 @@
 #include "src/global_tmp/global_tmp.h"
 #include "src/log/log.h"
 
+namespace tywebrtc {
+
 SrtHandler::~SrtHandler() {
   if (nullptr == formatContext_) {
     return;
@@ -234,3 +236,4 @@ int SrtHandler::SendFrame_(const std::vector<char>& frame, uint64_t frameMs,
 
   return 0;
 }
+}  // namespace tywebrtc

@@ -6,6 +6,8 @@
 #include "src/rtp/rtcp/rtcp_packet/rtp_fb/rtcp_nack.h"
 #include "src/rtp/rtp_handler.h"
 
+namespace tywebrtc {
+
 RtpReceiver::RtpReceiver(SSRCInfo& ssrcInfo) : belongingSSRCInfo_(ssrcInfo) {}
 
 // TODO: do NACK
@@ -107,9 +109,8 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
            kMediaSrcSSRC == firstRtpHeader.getSSRC());  // already recv
 
     int ret = this->belongingSSRCInfo_.belongingRtpHandler
-                  .belongingPeerConnection_.rtcpHandler_.nack.CreateNackSend(
+                  .belongingPeerConnection_.rtcpHandler_.nack_.CreateNackSend(
                       nackSeqs, kSelfRtcpSSRC, kMediaSrcSSRC);
-
     if (ret) {
       tylog("createNackReportSend ret=%d", ret);
 
@@ -144,7 +145,7 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
       belongingSSRCInfo_.belongingRtpHandler.upVideoSSRC;
   assert(0 != kMediaSrcSSRC);
   int ret = belongingSSRCInfo_.belongingRtpHandler.belongingPeerConnection_
-                .rtcpHandler_.pli.CreatePLISend(kSelfRtcpSSRC, kMediaSrcSSRC);
+                .rtcpHandler_.pli_.CreatePLISend(kSelfRtcpSSRC, kMediaSrcSSRC);
   if (ret) {
     tylog("createPLIReportSend ret=%d", ret);
     // not return
@@ -155,3 +156,5 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
 
   return {};
 }
+
+}  // namespace tywebrtc

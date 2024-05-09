@@ -10,6 +10,7 @@
 #define SRC_RTP_RTCP_RTCP_PACKET_RTCP_SENDER_REPORT_H_
 
 #include <cstdint>
+#include <unordered_map>
 
 namespace tywebrtc {
 
@@ -19,7 +20,6 @@ class RtcpHeader;
 struct SrPkgInfo {
   uint64_t svrTimeMS{};
   uint32_t SRCount{};
-
   uint32_t SSRC{};
   uint32_t blockCount{};
   uint32_t srLen{};
@@ -39,6 +39,7 @@ class RtcpSenderReport {
 
  private:
   RtcpHandler &belongingRtcpHandler_;
+  std::unordered_map<uint32_t, SrPkgInfo> ssrcSRInfo;
 };
 
 }  // namespace tywebrtc

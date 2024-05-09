@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <cstring>
 
+namespace tywebrtc {
+
 CommonAssist::CommonAssist(void)
     : mBuffer(NULL), mBufferLength(0), mCurrentPos(0) {}
 
@@ -100,3 +102,5 @@ int CommonAssist::putBit32At(const unsigned int val, const unsigned int pos) {
 
   return 0;
 }
+
+}  // namespace tywebrtc

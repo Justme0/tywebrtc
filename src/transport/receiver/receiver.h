@@ -6,6 +6,8 @@
 
 #include "src/rtp/rtp_parser.h"
 
+namespace tywebrtc {
+
 class SSRCInfo;
 
 const PowerSeqT kShitRecvPowerSeqInitValue = -1;
@@ -28,5 +30,7 @@ class RtpReceiver {
 
   PowerSeqT lastPoppedPowerSeq_ = kShitRecvPowerSeqInitValue;
 };
+
+}  // namespace tywebrtc
 
 #endif  //   TRANSPORT_RECEIVER_RECEIVER_H_

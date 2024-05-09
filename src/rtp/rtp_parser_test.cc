@@ -21,7 +21,7 @@ TEST(RtpParserTest, PowerSeq) {
   EXPECT_EQ(p.second, 0);
   EXPECT_EQ(PowerSeqToString(powerSeq), "{0, 0}");
 
-  powerSeq = ((-1) << 16) | 0xFFFF;
+  powerSeq = (static_cast<uint64_t>(-1) << 16) | 0xFFFF;
   p = SplitPowerSeq(powerSeq);
   EXPECT_EQ(p.first, -1);
   EXPECT_EQ(p.second, 0xFFFF);

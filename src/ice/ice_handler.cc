@@ -11,6 +11,8 @@
 #include "src/log/log.h"
 #include "src/pc/peer_connection.h"
 
+namespace tywebrtc {
+
 // taylor to remove, should show RETURN in naming!
 /*条件满足带返回值返回失败*/
 #define WEB_ERROR_CHECK(cond, errid, fmt, args...) \
@@ -577,3 +579,5 @@ int IceHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
 
   return 0;
 }
+
+}  // namespace tywebrtc

@@ -6,16 +6,23 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
-#include "src/rtp/rtcp/rtcp_packet/rtcp_extended_reports.h"
+#ifndef SRC_SIGNAL_SIGNAL_HANDLER_H_
+#define SRC_SIGNAL_SIGNAL_HANDLER_H_
 
 namespace tywebrtc {
 
-RtcpExtendedReports::RtcpExtendedReports(RtcpHandler &belongingRtcpHandler)
-    : belongingRtcpHandler_(belongingRtcpHandler) {}
+class PeerConnection;
 
-int RtcpExtendedReports::HandleExtendedReports(const RtcpHeader &chead) {
-  (void)chead;
-  return 0;
-}
+class SignalHandler {
+ public:
+  explicit SignalHandler(PeerConnection& pc);
+  int S2CReportRTT(int rttMs);
+
+  // tmp
+ public:
+  PeerConnection& belongingPeerConnection_;
+};
 
 }  // namespace tywebrtc
+
+#endif  // SRC_SIGNAL_SIGNAL_HANDLER_H_

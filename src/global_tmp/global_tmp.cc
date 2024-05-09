@@ -1,10 +1,13 @@
 #include "src/global_tmp/global_tmp.h"
 
+#include "colib/co_routine.h"
 #include "tylib/ip/ip.h"
 #include "tylib/time/timer.h"
 
 #include "src/log/log.h"
 #include "src/pc/peer_connection.h"
+
+namespace tywebrtc {
 
 prometheus::Family<prometheus::Gauge> *g_startServer;
 prometheus::Family<prometheus::Gauge> *g_recvPacketNum;
@@ -139,7 +142,6 @@ class SrsFFmpegLogHelper {
     RTMP_LogSetCallback(rtmpLog);
 
     // libco
-    void libco_log_set_callback(void (*callback)(const char *, va_list));
     libco_log_set_callback(libcoLog);
   }
 
@@ -204,3 +206,4 @@ class SrsFFmpegLogHelper {
 
 // Register FFmpeg log callback funciton.
 SrsFFmpegLogHelper _srs_ffmpeg_log_helper;
+}  // namespace tywebrtc

@@ -15,6 +15,8 @@
 #include "src/rtmp/MediaBuffer.h"
 #include "src/rtp/rtp_parser.h"
 
+namespace tywebrtc {
+
 #define MAX_CLIENT (256)  //单进程最大支持128路连接
 
 //一路UDP的监听socket，用于和接口机适配进程通信，一个TCP监听socket，用于TCP监听。
@@ -718,5 +720,7 @@ extern int CreateDirectory(const std::string& Path);
 
 extern in_addr_t GetAddrByName(const char* sIf);
 extern const char* VideoDumpHex(const char* data, int len);
+
+}  // namespace tywebrtc
 
 #endif  // RTMP_RTMP_PULL_H_

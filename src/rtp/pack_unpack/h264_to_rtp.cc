@@ -6,6 +6,8 @@
 #include "src/rtp/pack_unpack/pack_unpack_common.h"
 #include "src/rtp/rtp_parser.h"
 
+namespace tywebrtc {
+
 // @see: https://tools.ietf.org/html/rfc6184#section-5.8
 
 // to refactor, use string/string_view, cancle the struct
@@ -302,3 +304,4 @@ int32_t H264Packetizer::Packetize(
 
   return 0;
 }
+}  // namespace tywebrtc

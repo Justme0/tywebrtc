@@ -1,6 +1,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+namespace tywebrtc {
+
 /**
     bit buffer handling
 */
@@ -183,3 +185,5 @@ void H264ParseSps(const char *sps, unsigned int, int &width, int &height) {
     height *= 2;
   }
 }
+
+}  // namespace tywebrtc

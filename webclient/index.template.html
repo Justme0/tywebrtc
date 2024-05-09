@@ -19,12 +19,12 @@
             font-family: "Lucida Grande", "Arial", sans-serif;
             font-size: 16px;
         }
-        
+
         .statBoxCSS {
             border: 1px solid black;
             padding: 5px;
             width: 450px;
-            height: 212px;
+            height: 385px;
         }
 
         .messagebox {
@@ -102,11 +102,30 @@
         // ref: https://github.com/webrtc/samples/blob/gh-pages/src/content/peerconnection/pc1/js/main.js
         window.localStorage.setItem('debug', '*');
 
+        const kStatBoxMsgNum = 20;
         var pc = null;
         var sendChannel = null;
         var sendButton = null;
         var messageInputBox = null;
         var g_vp8Payload = null;
+
+        async function addToStatBox(text) {
+            // Create a new message element
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${getTimeString()} ${text}`;
+
+            statBox = document.getElementById('statBoxID');
+            // Add the new message to the message box
+            statBox.appendChild(messageElement);
+
+            let messages = statBox.querySelectorAll('div');
+            while (messages.length > kStatBoxMsgNum) {
+                // Remove the first (oldest) message element
+                statBox.removeChild(messages[0]);
+                // Update the messages NodeList
+                messages = statBox.querySelectorAll('div');
+            }
+        }
 
         // @return obj
         async function getStat() {
@@ -124,7 +143,7 @@
             let activeCandidatePair;
             const stats = await pc.getStats();
             stats.forEach(report => {
-                console.log(`stat report=${report}`)
+                console.log(`stat report=${JSON.stringify(report)}`)
                 if (report.type === 'transport') {
                     activeCandidatePair = stats.get(report.selectedCandidatePairId);
                 }
@@ -133,30 +152,16 @@
             return activeCandidatePair
         }
 
-        async function printStat() {
+        async function printCandidate() {
             const candidatePair = await getStat()
-
-            // Create a new message element
-            const messageElement = document.createElement('div');
             if (null == candidatePair) {
-                messageElement.textContent = `${new Date().toLocaleTimeString()} no data`;
-            } else {
-                messageElement.textContent = `${new Date().toLocaleTimeString()} Your RTT is ${candidatePair.currentRoundTripTime * 1000} ms, STUN s/r ${candidatePair.requestsSent}/${candidatePair.responsesReceived}`;
+                return
             }
 
-            statBox = document.getElementById('statBoxID');
-            // Add the new message to the message box
-            statBox.appendChild(messageElement);
-
-            let messages = statBox.querySelectorAll('div');
-            while (messages.length > 10) {
-                // Remove the first (oldest) message element
-                statBox.removeChild(messages[0]);
-                // Update the messages NodeList
-                // messages = statBox.querySelectorAll('div');
-            }
+            text = `RTT=${candidatePair.currentRoundTripTime * 1000} ms via STUN, s/r ${candidatePair.requestsSent}/${candidatePair.responsesReceived}`
+            addToStatBox(text);
         }
-        const rttInterval = setInterval(printStat, 1000);
+        const rttInterval = setInterval(printCandidate, 2000);
 
         async function getRemoteStream(e) {
             let videoElement = document.getElementById('video_container_subscribe');
@@ -194,18 +199,50 @@
             messageInputBox.focus();
         }
 
-        function addToDialog(strMessage) {
-            const el = document.createElement("p");
-            t = (new Date().toLocaleTimeString()) + " " + strMessage
-            const txtNode = document.createTextNode(t);
+        function getTimeString() {
+            let now = new Date();
+            let hours = now.getHours().toString().padStart(2, '0');
+            let minutes = now.getMinutes().toString().padStart(2, '0');
+            let seconds = now.getSeconds().toString().padStart(2, '0');
 
+            let time = `${hours}:${minutes}:${seconds}`;
+            return time
+        }
+
+        function addToDialog(strMessage) {
+            text = `${getTimeString()} ${strMessage}`
+            const txtNode = document.createTextNode(text);
+
+            const el = document.createElement("p");
             el.appendChild(txtNode);
             receiveBox = document.getElementById('receivebox');
             receiveBox.appendChild(el);
         }
 
         function handleReceiveMessage(event) {
-            addToDialog('friend: ' + event.data)
+            try {
+                // https://stackoverflow.com/a/20392392
+                var o = JSON.parse(event.data);
+
+                // Handle non-exception-throwing cases:
+                // Neither JSON.parse(false) or JSON.parse(1234) throw errors, hence the type-checking,
+                // but... JSON.parse(null) returns null, and typeof null === "object", 
+                // so we must check for that, too. Thankfully, null is falsey, so this suffices:
+                if (!(o && typeof o === "object")) {
+                    addToDialog('friend: ' + event.data)
+                    return
+                }
+
+                if (o.s2cStateReq) {
+                    addToStatBox(`RTT=${o.s2cStateReq.uint32RttMs} ms via RTCP in server.`)
+                } else {
+                    addToDialog('recv unknown: ' + event.data)
+                }
+            }
+            catch (e) {
+                // OPT: alse use cmd
+                addToDialog('friend: ' + event.data)
+            }
         }
 
         // Handle status changes on the local end of the data

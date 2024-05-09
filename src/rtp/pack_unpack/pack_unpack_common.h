@@ -4,6 +4,8 @@
 
 #include "tylib/string/format_string.h"
 
+namespace tywebrtc {
+
 // @see: https://tools.ietf.org/html/rfc6184#section-5.2
 
 const int kH265StapA = 48;
@@ -138,5 +140,7 @@ inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
       return tylib::format_string("Unknown[%d]", v);
   }
 }
+
+}  // namespace tywebrtc
 
 #endif  //  RTP_PACK_UNPACK_PACK_UNPACK_COMMON_H_

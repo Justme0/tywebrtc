@@ -6,6 +6,8 @@
 #include "src/rtmp/FlvCommon.h"
 #include "src/rtp/pack_unpack/pack_unpack_common.h"
 
+namespace tywebrtc {
+
 class MediaBuffer {
  public:
   explicit MediaBuffer();
@@ -77,5 +79,7 @@ class H264Context {
 
   bool mDecodeSuccess;
 };
+
+}  // namespace tywebrtc
 
 #endif

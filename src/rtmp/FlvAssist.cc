@@ -10,6 +10,8 @@
 #include "src/rtmp/CommonAssist.h"
 #include "src/rtmp/rtmp_handler.h"
 
+namespace tywebrtc {
+
 FlvAssist::FlvAssist(RtmpHandler& belongingRtmpHandler)
     : belongingRtmpHandler_(belongingRtmpHandler) {
   mStartTimeAud = 0;
@@ -1050,3 +1052,4 @@ int FlvAssist::makeAvcConfTag(MediaBuffer& mediaBuffer, int& tagSize) {
 
   return ret;
 }
+}  // namespace tywebrtc

@@ -6,6 +6,8 @@
 #include "src/log/log.h"
 #include "src/rtp/rtp_handler.h"
 
+namespace tywebrtc {
+
 static int ParseVP8Descriptor(RTP_HEADER_INFO_VP8* vp8, const void* void_data,
                               int data_length) {
   const uint8_t* data = static_cast<const uint8_t*>(void_data);
@@ -401,3 +403,5 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
 
   return 0;
 }
+
+}  // namespace tywebrtc

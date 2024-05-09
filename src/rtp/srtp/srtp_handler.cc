@@ -7,11 +7,12 @@
 #include <cstring>
 #include <mutex>
 
-#include "srtp2/srtp.h"
 #include "tylib/codec/codec.h"
 
 #include "src/log/log.h"
 #include "src/pc/peer_connection.h"
+
+namespace tywebrtc {
 
 bool SrtpHandler::isInitSrtp_ = false;
 
@@ -133,23 +134,25 @@ int SrtpHandler::ProtectRtp(std::vector<char> *io_vBufForSrtp) {
     return -1;
   }
 
-  int len = io_vBufForSrtp->size();
-  const int kOriginLen = len;
+  size_t len = io_vBufForSrtp->size();
+  const size_t kOriginLen = len;
 
   assert(nullptr != send_session_);
 
   // protect may increase SRTP_MAX_TRAILER_LEN
   // https://source.chromium.org/chromium/chromium/src/+/main:third_party/libsrtp/srtp/srtp.c;l=2352
   io_vBufForSrtp->resize(io_vBufForSrtp->size() + SRTP_MAX_TRAILER_LEN);
-  int ret = srtp_protect(send_session_, io_vBufForSrtp->data(), &len);
+  int ret = srtp_protect(send_session_,
+                         reinterpret_cast<uint8_t *>(io_vBufForSrtp->data()),
+                         &len, 0);
   if (ret) {
     tylog("srtp_protect ret=%d", ret);
     return ret;
   }
 
-  tylog("origin len=%d, after protect len=%d, before srtp we prepare to %zu",
+  tylog("origin len=%zu, after protect len=%zu, before srtp we prepare to %zu",
         kOriginLen, len, io_vBufForSrtp->size());
-  assert(kOriginLen <= len && len <= static_cast<int>(io_vBufForSrtp->size()));
+  assert(kOriginLen <= len && len <= io_vBufForSrtp->size());
   io_vBufForSrtp->resize(len);
 
   return 0;
@@ -167,23 +170,24 @@ int SrtpHandler::UnprotectRtp(std::vector<char> *io_vBufForSrtp) {
 
   assert(nullptr != receive_session_);
 
-  int len = io_vBufForSrtp->size();
+  size_t len = io_vBufForSrtp->size();
   srtp_err_status_t ret =
-      srtp_unprotect(receive_session_, io_vBufForSrtp->data(), &len);
+      srtp_unprotect(receive_session_,
+                     reinterpret_cast<uint8_t *>(io_vBufForSrtp->data()), &len);
   if (ret) {
     // if return srtp_err_status_replay_old=10
     // https://mp.weixin.qq.com/s/u7eStMiCGxNyEWsYkG8UYg
     //
     // if return srtp_err_status_replay_fail=9,
     // maybe unordered, nack retransmit, not error
-    tylog("warning: srtp_unprotect ret=%d", ret);
+    tylog("warning: srtp unprotect ret=%d", ret);
 
     return ret;
   }
 
   // https://source.chromium.org/chromium/chromium/src/+/main:third_party/libsrtp/srtp/srtp.c;l=2718
-  tylog("after unprotect, len=%d, origin=%zu", len, io_vBufForSrtp->size());
-  assert(len <= static_cast<int>(io_vBufForSrtp->size()));
+  tylog("after unprotect, len=%zu, origin=%zu", len, io_vBufForSrtp->size());
+  assert(len <= io_vBufForSrtp->size());
 
   io_vBufForSrtp->resize(len);
 
@@ -191,6 +195,7 @@ int SrtpHandler::UnprotectRtp(std::vector<char> *io_vBufForSrtp) {
 }
 
 // Encrypt portion after header, so sender SSRC isn't encrypted.
+// WebRTC 传输安全机制第二话：深入显出 SRTP 协议
 // https://mp.weixin.qq.com/s/u7eStMiCGxNyEWsYkG8UYg
 int SrtpHandler::ProtectRtcp(std::vector<char> *io_vBufForSrtp) {
   if (this->belongingPeerConnection_.bNotUseSrtp) {
@@ -202,8 +207,8 @@ int SrtpHandler::ProtectRtcp(std::vector<char> *io_vBufForSrtp) {
     return -1;
   }
 
-  int len = io_vBufForSrtp->size();
-  const int kOriginLen = len;
+  size_t len = io_vBufForSrtp->size();
+  const size_t kOriginLen = len;
 
   assert(nullptr != send_session_);
 
@@ -213,15 +218,17 @@ int SrtpHandler::ProtectRtcp(std::vector<char> *io_vBufForSrtp) {
   // https://source.chromium.org/chromium/chromium/src/+/main:third_party/libsrtp/include/srtp_priv.h;l=237
   // https://source.chromium.org/chromium/chromium/src/+/main:third_party/libsrtp/srtp/srtp.c;l=4078
   io_vBufForSrtp->resize(io_vBufForSrtp->size() + SRTP_MAX_TRAILER_LEN + 4);
-  int ret = srtp_protect_rtcp(send_session_, io_vBufForSrtp->data(), &len);
+  int ret = srtp_protect_rtcp(
+      send_session_, reinterpret_cast<uint8_t *>(io_vBufForSrtp->data()), &len,
+      0);
   if (ret) {
     tylog("srtp_protect_rtcp ret=%d", ret);
     return ret;
   }
 
-  tylog("origin len=%d, after protect len=%d, before srtp we prepare to %zu",
+  tylog("origin len=%zu, after protect len=%zu, before srtp we prepare to %zu",
         kOriginLen, len, io_vBufForSrtp->size());
-  assert(kOriginLen <= len && len <= static_cast<int>(io_vBufForSrtp->size()));
+  assert(kOriginLen <= len && len <= io_vBufForSrtp->size());
   io_vBufForSrtp->resize(len);
 
   return 0;
@@ -240,20 +247,23 @@ int SrtpHandler::UnprotectRtcp(std::vector<char> *io_vBufForSrtp) {
 
   assert(nullptr != receive_session_);
 
-  int len = io_vBufForSrtp->size();
-  srtp_err_status_t ret =
-      srtp_unprotect_rtcp(receive_session_, io_vBufForSrtp->data(), &len);
+  size_t len = io_vBufForSrtp->size();
+  srtp_err_status_t ret = srtp_unprotect_rtcp(
+      receive_session_, reinterpret_cast<uint8_t *>(io_vBufForSrtp->data()),
+      &len);
   if (ret) {
-    tylog("error srtp_unprotect ret=%d", ret);
+    tylog("error srtp unprotect ret=%d", ret);
 
     return ret;
   }
 
   // https://source.chromium.org/chromium/chromium/src/+/main:third_party/libsrtp/srtp/srtp.c;l=4346
-  tylog("after unprotect, len=%d, origin=%zu", len, io_vBufForSrtp->size());
-  assert(len <= static_cast<int>(io_vBufForSrtp->size()));
+  tylog("after unprotect, len=%zu, origin=%zu", len, io_vBufForSrtp->size());
+  assert(len <= io_vBufForSrtp->size());
 
   io_vBufForSrtp->resize(len);
 
   return 0;
 }
+
+}  // namespace tywebrtc

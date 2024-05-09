@@ -8,6 +8,8 @@ extern "C" {
 #include "src/codec/video_codec.h"
 #include "src/rtp/rtp_parser.h"
 
+namespace tywebrtc {
+
 class RtpHandler;
 
 // tmp
@@ -54,5 +56,7 @@ class RtpDepacketizerVp8 {
   void* m_pfOutfpH264;
   RtpHandler& belongingRtpHandler_;
 };
+
+}  // namespace tywebrtc
 
 #endif  // RTP_PACK_UNPACK_RTP_TO_VP8_H_

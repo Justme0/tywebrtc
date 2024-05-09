@@ -44,8 +44,8 @@ bool MonitorStateTimer::_OnTimer() {
 bool PLITimer::_OnTimer() {
   const uint32_t kSelfRtcpSSRC = 1;
   const uint32_t kMediaSrcSSRC = this->belongingPC_.rtpHandler_.upVideoSSRC;
-  int ret = this->belongingPC_.rtcpHandler_.pli.CreatePLISend(kSelfRtcpSSRC,
-                                                              kMediaSrcSSRC);
+  int ret = this->belongingPC_.rtcpHandler_.pli_.CreatePLISend(kSelfRtcpSSRC,
+                                                               kMediaSrcSSRC);
   if (ret) {
     tylog("createPLIReportSend ret=%d", ret);
   }
@@ -71,7 +71,11 @@ bool SenderReportTimer::_OnTimer() {
 }
 
 bool ReceiverReportTimer::_OnTimer() {
-  // int ret = belong
+  int ret = belongingPC_.rtcpHandler_.receiverReport_.CreateReceiverReport();
+  if (ret) {
+    tylog("timer rr ret=%d.", ret);
+  }
+
   return true;
 }
 

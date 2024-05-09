@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+namespace tywebrtc {
+
 class RtpDepacketizerOpus {
  public:
   RtpDepacketizerOpus();
@@ -24,5 +26,7 @@ class RtpDepacketizerOpus {
   uint8_t audio_level_index_;
   uint32_t audio_level_;
 };
+
+}  // namespace tywebrtc
 
 #endif  // RTP_PACK_UNPACK_RTP_TO_OPUS_H_

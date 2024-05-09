@@ -5,6 +5,7 @@
 // #include "webrtc_helper.h"
 // #include "media_relay.h"
 // #include "common/dump_webrtc.h"
+namespace tywebrtc {
 
 RtpDepacketizerOpus::RtpDepacketizerOpus() {}
 
@@ -95,4 +96,5 @@ int RtpDepacketizerOpus::ParseAudioLevel(uint8_t* data, uint32_t length,
   }
   audio_level = audio_level_;
   return 0;
+}
 }
