@@ -28,7 +28,7 @@ WebRTC server play
 ```
 $ git clone --recursive https://github.com/Justme0/tywebrtc.git
 $ cd tywebrtc
-$ ./build.sh # only compile, exe file is tywebrtc
+$ ./build.sh # only compile, exe file is tywebrtc; NOTE: my bazel version is 7.1.1
 $ ./tywebrtc # run
 ```
 
