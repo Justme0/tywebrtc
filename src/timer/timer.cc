@@ -42,12 +42,10 @@ bool MonitorStateTimer::_OnTimer() {
 }
 
 bool PLITimer::_OnTimer() {
-  const uint32_t kSelfRtcpSSRC = 1;
-  const uint32_t kMediaSrcSSRC = this->belongingPC_.rtpHandler_.upVideoSSRC;
-  int ret = this->belongingPC_.rtcpHandler_.pli_.CreatePLISend(kSelfRtcpSSRC,
-                                                               kMediaSrcSSRC);
+  int ret = this->belongingPC_.rtcpHandler_.psfb_.pli_.CreatePLISend();
   if (ret) {
-    tylog("createPLIReportSend ret=%d", ret);
+    tylog("create pli ret=%d", ret);
+    return true;
   }
 
   return true;
@@ -57,23 +55,79 @@ bool DTLSTimer::_OnTimer() {
   int ret = belongingPC_.dtlsHandler_.OnTime();
   if (ret) {
     tylog("dtls timer ret=%d", ret);
+    return true;
   }
 
   return true;
 }
 
 bool SenderReportTimer::_OnTimer() {
-  int ret = belongingPC_.rtcpHandler_.senderReport_.CreateSenderReport();
+  std::vector<char> rtcpBin;
+  int ret =
+      belongingPC_.rtcpHandler_.senderReport_.CreateSenderReport(&rtcpBin);
   if (ret) {
-    tylog("timer SR ret=%d.", ret);
+    tylog("create sr ret=%d.", ret);
+
+    return true;
   }
+
+  ret =
+      belongingPC_.rtcpHandler_.extendedReport_.dlrr_.CreateRtcpDLRR(&rtcpBin);
+  if (ret) {
+    tylog("create dlrr ret=%d.", ret);
+
+    return true;
+  }
+
+  DumpSendPacket(rtcpBin);
+  ret = this->belongingPC_.srtpHandler_.ProtectRtcp(
+      const_cast<std::vector<char>*>(&rtcpBin));
+  if (ret) {
+    tylog("send to client, protect rtcp ret=%d", ret);
+
+    return true;
+  }
+  ret = this->belongingPC_.SendToClient(rtcpBin);
+  if (ret) {
+    tylog("send to client ret=%d", ret);
+
+    return true;
+  }
+
   return true;
 }
 
 bool ReceiverReportTimer::_OnTimer() {
-  int ret = belongingPC_.rtcpHandler_.receiverReport_.CreateReceiverReport();
+  std::vector<char> rtcpBin;
+  int ret =
+      belongingPC_.rtcpHandler_.receiverReport_.CreateReceiverReport(&rtcpBin);
   if (ret) {
-    tylog("timer rr ret=%d.", ret);
+    tylog("create rr ret=%d.", ret);
+
+    return true;
+  }
+
+  ret =
+      belongingPC_.rtcpHandler_.extendedReport_.rrtr_.CreateRtcpRRTR(&rtcpBin);
+  if (ret) {
+    tylog("create rrtr ret=%d.", ret);
+
+    return true;
+  }
+
+  DumpSendPacket(rtcpBin);
+  ret = this->belongingPC_.srtpHandler_.ProtectRtcp(
+      const_cast<std::vector<char>*>(&rtcpBin));
+  if (ret) {
+    tylog("send to client, protect rtcp ret=%d", ret);
+
+    return true;
+  }
+  ret = this->belongingPC_.SendToClient(rtcpBin);
+  if (ret) {
+    tylog("send to client ret=%d", ret);
+
+    return true;
   }
 
   return true;

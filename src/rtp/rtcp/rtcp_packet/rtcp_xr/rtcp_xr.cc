@@ -22,23 +22,28 @@ RtcpExtendedReports::RtcpExtendedReports(RtcpHandler& belongingRtcpHandler)
 
 int RtcpExtendedReports::HandleExtendedReports(const RtcpHeader& chead) {
   const uint8_t* blockMovPointer = reinterpret_cast<const uint8_t*>(&chead);
-  uint32_t rtcpLen = (chead.getLength() + 1) * 4;
   // rtcp head is 4 bytes, sender ssrc is 4 bytes
-  uint32_t blockBufSize = rtcpLen - 8;
+  int blockBufSize = chead.getRealLength() - 8;
   while (true) {
     const RtcpHeader& blockHead =
         *reinterpret_cast<const RtcpHeader*>(blockMovPointer);
 
-    uint32_t blockLen = blockHead.getBlockLen();
-    tylog("[ExtendedReport] blockLen[%u]", blockLen);
+    const uint32_t blockLen = blockHead.getBlockLen();
+    tylog("[ExtendedReport] BlockLen[%u]", blockLen);
 
-    // block head is 4 bytes
-    if (blockLen == 0 || (blockLen * 4 + 4) > blockBufSize) {
-      tylog("[ExtendedReport]blockLen[%u]*4 + 4 > blockBufSize[%u]", blockLen,
+    // block head is 4 bytes.
+    // https://datatracker.ietf.org/doc/html/rfc3611#section-3
+    // If the block type definition permits,
+    // zero is an acceptable value, signifying a block that consists
+    // of only the BT, type-specific, and block length fields, with a
+    // null type-specific block contents field.
+    if (blockLen == 0 || blockHead.getBlockRealLen() > blockBufSize) {
+      tylog("[ExtendedReport]BlockLen[%u]*4 + 4 > blockBufSize[%u]", blockLen,
             blockBufSize);
       break;
     }
-    blockBufSize = blockBufSize - blockLen * 4 - 4;
+    blockBufSize -= blockHead.getBlockRealLen();
+    assert(blockBufSize >= 0);
 
     switch (blockHead.getBlockType()) {
       // ref
@@ -62,10 +67,41 @@ int RtcpExtendedReports::HandleExtendedReports(const RtcpHeader& chead) {
 
     if (blockBufSize <= 0) break;
 
-    blockMovPointer += (blockLen + 1) * 4;
+    blockMovPointer += blockHead.getBlockRealLen();
   }
 
   return 0;
 }
+
+/*
+int RtcpExtendedReports::CreateExtendedReports(EnXRBlockType blockType,
+                                               std::vector<char>* io_rtcpBin) {
+  int ret = 0;
+
+  switch (blockType) {
+    case EnXRBlockType::kXRBlockDLRR: {
+      ret = dlrr_.CreateRtcpDLRR(io_rtcpBin);
+      if (ret) {
+        return ret;
+      }
+      break;
+    }
+
+    case EnXRBlockType::kXRBlockRRTR: {
+      ret = rrtr_.CreateRtcpRRTR(io_rtcpBin);
+      if (ret) {
+        return ret;
+      }
+      break;
+    }
+
+    default:
+      assert(!"not support");
+      break;
+  }
+
+  return 0;
+}
+*/
 
 }  // namespace tywebrtc

@@ -15,8 +15,8 @@
 
 namespace tywebrtc {
 
-RtcpNack::RtcpNack(RtcpHandler &belongingRtcpHandler)
-    : belongingRtcpHandler_(belongingRtcpHandler) {}
+RtcpNack::RtcpNack(RtcpRtpFeedback &belongingRtpfb)
+    : belongingRtpfb_(belongingRtpfb) {}
 
 // downlink send lost package
 int RtcpNack::SendReqNackPkt_(const std::vector<uint16_t> &seqVect,
@@ -24,13 +24,13 @@ int RtcpNack::SendReqNackPkt_(const std::vector<uint16_t> &seqVect,
                               std::vector<uint16_t> &failedSeqs) {
   int ret = 0;
 
-  auto it = belongingRtcpHandler_.belongingPeerConnection_.rtpHandler_
-                .ssrcInfoMap_.find(sourceSSRC);
+  auto it = belongingRtpfb_.belongingRtcpHandler_.belongingPeerConnection_
+                .rtpHandler_.ssrcInfoMap_.find(sourceSSRC);
 
   // we send to client firstly, SSRC already in queue
   assert(it !=
-         belongingRtcpHandler_.belongingPeerConnection_.rtpHandler_.ssrcInfoMap_
-             .end());
+         belongingRtpfb_.belongingRtcpHandler_.belongingPeerConnection_
+             .rtpHandler_.ssrcInfoMap_.end());
 
   const SSRCInfo &ssrcInfo = it->second;
 
@@ -85,8 +85,8 @@ int RtcpNack::SendReqNackPkt_(const std::vector<uint16_t> &seqVect,
     // OPT: rawPacket is encrypted data, but exclude head
     DumpSendPacket(*rawPacket);
 
-    ret =
-        belongingRtcpHandler_.belongingPeerConnection_.SendToClient(*rawPacket);
+    ret = belongingRtpfb_.belongingRtcpHandler_.belongingPeerConnection_
+              .SendToClient(*rawPacket);
     if (ret) {
       tylog("send to peer ret=%d, seq=%u, continue handle other nack seq", ret,
             itemSeq);
@@ -155,7 +155,7 @@ int RtcpNack::SerializeNackSend_(const std::vector<NackBlock> &nackBlokVect,
   int ret = 0;
 
   RtcpHeader nack;
-  nack.setPacketType(RtcpPacketType::kGenericRtpFeedback);
+  nack.setPacketType(RtcpPacketType::kRtpFeedback);
   nack.setBlockCount(1);
   nack.setSSRC(sinkSSRC);
   nack.setSourceSSRC(soucreSSRC);
@@ -175,15 +175,16 @@ int RtcpNack::SerializeNackSend_(const std::vector<NackBlock> &nackBlokVect,
 
   DumpSendPacket(rtcpBin);
 
-  ret = this->belongingRtcpHandler_.belongingPeerConnection_.srtpHandler_
-            .ProtectRtcp(const_cast<std::vector<char> *>(&rtcpBin));
+  ret =
+      this->belongingRtpfb_.belongingRtcpHandler_.belongingPeerConnection_
+          .srtpHandler_.ProtectRtcp(const_cast<std::vector<char> *>(&rtcpBin));
   if (ret) {
     tylog("uplink send to src client, protect rtcp ret=%d", ret);
     return ret;
   }
 
-  ret = this->belongingRtcpHandler_.belongingPeerConnection_.SendToClient(
-      rtcpBin);
+  ret = this->belongingRtpfb_.belongingRtcpHandler_.belongingPeerConnection_
+            .SendToClient(rtcpBin);
   if (ret) {
     tylog("send to client nack rtcp ret=%d", ret);
 

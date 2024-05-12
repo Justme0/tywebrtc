@@ -6,11 +6,12 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
-#ifndef SRC_RTP_RTCP_RTCP_RECEIVER_REPORT_H_
-#define SRC_RTP_RTCP_RTCP_RECEIVER_REPORT_H_
+#ifndef SRC_RTP_RTCP_RTCP_PACKET_RTCP_RECEIVER_REPORT_H_
+#define SRC_RTP_RTCP_RTCP_PACKET_RTCP_RECEIVER_REPORT_H_
 
 #include <cstdint>
 #include <unordered_map>
+#include <vector>
 
 namespace tywebrtc {
 
@@ -36,7 +37,7 @@ class RtcpReceiverReport {
 
   int HandleReceiverReport(const RtcpHeader &chead);
 
-  int CreateReceiverReport();
+  int CreateReceiverReport(std::vector<char> *io_rtcpBin);
 
  private:
   RtcpHandler &belongingRtcpHandler_;
@@ -45,4 +46,4 @@ class RtcpReceiverReport {
 
 }  // namespace tywebrtc
 
-#endif  // SRC_RTP_RTCP_RTCP_RECEIVER_REPORT_H_
+#endif  // SRC_RTP_RTCP_RTCP_PACKET_RTCP_RECEIVER_REPORT_H_

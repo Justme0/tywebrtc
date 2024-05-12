@@ -6,8 +6,8 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
-#ifndef SRC_RTP_RTCP_RTCP_NACK_H_
-#define SRC_RTP_RTCP_RTCP_NACK_H_
+#ifndef SRC_RTP_RTCP_RTCP_PACKET_RTP_FB_RTCP_NACK_H_
+#define SRC_RTP_RTCP_RTCP_PACKET_RTP_FB_RTCP_NACK_H_
 
 #include <cstdint>
 #include <set>
@@ -18,11 +18,12 @@
 namespace tywebrtc {
 
 class RtcpHandler;
-class RtcpHeader;
+class RtcpRtpFeedback;
 
 class RtcpNack {
  public:
-  explicit RtcpNack(RtcpHandler &belongingRtcpHandler);
+  explicit RtcpNack(RtcpRtpFeedback &belongingRtpfb);
+
   int HandleNack(const RtcpHeader &chead);
 
   int CreateNackSend(const std::set<int> &lostSeqs, uint32_t localSSRC,
@@ -36,9 +37,9 @@ class RtcpNack {
                          uint32_t sinkSSRC, uint32_t soucreSSRC);
 
  private:
-  RtcpHandler &belongingRtcpHandler_;
+  RtcpRtpFeedback &belongingRtpfb_;
 };
 
 }  // namespace tywebrtc
 
-#endif  // SRC_RTP_RTCP_RTCP_NACK_H_
+#endif  // SRC_RTP_RTCP_RTCP_PACKET_RTP_FB_RTCP_NACK_H_

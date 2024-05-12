@@ -9,6 +9,8 @@
 #ifndef SRC_RTP_RTCP_RTCP_PACKET_RTCP_XR_BLOCK_DLRR_H_
 #define SRC_RTP_RTCP_RTCP_PACKET_RTCP_XR_BLOCK_DLRR_H_
 
+#include <vector>
+
 #include "src/rtp/rtcp/rtcp_parser.h"
 
 namespace tywebrtc {
@@ -20,8 +22,9 @@ class RtcpDLRR {
   RtcpDLRR(RtcpExtendedReports& belongingXrHandler);
 
   int HandleRtcpDLRR(const RtcpHeader& blockHead);
+  int CreateRtcpDLRR(std::vector<char>* io_rtcpBin);
 
-  RtcpExtendedReports& belongingXrHandler_;
+  RtcpExtendedReports& belongingXr_;
 };
 
 }  // namespace tywebrtc

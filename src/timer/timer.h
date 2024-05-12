@@ -41,7 +41,7 @@ class DTLSTimer : public Timer {
 class PLITimer : public Timer {
  public:
   PLITimer(PeerConnection& belongingPC)
-      : Timer(4000, -1), belongingPC_(belongingPC) {}
+      : Timer(5000, -1), belongingPC_(belongingPC) {}
 
  private:
   bool _OnTimer() override;

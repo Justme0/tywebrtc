@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <unordered_map>
+#include <vector>
 
 namespace tywebrtc {
 
@@ -35,7 +36,7 @@ class RtcpSenderReport {
 
   int HandleSenderReport(const RtcpHeader &chead);
 
-  int CreateSenderReport();
+  int CreateSenderReport(std::vector<char> *io_rtcpBin);
 
  private:
   RtcpHandler &belongingRtcpHandler_;

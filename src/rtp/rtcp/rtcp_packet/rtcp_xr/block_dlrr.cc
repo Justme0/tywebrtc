@@ -13,8 +13,8 @@
 
 namespace tywebrtc {
 
-RtcpDLRR::RtcpDLRR(RtcpExtendedReports& belongingXrHandler)
-    : belongingXrHandler_(belongingXrHandler) {}
+RtcpDLRR::RtcpDLRR(RtcpExtendedReports& belongingXr)
+    : belongingXr_(belongingXr) {}
 
 int RtcpDLRR::HandleRtcpDLRR(const RtcpHeader& blockHead) {
   uint32_t blockLen = blockHead.getBlockLen();
@@ -46,12 +46,41 @@ int RtcpDLRR::HandleRtcpDLRR(const RtcpHeader& blockHead) {
           "taylor [ExtendedReport] rrSsrc[%u] lastRr[%u] dlrr[%u] "
           "rttNtp[%u] rttMs[%u]",
           rrSsrc, lastRr, dlrr, rttNtp, rttMs);
-      this->belongingXrHandler_.belongingRtcpHandler_.belongingPeerConnection_
+      this->belongingXr_.belongingRtcpHandler_.belongingPeerConnection_
           .signalHandler_.S2CReportRTT(rttMs);
     }
 
     break;
   }
+
+  return 0;
+}
+
+int RtcpDLRR::CreateRtcpDLRR(std::vector<char>* io_rtcpBin) {
+  uint64_t relayNtp =
+      MsToNtp(g_now_ms).GetValue() - MsToNtp(g_now_ms - 500).GetValue();
+  uint32_t dlrrNtp = CompactNtp(NtpTime(relayNtp));
+
+  // mock
+  const int rrtr_ssrc = 1;   // ?
+  uint32_t lastRrtrNtp = 3;  // test
+
+  RtcpHeader dlrr;
+  dlrr.setPacketType(RtcpPacketType::kExtendedReports);
+  dlrr.setSSRC(kDownlinkVideoSsrc);
+  dlrr.setLength(5);
+  dlrr.setBlockCount(1);
+
+  dlrr.setBlockType(EnXRBlockType::kXRBlockDLRR);
+  dlrr.setBlockLen(3);
+  dlrr.setRrSsrc(rrtr_ssrc);
+  dlrr.setLastRr(lastRrtrNtp);
+  dlrr.setDLRR(dlrrNtp);
+
+  char* buf = reinterpret_cast<char*>(&dlrr);
+  int len = (dlrr.getLength() + 1) * 4;
+
+  io_rtcpBin->insert(io_rtcpBin->end(), buf, buf + len);
 
   return 0;
 }

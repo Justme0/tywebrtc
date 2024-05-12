@@ -33,7 +33,7 @@ enum class EnXRBlockType {
 };
 
 // payload type is 205
-enum class RtcpGenericFeedbackFormat {
+enum class RtcpRtpFeedbackFormat {
   kFeedbackNack = 1,
   kFeedbackTCC = 15,
 };
@@ -72,14 +72,19 @@ inline std::string RtcpPayloadSpecificFormatToString(
 // per https://tools.ietf.org/html/rfc5761
 enum class RtcpPacketType : uint8_t {
   RTCP_MIN_PT = 192,  // for FIR
+
+  // basic:
   kSenderReport = 200,
   kReceiverReport = 201,
   kSourceDescription = 202,
   kBye = 203,
   kApplicationDefined = 204,
-  kGenericRtpFeedback = 205,  // NACK RFC3550
+
+  // extend:
+  kRtpFeedback = 205,
   kPayloadSpecificFeedback = 206,
   kExtendedReports = 207,
+
   RTCP_MAX_PT = 223,  // include
 };
 
@@ -96,8 +101,8 @@ inline std::string RtcpPacketTypeToString(RtcpPacketType type) {
       return "Bye";
     case RtcpPacketType::kApplicationDefined:
       return "ApplicationDefined";
-    case RtcpPacketType::kGenericRtpFeedback:
-      return "GenericRtpFeedback";
+    case RtcpPacketType::kRtpFeedback:
+      return "RtpFeedback";
     case RtcpPacketType::kPayloadSpecificFeedback:
       return "PayloadSpecificFeedback";
     case RtcpPacketType::kExtendedReports:
@@ -275,10 +280,34 @@ class RtcpHeader {
  public:
   // maybe FMT for payload specific feedback
   uint32_t blockcount : 5;
+
+  // padding (P): 1 bit
+  //  If the padding bit is set, this individual RTCP packet contains
+  //  some additional padding octets at the end which are not part of
+  //  the control information but are included in the length field.  The
+  //  last octet of the padding is a count of how many padding octets
+  //  should be ignored, including itself (it will be a multiple of
+  //  four).  Padding may be needed by some encryption algorithms with
+  //  fixed block sizes.  In a compound RTCP packet, padding is only
+  //  required on one individual packet because the compound packet is
+  //  encrypted as a whole for the method in Section 9.1.  Thus, padding
+  //  MUST only be added to the last individual packet, and if padding
+  //  is added to that packet, the padding bit MUST be set only on that
+  //  packet.  This convention aids the header validity checks described
+  //  in Appendix A.2 and allows detection of packets from some early
+  //  implementations that incorrectly set the padding bit on the first
+  //  individual packet and add padding to the last individual packet.
   uint32_t padding : 1;
   uint32_t version : 2;
 
   RtcpPacketType packettype : 8;
+
+  // length: 16 bits
+  //  The length of this RTCP packet in 32-bit words minus one,
+  //  including the header and any padding.  (The offset of one makes
+  //  zero a valid length and avoids a possible infinite loop in
+  //  scanning a compound RTCP packet, while counting 32-bit words
+  //  avoids a validity check for a multiple of 4.)
   uint32_t length : 16;
 
   uint32_t ssrc;
@@ -340,6 +369,13 @@ class RtcpHeader {
     struct XR_DLRR_t {
       EnXRBlockType blocktype : 8;
       uint32_t reserved : 8;
+
+      // block length: 16 bits
+      // The length of this report block, including the header, in 32-
+      // bit words minus one.  If the block type definition permits,
+      // zero is an acceptable value, signifying a block that consists
+      // of only the BT, type-specific, and block length fields, with a
+      // null type-specific block contents field.
       uint32_t blocklen : 16;
       uint32_t rrssrc;
       uint32_t lastrr;
@@ -365,19 +401,20 @@ class RtcpHeader {
 
   bool isFeedback(void) const {
     return (packettype == RtcpPacketType::kReceiverReport ||
-            packettype == RtcpPacketType::kGenericRtpFeedback ||
+            packettype == RtcpPacketType::kRtpFeedback ||
             packettype == RtcpPacketType::kPayloadSpecificFeedback);
   }
 
   RtcpPacketType getPacketType() const { return packettype; }
   void setPacketType(RtcpPacketType pt) { packettype = pt; }
 
-  // maybe FMT for RtcpPayloadSpecificFormat or RtcpGenericFeedbackFormat
+  // maybe FMT for RtcpPayloadSpecificFormat or RtcpRtpFeedbackFormat
   uint8_t getBlockCount() const { return blockcount; }
   void setBlockCount(uint8_t count) { blockcount = count; }
 
   uint16_t getLength() const { return ntohs(length); }
   void setLength(uint16_t theLength) { length = htons(theLength); }
+  int getRealLength() const { return (getLength() + 1) * 4; }
 
   uint32_t getSSRC() const { return ntohl(ssrc); }
   void setSSRC(uint32_t aSsrc) { ssrc = htonl(aSsrc); }
@@ -533,6 +570,7 @@ class RtcpHeader {
   void setBlockLen(uint16_t blockLen) {
     report.xr_dlrr.blocklen = htons(blockLen);
   }
+  int getBlockRealLen() const { return (getBlockLen() + 1) * 4; }
 
   uint32_t getRrSsrc() const { return ntohl(report.xr_dlrr.rrssrc); }
   void setRrSsrc(uint32_t rrssrc) { report.xr_dlrr.rrssrc = htonl(rrssrc); }
@@ -558,10 +596,11 @@ class RtcpHeader {
 
   std::string ToString() const {
     return tylib::format_string(
-        "{blockCnt=%d, pad=%d, packetType=%d[%s], len=%d, senderSSRC=%u(0x%X)}",
+        "{blockCnt=%d, pad=%d, packetType=%d[%s], len=%d(realLen=%d), "
+        "senderSSRC=%u(0x%X)}",
         getBlockCount(), padding, static_cast<int>(getPacketType()),
-        RtcpPacketTypeToString(getPacketType()).data(), getLength(), getSSRC(),
-        getSSRC());
+        RtcpPacketTypeToString(getPacketType()).data(), getLength(),
+        getRealLength(), getSSRC(), getSSRC());
   }
 };
 

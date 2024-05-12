@@ -91,36 +91,7 @@ int RtcpReceiverReport::HandleReceiverReport(const RtcpHeader& chead) {
   return 0;
 }
 
-static int createRR(char* outBuf, int outBufLen, const RrPkgInfo& rrPkgInfo) {
-  RtcpHeader receiverReport;
-  receiverReport.setPacketType(RtcpPacketType::kReceiverReport);
-  receiverReport.setSSRC(rrPkgInfo.sinkSSRC);
-  receiverReport.setSourceSSRC(rrPkgInfo.sourceSSRC);
-  receiverReport.setHighestSeqnum(rrPkgInfo.extendedSeq);
-  receiverReport.setSeqnumCycles(rrPkgInfo.extendedSeq >> 16);
-  receiverReport.setLostPackets(rrPkgInfo.lostPkgNum);
-  receiverReport.setFractionLost(rrPkgInfo.fractionLost);
-  receiverReport.setJitter(rrPkgInfo.jitter);
-  receiverReport.setDelaySinceLastSr(rrPkgInfo.delaySinceLast);
-  receiverReport.setLastSr(rrPkgInfo.lastSr);
-  receiverReport.setLength(7);
-  receiverReport.setBlockCount(1);
-
-  char* buf = reinterpret_cast<char*>(&receiverReport);
-  int len = (receiverReport.getLength() + 1) * 4;
-
-  if (outBufLen < len) {
-    return -1;
-  }
-
-  memcpy(outBuf, buf, len);
-
-  return len;
-}
-
-int RtcpReceiverReport::CreateReceiverReport() {
-  int ret = 0;
-
+int RtcpReceiverReport::CreateReceiverReport(std::vector<char>* io_rtcpBin) {
   // taylor check
   int remote_ssrc = this->belongingRtcpHandler_.belongingPeerConnection_
                         .rtpHandler_.upVideoSSRC;
@@ -148,54 +119,23 @@ int RtcpReceiverReport::CreateReceiverReport() {
   tylog("rr PkgInfo.delaySinceLast=%u, rr PkgInfo.lastSr=%u",
         rrPkgInfo.delaySinceLast, rrPkgInfo.lastSr);
 
-  char outBuf[2048]{};
-  int len = createRR(outBuf, 2048, rrPkgInfo);
-  assert(len > 0);
+  RtcpHeader receiverReport;
+  receiverReport.setPacketType(RtcpPacketType::kReceiverReport);
+  receiverReport.setSSRC(rrPkgInfo.sinkSSRC);
+  receiverReport.setSourceSSRC(rrPkgInfo.sourceSSRC);
+  receiverReport.setHighestSeqnum(rrPkgInfo.extendedSeq);
+  receiverReport.setSeqnumCycles(rrPkgInfo.extendedSeq >> 16);
+  receiverReport.setLostPackets(rrPkgInfo.lostPkgNum);
+  receiverReport.setFractionLost(rrPkgInfo.fractionLost);
+  receiverReport.setJitter(rrPkgInfo.jitter);
+  receiverReport.setDelaySinceLastSr(rrPkgInfo.delaySinceLast);
+  receiverReport.setLastSr(rrPkgInfo.lastSr);
+  receiverReport.setLength(7);
+  receiverReport.setBlockCount(1);
 
-  const uint64_t NTP = nowNtp.GetValue();
-  uint64_t netNtp = (((uint64_t)ntohl(NTP)) << 32) + ntohl(NTP >> 32);
-
-  // move to XR cpp?
-  RtcpHeader rrtrReport;
-  rrtrReport.setPacketType(RtcpPacketType::kExtendedReports);
-  rrtrReport.setLength(4);
-  rrtrReport.setSSRC(this->belongingRtcpHandler_.belongingPeerConnection_
-                         .rtpHandler_.upVideoSSRC);
-
-  rrtrReport.setBlockType(EnXRBlockType::kXRBlockRRTR);
-  const int kRRTRBlockLen = 2;  // all block is (2+1)*4B
-  rrtrReport.setBlockLen(kRRTRBlockLen);
-  tylog(
-      "NTPMS[%lu] NTP[%lu] "
-      "middleNtp[%u],1 rr PkgInfo.fractionLost[%d]",
-      nowNtp.ToMs(), NTP, CompactNtp(nowNtp),
-      rrPkgInfo.fractionLost * 100 / 256);
-  memcpy(outBuf + len, reinterpret_cast<char*>(&rrtrReport), 12);
-  len += 12;
-  // OPT: use setRrtrNtp
-  memcpy(outBuf + len, reinterpret_cast<char*>(&netNtp),
-         8);  // for calculate RTT
-  len += 8;
-
-  std::vector<char> rtcpBin(outBuf, outBuf + len);  // can use string view
-  DumpSendPacket(rtcpBin);
-  ret = this->belongingRtcpHandler_.belongingPeerConnection_.srtpHandler_
-            .ProtectRtcp(const_cast<std::vector<char>*>(&rtcpBin));
-  if (ret) {
-    tylog("send to client, protect rtcp ret=%d", ret);
-
-    return ret;
-  }
-  ret = this->belongingRtcpHandler_.belongingPeerConnection_.SendToClient(
-      rtcpBin);
-  if (ret) {
-    tylog("send to client ret=%d", ret);
-
-    return ret;
-  }
-
-  // *averageBitrate5Sec = (uint32_t)((9 * (*averageBitrate5Sec) +
-  // outParaRFC3550A3.bit_rate) / 10);
+  char* buf = reinterpret_cast<char*>(&receiverReport);
+  int len = (receiverReport.getLength() + 1) * 4;
+  io_rtcpBin->insert(io_rtcpBin->end(), buf, buf + len);
 
   return 0;
 }

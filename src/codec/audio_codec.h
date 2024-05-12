@@ -1,7 +1,15 @@
+// Copyright (c) 2024 The tywebrtc project authors. All Rights Reserved.
+//
+// Use of this source code is governed by a MIT license
+// that can be found in the LICENSE file in the root of the source
+// tree. An additional intellectual property rights grant can be found
+// in the file PATENTS.  All contributing project authors may
+// be found in the AUTHORS file in the root of the source tree.
+
 // from SRS
 
-#ifndef RTMP_AUDIO_CODEC_H_
-#define RTMP_AUDIO_CODEC_H_
+#ifndef SRC_CODEC_AUDIO_CODEC_H_
+#define SRC_CODEC_AUDIO_CODEC_H_
 
 #include <string>
 #include <vector>
@@ -128,4 +136,4 @@ class SrsAudioTranscoder {
 
 }  // namespace tywebrtc
 
-#endif  // RTMP_AUDIO_CODEC_H_
+#endif  // SRC_CODEC_AUDIO_CODEC_H_

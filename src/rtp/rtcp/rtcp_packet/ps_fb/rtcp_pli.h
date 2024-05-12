@@ -6,27 +6,28 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
-#ifndef SRC_RTP_RTCP_RTCP_PACKET_RTCP_XR_BLOCK_RRTR_H_
-#define SRC_RTP_RTCP_RTCP_PACKET_RTCP_XR_BLOCK_RRTR_H_
+#ifndef SRC_RTP_RTCP_RTCP_PACKET_PS_FB_RTCP_PLI_H_
+#define SRC_RTP_RTCP_RTCP_PACKET_PS_FB_RTCP_PLI_H_
+
+#include <cstdint>
 
 #include "src/rtp/rtcp/rtcp_parser.h"
 
-#include <vector>
-
 namespace tywebrtc {
 
-class RtcpExtendedReports;
+class RtcpPayloadSpecificFeedback;
 
-class RtcpRRTR {
+class RtcpPLI {
  public:
-  RtcpRRTR(RtcpExtendedReports& belongingXr);
+  explicit RtcpPLI(RtcpPayloadSpecificFeedback &belongingPsfb);
+  int HandlePLI(const RtcpHeader &chead);
 
-  int HandleRtcpRRTR(const RtcpHeader& blockHead);
-  int CreateRtcpRRTR(std::vector<char>* io_rtcpBin);
+  int CreatePLISend();
 
-  RtcpExtendedReports& belongingXr_;
+ private:
+  RtcpPayloadSpecificFeedback &belongingPsfb_;
 };
 
 }  // namespace tywebrtc
 
-#endif  // SRC_RTP_RTCP_RTCP_PACKET_RTCP_XR_BLOCK_RRTR_H_
+#endif  // SRC_RTP_RTCP_RTCP_PACKET_PS_FB_RTCP_PLI_H_

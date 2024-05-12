@@ -15,7 +15,9 @@
 namespace tywebrtc {
 
 RtcpSenderReport::RtcpSenderReport(RtcpHandler& belongingRtcpHandler)
-    : belongingRtcpHandler_(belongingRtcpHandler) {}
+    : belongingRtcpHandler_(belongingRtcpHandler) {
+  (void)belongingRtcpHandler_;
+}
 
 int RtcpSenderReport::HandleSenderReport(const RtcpHeader& chead) {
   uint8_t blockCount = chead.getBlockCount();
@@ -47,7 +49,19 @@ int RtcpSenderReport::HandleSenderReport(const RtcpHeader& chead) {
   return 0;
 }
 
-static int createSR(char* outBuf, int outBufLen, SrPkgInfo srPkgInfo) {
+int RtcpSenderReport::CreateSenderReport(std::vector<char>* io_rtcpBin) {
+  SrPkgInfo srPkgInfo{};
+
+  // taylor mock
+  NtpTime nowNtp = MsToNtp(g_now_ms);
+  srPkgInfo.SSRC = kDownlinkVideoSsrc;
+  srPkgInfo.NTPTimeStamps = nowNtp.GetValue();  // for calculate RTT
+  srPkgInfo.RTPTimeStamps = 999888;
+  srPkgInfo.sentOctets = 10000;
+  srPkgInfo.sentPkgs = 20000;
+  tylog("[srPkgInfo]SSRC:%u, NTP TimeStamps:%lu, RTP TimeStamps:%u",
+        srPkgInfo.SSRC, srPkgInfo.NTPTimeStamps, srPkgInfo.RTPTimeStamps);
+
   RtcpHeader senderReport;
   senderReport.setPacketType(RtcpPacketType::kSenderReport);
   senderReport.setSSRC(srPkgInfo.SSRC);
@@ -56,109 +70,9 @@ static int createSR(char* outBuf, int outBufLen, SrPkgInfo srPkgInfo) {
   senderReport.setPacketsSent(srPkgInfo.sentPkgs);
   senderReport.setOctetsSent(srPkgInfo.sentOctets);
   senderReport.setLength(6);
-
   char* buf = reinterpret_cast<char*>(&senderReport);
   int len = (senderReport.getLength() + 1) * 4;
-
-  if (outBufLen < len) {
-    return -1;
-  }
-
-  memcpy(outBuf, buf, len);
-
-  return len;
-}
-
-static int createDLRR(char* outBuf, int outBufLen, uint32_t ssrc,
-                      uint32_t rrSsrc, uint32_t lastRrNtp, uint32_t dlrrNtp) {
-  RtcpHeader dlrr;
-  dlrr.setPacketType(RtcpPacketType::kExtendedReports);
-  dlrr.setSSRC(ssrc);
-  dlrr.setLength(5);
-  dlrr.setBlockCount(1);
-
-  dlrr.setBlockType(EnXRBlockType::kXRBlockDLRR);
-  dlrr.setBlockLen(3);
-  dlrr.setRrSsrc(rrSsrc);
-  dlrr.setLastRr(lastRrNtp);
-  dlrr.setDLRR(dlrrNtp);
-
-  char* buf = reinterpret_cast<char*>(&dlrr);
-  int len = (dlrr.getLength() + 1) * 4;
-
-  if (outBufLen < len) {
-    return -1;
-  }
-
-  memcpy(outBuf, buf, len);
-
-  return len;
-}
-
-int RtcpSenderReport::CreateSenderReport() {
-  int ret = 0;
-
-  SrPkgInfo videoSrPkgInfo;
-
-  // taylor mock
-  NtpTime nowNtp = MsToNtp(g_now_ms);
-  videoSrPkgInfo.SSRC = kDownlinkVideoSsrc;
-  videoSrPkgInfo.NTPTimeStamps = nowNtp.GetValue();  // for calculate RTT
-  videoSrPkgInfo.RTPTimeStamps = 999888;
-  videoSrPkgInfo.sentOctets = 10000;
-  videoSrPkgInfo.sentPkgs = 20000;
-
-  tylog("[videoSrPkgInfo]SSRC:%u, NTP TimeStamps:%lu, RTP TimeStamps:%u",
-        videoSrPkgInfo.SSRC, videoSrPkgInfo.NTPTimeStamps,
-        videoSrPkgInfo.RTPTimeStamps);
-
-  char outBuf[2048]{};
-  int len = createSR(outBuf, 2048, videoSrPkgInfo);
-  if (len <= 0) {
-    tylog("video create SR Failed!");
-    assert(!"buffer too small, to use vector");
-
-    return -1;
-  }
-
-  // taylor FIXME
-  uint64_t relayNtp =
-      MsToNtp(g_now_ms).GetValue() - MsToNtp(g_now_ms - 500).GetValue();
-  uint32_t dlrrNtp = CompactNtp(NtpTime(relayNtp));
-
-  const int rrtr_ssrc = 1;   // ?
-  uint32_t lastRrtrNtp = 3;  // test
-  const int dlrrLen = createDLRR(outBuf + len, 2048 - len, kDownlinkVideoSsrc,
-                                 rrtr_ssrc, lastRrtrNtp, dlrrNtp);
-  tylog("send dlrr, ssrc:%u, rrtrSsrc:%u, lastRrtrNtp:%u, dlrr Ntp:%u",
-        kDownlinkVideoSsrc, rrtr_ssrc, lastRrtrNtp, dlrrNtp);
-
-  if (dlrrLen > 0) {
-    len += dlrrLen;
-  } else {
-    tylog("send dlrr,video create DLRR Failed!");
-    assert(!"should not use assert :)");
-
-    return -2;
-  }
-
-  // OPT: use string view
-  std::vector<char> rtcpBin(outBuf, outBuf + len);
-  DumpSendPacket(rtcpBin);
-  ret = this->belongingRtcpHandler_.belongingPeerConnection_.srtpHandler_
-            .ProtectRtcp(const_cast<std::vector<char>*>(&rtcpBin));
-  if (ret) {
-    tylog("send to client, protect rtcp ret=%d", ret);
-
-    return ret;
-  }
-  ret = this->belongingRtcpHandler_.belongingPeerConnection_.SendToClient(
-      rtcpBin);
-  if (ret) {
-    tylog("send to client ret=%d", ret);
-
-    return ret;
-  }
+  io_rtcpBin->insert(io_rtcpBin->end(), buf, buf + len);
 
   return 0;
 }

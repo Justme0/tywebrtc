@@ -1,3 +1,11 @@
+// Copyright (c) 2024 The tywebrtc project authors. All Rights Reserved.
+//
+// Use of this source code is governed by a MIT license
+// that can be found in the LICENSE file in the root of the source
+// tree. An additional intellectual property rights grant can be found
+// in the file PATENTS.  All contributing project authors may
+// be found in the AUTHORS file in the root of the source tree.
+
 #include "src/rtp/rtp_handler.h"
 
 #include <arpa/inet.h>
@@ -627,7 +635,14 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
 
     auto peerPC = belongingPeerConnection_.FindPeerPC();
     if (nullptr != peerPC) {
-      peerPC->dataChannelHandler_.SendSctpDataForLable("I'm coming.");
+      peerPC->dataChannelHandler_.SendSctpDataForLable(
+          "I'm coming. Give me I frame.");
+
+      ret = peerPC->rtcpHandler_.psfb_.pli_.CreatePLISend();
+      if (ret) {
+        tylog("create pli ret=%d", ret);
+        assert(!"why fail!");
+      }
     }
 
     // init push handler

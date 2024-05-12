@@ -1,5 +1,13 @@
-#ifndef __DOMAIN_RESOLVE_H__
-#define __DOMAIN_RESOLVE_H__
+// Copyright (c) 2024 The tywebrtc project authors. All Rights Reserved.
+//
+// Use of this source code is governed by a MIT license
+// that can be found in the LICENSE file in the root of the source
+// tree. An additional intellectual property rights grant can be found
+// in the file PATENTS.  All contributing project authors may
+// be found in the AUTHORS file in the root of the source tree.
+
+#ifndef SRC_RTMP_DOMAINRESOLVE_H_
+#define SRC_RTMP_DOMAINRESOLVE_H_
 
 // #include <inttypes.h>
 #include <netinet/in.h>
@@ -41,4 +49,4 @@ class DomainResolve {
 };
 }
 
-#endif
+#endif  // SRC_RTMP_DOMAINRESOLVE_H_

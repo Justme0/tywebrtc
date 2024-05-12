@@ -1,10 +1,16 @@
-#include "src/transport/receiver/receiver.h"
+// Copyright (c) 2024 The tywebrtc project authors. All Rights Reserved.
+//
+// Use of this source code is governed by a MIT license
+// that can be found in the LICENSE file in the root of the source
+// tree. An additional intellectual property rights grant can be found
+// in the file PATENTS.  All contributing project authors may
+// be found in the AUTHORS file in the root of the source tree.
+
+// #include "src/transport/receiver/receiver.h"
 
 #include <cassert>
 
 #include "src/pc/peer_connection.h"
-#include "src/rtp/rtcp/rtcp_packet/rtp_fb/rtcp_nack.h"
-#include "src/rtp/rtp_handler.h"
 
 namespace tywebrtc {
 
@@ -101,16 +107,16 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
           firstPacket.ToString().data(), tylib::AnyToString(nackSeqs).data());
     assert(!nackSeqs.empty());
 
-    const uint32_t kSelfRtcpSSRC = 1;
     const uint32_t kMediaSrcSSRC =
         bAudioType ? this->belongingSSRCInfo_.belongingRtpHandler.upAudioSSRC
                    : this->belongingSSRCInfo_.belongingRtpHandler.upVideoSSRC;
     assert(0 != kMediaSrcSSRC &&
            kMediaSrcSSRC == firstRtpHeader.getSSRC());  // already recv
 
-    int ret = this->belongingSSRCInfo_.belongingRtpHandler
-                  .belongingPeerConnection_.rtcpHandler_.nack_.CreateNackSend(
-                      nackSeqs, kSelfRtcpSSRC, kMediaSrcSSRC);
+    int ret =
+        this->belongingSSRCInfo_.belongingRtpHandler.belongingPeerConnection_
+            .rtcpHandler_.rtpfb_.nack_.CreateNackSend(nackSeqs, kSelfRtcpSSRC,
+                                                      kMediaSrcSSRC);
     if (ret) {
       tylog("createNackReportSend ret=%d", ret);
 
@@ -133,6 +139,7 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
 
       it = jitterBuffer_.erase(it);
     }
+
     return orderedPackets;
   }
 
@@ -140,12 +147,8 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
   tylog("PLI, first packet waitMs=%ld too long, packet=%s.", waitMs,
         firstPacket.ToString().data());
 
-  const uint32_t kSelfRtcpSSRC = 1;
-  const uint32_t kMediaSrcSSRC =
-      belongingSSRCInfo_.belongingRtpHandler.upVideoSSRC;
-  assert(0 != kMediaSrcSSRC);
   int ret = belongingSSRCInfo_.belongingRtpHandler.belongingPeerConnection_
-                .rtcpHandler_.pli_.CreatePLISend(kSelfRtcpSSRC, kMediaSrcSSRC);
+                .rtcpHandler_.psfb_.pli_.CreatePLISend();
   if (ret) {
     tylog("createPLIReportSend ret=%d", ret);
     // not return

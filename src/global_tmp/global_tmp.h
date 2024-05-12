@@ -1,3 +1,11 @@
+// Copyright (c) 2024 The tywebrtc project authors. All Rights Reserved.
+//
+// Use of this source code is governed by a MIT license
+// that can be found in the LICENSE file in the root of the source
+// tree. An additional intellectual property rights grant can be found
+// in the file PATENTS.  All contributing project authors may
+// be found in the AUTHORS file in the root of the source tree.
+
 // OPT: not use global thing as possible
 // will refactor
 
@@ -53,6 +61,8 @@ const int kDownlinkH264PayloadType = 106;
 
 // const int kDownlinkVideoFecSsrc = 13697341;  // taylor to make dynamic
 const int kDownlinkVideoFecPayloadType = 127;
+
+const uint32_t kSelfRtcpSSRC = 1;
 
 class PeerConnection;
 
@@ -359,6 +369,14 @@ inline NtpTime MsToNtp(uint64_t timeMs) {
 
 // from
 // https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/modules/rtp_rtcp/source/time_util.h
+// Helper function for compact ntp representation:
+// RFC 3550, Section 4. Time Format.
+// Wallclock time is represented using the timestamp format of
+// the Network Time Protocol (NTP).
+// ...
+// In some fields where a more compact representation is
+// appropriate, only the middle 32 bits are used; that is, the low 16
+// bits of the integer part and the high 16 bits of the fractional part.
 inline uint32_t CompactNtp(NtpTime ntp) {
   return (ntp.seconds() << 16) | (ntp.fractions() >> 16);
 }

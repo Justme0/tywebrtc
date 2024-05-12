@@ -10,13 +10,15 @@
 
 #include <cinttypes>
 
+#include "src/global_tmp/global_tmp.h"
 #include "src/log/log.h"
+#include "src/pc/peer_connection.h"
 
 namespace tywebrtc {
 
-RtcpRRTR::RtcpRRTR(RtcpExtendedReports& belongingXrHandler)
-    : belongingXrHandler_(belongingXrHandler) {
-  (void)belongingXrHandler_;
+RtcpRRTR::RtcpRRTR(RtcpExtendedReports& belongingXr)
+    : belongingXr_(belongingXr) {
+  (void)belongingXr_;
 }
 
 int RtcpRRTR::HandleRtcpRRTR(const RtcpHeader& blockHead) {
@@ -30,6 +32,28 @@ int RtcpRRTR::HandleRtcpRRTR(const RtcpHeader& blockHead) {
   // auto lastRrtrNtp = CompactNtp(NtpTime(rrtrNtp));
   // auto rcvRrtrTime = g_now_ms;
   // auto rrtrSsrc = rrtrSsrc;
+
+  return 0;
+}
+
+int RtcpRRTR::CreateRtcpRRTR(std::vector<char>* io_rtcpBin) {
+  RtcpHeader rrtrReport;
+  // no need block count ?
+  rrtrReport.setPacketType(RtcpPacketType::kExtendedReports);
+  rrtrReport.setLength(4);
+  rrtrReport.setSSRC(this->belongingXr_.belongingRtcpHandler_
+                         .belongingPeerConnection_.rtpHandler_.upVideoSSRC);
+
+  rrtrReport.setBlockType(EnXRBlockType::kXRBlockRRTR);
+  const int kRRTRBlockLen = 2;  // all block is (2+1)*4 B
+  rrtrReport.setBlockLen(kRRTRBlockLen);
+  // KEY: peer SR will return this ntp time
+  rrtrReport.setRrtrNtp(MsToNtp(g_now_ms).GetValue());
+
+  char* buf = reinterpret_cast<char*>(&rrtrReport);
+  int len = (rrtrReport.getLength() + 1) * 4;
+
+  io_rtcpBin->insert(io_rtcpBin->end(), buf, buf + len);
 
   return 0;
 }

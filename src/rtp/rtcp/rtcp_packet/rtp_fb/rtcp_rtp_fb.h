@@ -8,32 +8,31 @@
 
 // RTCP XR RFC: https://datatracker.ietf.org/doc/html/rfc3611
 
-#ifndef SRC_RTP_RTCP_RTCP_PACKET_RTCP_XR_RTCP_XR_H_
-#define SRC_RTP_RTCP_RTCP_PACKET_RTCP_XR_RTCP_XR_H_
+#ifndef SRC_RTP_RTCP_RTCP_PACKET_RTP_FB_RTCP_RTP_FB_H_
+#define SRC_RTP_RTCP_RTCP_PACKET_RTP_FB_RTCP_RTP_FB_H_
 
-#include "src/rtp/rtcp/rtcp_packet/rtcp_xr/block_dlrr.h"
-#include "src/rtp/rtcp/rtcp_packet/rtcp_xr/block_rrtr.h"
+#include "src/rtp/rtcp/rtcp_packet/rtp_fb/rtcp_nack.h"
 #include "src/rtp/rtcp/rtcp_parser.h"
 
 namespace tywebrtc {
 
 class RtcpHandler;
-class RtcpHeader;
 
-class RtcpExtendedReports {
+// RTPFB: Transport layer feedback message.
+// https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
+class RtcpRtpFeedback {
  public:
-  explicit RtcpExtendedReports(RtcpHandler &belongingRtcpHandler);
+  explicit RtcpRtpFeedback(RtcpHandler &belongingRtcpHandler);
 
-  int HandleExtendedReports(const RtcpHeader &chead);
-  // int CreateExtendedReports(EnXRBlockType blockType,
-  //                           std::vector<char> *io_rtcpBin);
+  int HandleRtpFeedback(const RtcpHeader &chead);
+  // int CreateRtpFeedback(EnXRBlockType blockType, std::vector<char>
+  // *io_rtcpBin);
 
   RtcpHandler &belongingRtcpHandler_;
 
-  RtcpRRTR rrtr_;
-  RtcpDLRR dlrr_;
+  RtcpNack nack_;
 };
 
 }  // namespace tywebrtc
 
-#endif  // SRC_RTP_RTCP_RTCP_PACKET_RTCP_XR_RTCP_XR_H_
+#endif  // SRC_RTP_RTCP_RTCP_PACKET_RTP_FB_RTCP_RTP_FB_H_

@@ -11,11 +11,11 @@
 
 #include <vector>
 
-#include "src/rtp/rtcp/rtcp_packet/payload_spec_fb/rtcp_pli.h"
+#include "src/rtp/rtcp/rtcp_packet/ps_fb/rtcp_ps_fb.h"
 #include "src/rtp/rtcp/rtcp_packet/rtcp_receiver_report.h"
 #include "src/rtp/rtcp/rtcp_packet/rtcp_sender_report.h"
 #include "src/rtp/rtcp/rtcp_packet/rtcp_xr/rtcp_xr.h"
-#include "src/rtp/rtcp/rtcp_packet/rtp_fb/rtcp_nack.h"
+#include "src/rtp/rtcp/rtcp_packet/rtp_fb/rtcp_rtp_fb.h"
 
 namespace tywebrtc {
 
@@ -32,8 +32,8 @@ class RtcpHandler {
  public:  // should be private
   RtcpSenderReport senderReport_;
   RtcpReceiverReport receiverReport_;
-  RtcpNack nack_;
-  RtcpPLI pli_;
+  RtcpPayloadSpecificFeedback psfb_;
+  RtcpRtpFeedback rtpfb_;
   RtcpExtendedReports extendedReport_;
 
   PeerConnection& belongingPeerConnection_;

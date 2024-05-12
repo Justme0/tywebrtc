@@ -9,8 +9,8 @@
 // From licode
 // https://github.com/lynckia/licode/blob/master/erizo/src/erizo/rtp/RtpHeaders.h
 
-#ifndef RTP_RTP_PARSER_H_
-#define RTP_RTP_PARSER_H_
+#ifndef SRC_RTP_RTP_PARSER_H_
+#define SRC_RTP_RTP_PARSER_H_
 
 #include <netinet/in.h>
 
@@ -986,4 +986,4 @@ struct RTP_HEADER_INFO_VP8 {
 
 }  // namespace tywebrtc
 
-#endif  // RTP_RTP_PARSER_H_
+#endif  // SRC_RTP_RTP_PARSER_H_

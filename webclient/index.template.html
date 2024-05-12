@@ -24,7 +24,7 @@
             border: 1px solid black;
             padding: 5px;
             width: 450px;
-            height: 385px;
+            height: 395px;
         }
 
         .messagebox {
@@ -109,10 +109,11 @@
         var messageInputBox = null;
         var g_vp8Payload = null;
 
-        async function addToStatBox(text) {
+        async function addToStatBox(text, color) {
             // Create a new message element
             const messageElement = document.createElement('div');
             messageElement.textContent = `${getTimeString()} ${text}`;
+            messageElement.style.color = color;
 
             statBox = document.getElementById('statBoxID');
             // Add the new message to the message box
@@ -158,8 +159,9 @@
                 return
             }
 
-            text = `RTT=${candidatePair.currentRoundTripTime * 1000} ms via STUN, s/r ${candidatePair.requestsSent}/${candidatePair.responsesReceived}`
-            addToStatBox(text);
+            text = `RTT=${candidatePair.currentRoundTripTime * 1000} ms via STUN, s/r ${candidatePair.requestsSent}/${candidatePair.responsesReceived}.`
+            // addToStatBox(text, "rgb(12 179 12 / 96%)");
+            addToStatBox(text, "green");
         }
         const rttInterval = setInterval(printCandidate, 2000);
 
@@ -313,7 +315,7 @@
             const constraints = {
                 video: {
                     facingMode: { ideal: 'user' },
-                    frameRate: { max: 12, ideal: 12 },
+                    frameRate: { max: 10, ideal: 10 },
                     width: { max: 450, ideal: 450 },
                     height: { max: 450, ideal: 450 },
                     aspectRatio: 1,
