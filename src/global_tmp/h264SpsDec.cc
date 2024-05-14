@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "src/log/log.h"
+
 namespace tywebrtc {
 
 /**
@@ -53,9 +55,9 @@ static unsigned int exp_golomb_ue(bit_buffer *bb) {
   bit = get_bit(bb);
   while (bit == 0) {
     if (32 < significant_bits) {
-      //防止非法输入导致的内存读越界
-      printf("big error in sps parse, significant_bits:%u >20\n",
-             significant_bits);
+      // check if invalid input causing out of bound
+      tylog("big error in sps parse, significant_bits:%u >20\n",
+            significant_bits);
       return 0;
     }
 
