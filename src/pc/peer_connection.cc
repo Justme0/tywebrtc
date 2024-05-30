@@ -102,7 +102,31 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
     }
 
     case PacketType::RTP: {
-      // dump recv data after decrypting according to RTP/RTCP
+      if (this->sdpHandler_.bNotUseSrtp) {
+        if (this->stateMachine_ < EnumStateMachine::DTLS_DONE) {
+          tylog(
+              "first recv RTP, but not launch DTLS, maybe use "
+              "--disable-webrtc-encryption, the check is not very strict :) "
+              "should use signal.");
+
+          // set to DTLS_DONE for rtp handler launch timer and others,
+          // OPT
+          this->stateMachine_ = EnumStateMachine::DTLS_DONE;
+          tylog("set stateMachine to %s.",
+                StateMachineToString(stateMachine_).data());
+        }
+      } else {
+        // if we recv web's data, dtls should complete in Chrome
+        // OPT: no need call hand shake complete function each time recv rtp
+        const bool kSessionCompleted = true;
+        ret = dtlsHandler_.HandshakeCompleted(kSessionCompleted);
+        if (ret) {
+          tylog(
+              "already recv rtp, we can handshakeCompleted safely, but ret=%d, "
+              "but not return error",
+              ret);
+        }
+      }
       ret = rtpHandler_.HandleRtpPacket(vBufReceive);
       if (ret) {
         tylog("handle rtp packet fail, ret=%d", ret);
@@ -117,9 +141,11 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
       this->SendToClient({echoStr.begin(), echoStr.end()});
 
       if (std::string(vBufReceive.begin(), vBufReceive.end()) == "Hello Qt!" &&
-          stateMachine_ != EnumStateMachine::GOT_RTP) {
+          stateMachine_ < EnumStateMachine::GOT_RTP) {
         this->stateMachine_ = EnumStateMachine::GOT_RTP;
-        this->bNotUseSrtp = true;
+        tylog("set stateMachine to %s.",
+              StateMachineToString(stateMachine_).data());
+        this->sdpHandler_.bNotUseSrtp = true;
         this->bUseRsfec = true;
 
         // if pull fail, retry?
@@ -168,11 +194,18 @@ std::shared_ptr<PeerConnection> PeerConnection::FindPeerPC() const {
       continue;
     }
 
+    // OPT: pc's key should be ice username, and add map(addr=>pc) for quick
+    // find.
+    if (iceHandler_.iceInfo_.remoteUsername ==
+        p.second->iceHandler_.iceInfo_.remoteUsername) {
+      continue;
+    }
+
     if (p.second->stateMachine_ < EnumStateMachine::GOT_RTP) {
       continue;
     }
 
-    if (nullptr == pc || pc->initTimeMs_ < p.second->initTimeMs_) {
+    if (nullptr == pc || pc->lastActiveTimeMs_ < p.second->lastActiveTimeMs_) {
       pc = p.second;
     }
   }

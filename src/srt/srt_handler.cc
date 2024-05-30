@@ -109,8 +109,8 @@ int SrtHandler::AddAudioStream_(uint32_t sampleRate, uint32_t channels,
   par->codec_id = codec_id;
   par->bit_rate = 64000;
   par->sample_rate = sampleRate;
-  par->channels = channels;
-  av_channel_layout_default(&par->ch_layout, par->channels);
+  par->ch_layout.nb_channels = channels;
+  av_channel_layout_default(&par->ch_layout, par->ch_layout.nb_channels);
   switch (par->codec_id) {
     case AV_CODEC_ID_AAC:  // AudioSpecificConfig 48000-2
       par->profile = 1;    // 0:main 1: LC 2: SSR

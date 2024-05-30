@@ -23,6 +23,12 @@ enum enVideoRtpRfcMode {
   kH264Rfc3984ModeButt
 };
 
+// to refactor, use string/string_view, cancle the struct
+struct Nalu {
+  const char *data;
+  int size;
+};
+
 class H264Packetizer {
  public:
   int Packetize(const std::vector<char> &stream, uint32_t timestamp,
@@ -37,14 +43,14 @@ class H264Packetizer {
                   const std::vector<std::shared_ptr<Extension>> &extensions,
                   std::vector<RtpBizPacket> &rtpBizPackets);
 
-  int PacketSingleNalu(
-      const char *frame, const int len, const uint32_t timestamp,
+  int PacketSingleNalu_(
+      const Nalu &nalu, const uint32_t timestamp,
       const std::vector<std::shared_ptr<Extension>> &extensions,
       std::vector<RtpBizPacket> &rtpBizPackets);
 
-  int PacketFuA(const char *frame, const int len, const uint32_t timestamp,
-                const std::vector<std::shared_ptr<Extension>> &extensions,
-                std::vector<RtpBizPacket> &rtpBizPackets);
+  int PacketFuA_(const Nalu &nalu, const uint32_t timestamp,
+                 const std::vector<std::shared_ptr<Extension>> &extensions,
+                 std::vector<RtpBizPacket> &rtpBizPackets);
 
  private:
   uint8_t payload_type_ = kDownlinkH264PayloadType;

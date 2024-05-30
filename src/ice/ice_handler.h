@@ -9,6 +9,7 @@
 #ifndef SRC_ICE_ICE_HANDLER_H_
 #define SRC_ICE_ICE_HANDLER_H_
 
+#include <string>
 #include <vector>
 
 namespace tywebrtc {
@@ -120,6 +121,8 @@ struct ICEInfo {
 
   char Foundation[64];
   unsigned int Prio = 0;
+
+  std::string remoteUsername;
 };
 
 class PeerConnection;
@@ -145,7 +148,7 @@ class IceHandler {
   unsigned int IceCalcCandPrio(int type, unsigned int CompId);
   void CreatUserPrio();
 
- private:
+ public:  // tmp
   PeerConnection &belongingPeerConnection_;
 
   ICEInfo iceInfo_;

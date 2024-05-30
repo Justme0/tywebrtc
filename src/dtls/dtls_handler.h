@@ -84,6 +84,7 @@ class DtlsHandler {
   ~DtlsHandler();
 
   int StartDTLS();
+  // bool IsGetKey() const { return mGetKeyFlag; }
   int HandleDtlsPacket(const std::vector<char>& vBufReceive);
 
   void SetStreamDirect(StreamDirection direct);
@@ -96,7 +97,7 @@ class DtlsHandler {
 
  private:
   int OnHandshakeCompleted_();
-  bool checkFingerprint(const char* fingerprint, unsigned int len) const;
+  bool CheckFingerprint_(const char* fingerprint, unsigned int len) const;
   bool GetRemoteFingerprint(char* fprint) const;
   void computeFingerprint(const X509* cert, char* fingerprint) const;
   void InitOpensslAndCert();

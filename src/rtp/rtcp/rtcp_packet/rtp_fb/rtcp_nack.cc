@@ -24,13 +24,14 @@ int RtcpNack::SendReqNackPkt_(const std::vector<uint16_t> &seqVect,
                               std::vector<uint16_t> &failedSeqs) {
   int ret = 0;
 
-  auto it = belongingRtpfb_.belongingRtcpHandler_.belongingPeerConnection_
-                .rtpHandler_.ssrcInfoMap_.find(sourceSSRC);
-
-  // we send to client firstly, SSRC already in queue
-  assert(it !=
-         belongingRtpfb_.belongingRtcpHandler_.belongingPeerConnection_
-             .rtpHandler_.ssrcInfoMap_.end());
+  const auto &m = belongingRtpfb_.belongingRtcpHandler_.belongingPeerConnection_
+                      .rtpHandler_.ssrcInfoMap_;
+  auto it = m.find(sourceSSRC);
+  if (it == m.end()) {
+    // assert(!"we send to client firstly, SSRC should already in queue");
+    // 不加密场景发包检测松，可能PC超时断开后立马又收到包，此时还未建立下行，收到端上之前的nack，用信令后不应走到这里
+    return 0;
+  }
 
   const SSRCInfo &ssrcInfo = it->second;
 
@@ -73,7 +74,7 @@ int RtcpNack::SendReqNackPkt_(const std::vector<uint16_t> &seqVect,
     const std::vector<char> *rawPacket =
         ssrcInfo.rtpSender.GetSeqPacket(itemPowerSeq);
     if (nullptr == rawPacket) {
-      tylog("NOTE: nack not found packet, powerseq=%s, %s.",
+      tylog("NOTE: nack not found packet, powerseq=%s, ssrcInfo=%s.",
             PowerSeqToString(itemPowerSeq).data(), ssrcInfo.ToString().data());
 
       failedSeqs.push_back(itemSeq);

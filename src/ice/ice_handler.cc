@@ -152,10 +152,17 @@ int IceHandler::DecodeStunBindingAttributesMsg_(const STUN_MSG_COMMON *pMsgComm,
         }
 
         std::string username(pData, std::min(kEnoughLen, AttributeLen));
-        tylog("ice username=%s",
-              username.data());  // taylor last char is '\0' ?
+        // taylor last char is '\0' ?
+        tylog("ice username=%s", username.data());
 
-        // TODO check username
+        if (iceInfo_.remoteUsername.empty()) {
+          // TODO check username should include ICEInfo::RemoteUfrag,
+          // signal SDP should assign ICEInfo::RemoteUfrag firstly.
+          // tmp record and check:
+          iceInfo_.remoteUsername = username;
+        } else {
+          assert(iceInfo_.remoteUsername == username);
+        }
 
         break;
       }
@@ -443,23 +450,25 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
     // machine state before assigning
     belongingPeerConnection_.stateMachine_ =
         EnumStateMachine::GOT_USE_CANDIDATE_ICE;
-    tylog("stateMachine=%s, ice done, now start dtls.",
+    tylog("set stateMachine to %s, ice done, now start dtls if needed.",
           StateMachineToString(belongingPeerConnection_.stateMachine_).data());
 
-    // 收到带UseCandidate属性的STUN包后启动DTLS
-    ret = belongingPeerConnection_.dtlsHandler_.StartDTLS();
-    if (ret) {
-      tylog("dtls start fail, ret=%d", ret);
+    if (!this->belongingPeerConnection_.sdpHandler_.bNotUseSrtp) {
+      // 收到带UseCandidate属性的STUN包后启动DTLS
+      ret = belongingPeerConnection_.dtlsHandler_.StartDTLS();
+      if (ret) {
+        tylog("dtls start fail, ret=%d", ret);
 
-      return ret;
+        return ret;
+      }
+
+      TimerManager::Instance()->AddTimer(
+          &this->belongingPeerConnection_.dtlsTimer_);
     }
-
-    TimerManager::Instance()->AddTimer(
-        &this->belongingPeerConnection_.dtlsTimer_);
   } else if (EnumStateMachine::GOT_FIRST_ICE >
              belongingPeerConnection_.stateMachine_) {
     belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_FIRST_ICE;
-    tylog("stateMachine=%s",
+    tylog("set stateMachine to %s.",
           StateMachineToString(belongingPeerConnection_.stateMachine_).data());
   }
 
@@ -553,7 +562,8 @@ int IceHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
 
   ret = CheckIcePacket(vBufReceive);
   if (ret) {
-    tylog("CheckIcePacket fail, ret=%d", ret);
+    tylog("checkIcePacket fail, ret=%d", ret);
+
     return ret;
   }
 
@@ -572,7 +582,7 @@ int IceHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
     case CMD_STUN_BINDING_REQ: {
       ret = HandleBindReq(vBufReceive);
       if (ret) {
-        tylog("HandleBindReq ret=%d", ret);
+        tylog("handleBindReq ret=%d", ret);
         return ret;
       }
 

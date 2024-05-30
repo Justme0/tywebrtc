@@ -34,18 +34,18 @@ int RtcpDLRR::HandleRtcpDLRR(const RtcpHeader& blockHead) {
     pdlrrHead = reinterpret_cast<const RtcpHeader*>(dlrrMovPointer);
 
     uint32_t rrSsrc = pdlrrHead->getRrSsrc();
+
     uint32_t lastRr = pdlrrHead->getLastRr();
     uint32_t dlrr = pdlrrHead->getDLRR();
     if (lastRr > 0 && dlrr > 0) {
-      NtpTime nowNtp = MsToNtp(g_now_ms);
-      uint32_t rttNtp = CompactNtp(nowNtp) - dlrr - lastRr;
+      uint32_t rttNtp = CompactNtp(MsToNtp(g_now_ms)) - dlrr - lastRr;
       uint32_t rttMs = CompactNtpRttToMs(rttNtp);
 
       // rtt_acumulator_.Update(g_now_ms, rttMs);
-      tylog(
-          "taylor [ExtendedReport] rrSsrc[%u] lastRr[%u] dlrr[%u] "
-          "rttNtp[%u] rttMs[%u]",
-          rrSsrc, lastRr, dlrr, rttNtp, rttMs);
+      tylog("taylor [ExtendedReport] rrSsrc[%u] lastRr[%u] dlrr[%u=>%" PRIi64
+            "ms] rttNtp[%u=>%" PRIu32 "ms]",
+            rrSsrc, lastRr, dlrr, CompactNtpRttToMs(dlrr), rttNtp, rttMs);
+
       this->belongingXr_.belongingRtcpHandler_.belongingPeerConnection_
           .signalHandler_.S2CReportRTT(rttMs);
     }
@@ -57,9 +57,8 @@ int RtcpDLRR::HandleRtcpDLRR(const RtcpHeader& blockHead) {
 }
 
 int RtcpDLRR::CreateRtcpDLRR(std::vector<char>* io_rtcpBin) {
-  uint64_t relayNtp =
-      MsToNtp(g_now_ms).GetValue() - MsToNtp(g_now_ms - 500).GetValue();
-  uint32_t dlrrNtp = CompactNtp(NtpTime(relayNtp));
+  // taylor fixme
+  uint32_t dlrrNtp = CompactNtp(NtpTime(1, 0));
 
   // mock
   const int rrtr_ssrc = 1;   // ?

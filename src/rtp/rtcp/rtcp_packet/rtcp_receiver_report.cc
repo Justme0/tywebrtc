@@ -48,9 +48,9 @@ int RtcpReceiverReport::HandleReceiverReport(const RtcpHeader& chead) {
     return -1;
   }
 
-  int i;
   // hack: pDummyHead points to `last SR (LSR)` of last block,
   // cannot get RTCP head field.
+  int i;
   const RtcpHeader* pDummyHead;
   for (i = 0, pDummyHead = &chead; i < block_count; ++i,
       pDummyHead = reinterpret_cast<const RtcpHeader*>(
@@ -63,24 +63,28 @@ int RtcpReceiverReport::HandleReceiverReport(const RtcpHeader& chead) {
     uint16_t seqnumCycles = pDummyHead->getSeqnumCycles();
     uint16_t highestSeq = pDummyHead->getHighestSeqnum();
     uint32_t jitter = pDummyHead->getJitter();
+
     const uint32_t kLSR = pDummyHead->getLastSr();
     const uint32_t kDLSR = pDummyHead->getDelaySinceLastSr();
 
+    uint32_t rttNtp = 0;
+    int rttMs = 0;
     if (kLSR > 0 && kDLSR > 0) {
-      NtpTime nowNtp = MsToNtp(g_now_ms);
-      uint32_t rttNtp = CompactNtp(nowNtp) - kDLSR - kLSR;
-      int rttMs = CompactNtpRttToMs(rttNtp);
-      tylog("taylor in RR rtt ms=%d.", rttMs);
+      rttNtp = CompactNtp(MsToNtp(g_now_ms)) - kDLSR - kLSR;
+      rttMs = CompactNtpRttToMs(rttNtp);
+      // tylog("taylor in RR rtt ms=%d.", rttMs);
+
       // SaveDownLost(sourceSsrc, fractLost, lostPkgs, rtt);
       this->belongingRtcpHandler_.belongingPeerConnection_.signalHandler_
           .S2CReportRTT(rttMs);
     }
 
     tylog(
-        "RR sourceSsrc[%u] fractLost[%u] lostPkgs[%u] seqnumCycles[%u] "
-        "highestSeq[%u] jitter[%u] LSR[%u] DLSR[%u].",
-        sourceSsrc, fractLost, lostPkgs, seqnumCycles, highestSeq, jitter, kLSR,
-        kDLSR);
+        "RRSrcSsrc=%u,lostRate[%u,%d%%]allLost=%u,cycle=%u,hiSeq=%u,jit=%u,LSR="
+        "%u,DLSR[%u=>%" PRIi64 "ms],rttNtp[%u=>%dms]",
+        sourceSsrc, fractLost, fractLost * 100 / 256, lostPkgs, seqnumCycles,
+        highestSeq, jitter, kLSR, kDLSR,
+        kDLSR == 0 ? 0 : CompactNtpRttToMs(kDLSR), rttNtp, rttMs);
 
     RrPkgInfo& info = this->ssrcRRInfo[sourceSsrc];
     info.svrTimeMS = g_now_ms;
@@ -92,9 +96,38 @@ int RtcpReceiverReport::HandleReceiverReport(const RtcpHeader& chead) {
 }
 
 int RtcpReceiverReport::CreateReceiverReport(std::vector<char>* io_rtcpBin) {
-  // taylor check
   int remote_ssrc = this->belongingRtcpHandler_.belongingPeerConnection_
                         .rtpHandler_.upVideoSSRC;
+  if (0 == remote_ssrc) {
+    tylog("remote_ssrc is 0, may have no up");
+    return 0;
+  }
+
+  RTPStatistics& rtpStats = this->belongingRtcpHandler_.belongingPeerConnection_
+                                .rtpHandler_.ssrcInfoMap_.at(remote_ssrc)
+                                .rtpReceiver.rtpStats_;
+
+  rtpStats.last_octet_count = rtpStats.octet_count;
+  // some placeholders we should really fill...
+  // RFC 1889/p64
+  uint32_t extended_max = rtpStats.cycles + rtpStats.max_seq;
+  uint32_t expected = extended_max - rtpStats.base_seq;
+  uint32_t lost = expected - rtpStats.received;
+  lost = std::min<uint32_t>(lost,
+                            0xffffff);  // clamp it since it's only 24 bits...
+  uint32_t expected_interval = expected - rtpStats.expected_prior;
+  rtpStats.expected_prior = expected;
+  uint32_t received_interval = rtpStats.received - rtpStats.received_prior;
+  rtpStats.received_prior = rtpStats.received;
+  int32_t lost_interval = expected_interval - received_interval;
+
+  uint8_t fraction = 0;
+  if (expected_interval == 0 || lost_interval <= 0) {
+    fraction = 0;
+  } else {
+    fraction = (lost_interval << 8) / expected_interval;
+  }
+
   int uiLocSsrc = 23333;
 
   RrPkgInfo rrPkgInfo{};
@@ -104,17 +137,16 @@ int RtcpReceiverReport::CreateReceiverReport(std::vector<char>* io_rtcpBin) {
   assert(rrPkgInfo.lastSr == 0);
   rrPkgInfo.sinkSSRC = uiLocSsrc;
   rrPkgInfo.sourceSSRC = remote_ssrc;
-  rrPkgInfo.extendedSeq = 0;   // taylor fix
-  rrPkgInfo.fractionLost = 0;  // taylor fix
-  rrPkgInfo.lostPkgNum = 0;    // taylor fix
-  rrPkgInfo.jitter = 3;        // taylor fix
+  rrPkgInfo.extendedSeq = extended_max;
+  rrPkgInfo.fractionLost = fraction;
+  rrPkgInfo.lostPkgNum = lost;
+  rrPkgInfo.jitter = rtpStats.jitter >> 4;
   rrPkgInfo.delaySinceLast = 0;
   rrPkgInfo.lastSr = 0;
 
   // taylor fixme
   NtpTime rcvNtp = MsToNtp(g_now_ms - 500);
-  NtpTime nowNtp = MsToNtp(g_now_ms);
-  rrPkgInfo.delaySinceLast = CompactNtp(nowNtp) - CompactNtp(rcvNtp);
+  rrPkgInfo.delaySinceLast = CompactNtp(MsToNtp(g_now_ms)) - CompactNtp(rcvNtp);
   rrPkgInfo.lastSr = 23333;
   tylog("rr PkgInfo.delaySinceLast=%u, rr PkgInfo.lastSr=%u",
         rrPkgInfo.delaySinceLast, rrPkgInfo.lastSr);

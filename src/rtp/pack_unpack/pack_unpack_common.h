@@ -18,9 +18,6 @@ namespace tywebrtc {
 const int kH265StapA = 48;
 const int kH265FuA = 49;
 
-// H.264 nalu header type mask.
-const int kH264TypeMask = 0x1F;
-
 // H264协议中规定的nalu_unit_type所占的byte长度
 const int VIDEO_NALU_HEADER_LTH = 1;
 const int VIDEO_MAX_SPP_PPS_LEN = 100;
@@ -29,24 +26,30 @@ enum FuDefs { kSBit = 0x80, kEBit = 0x40, kRBit = 0x20 };
 
 /*FU-A分片指示器结构 */
 struct VideoFuIndicator {
-  uint8_t type : 5;  // nalu的类型，RFC3984中FU-A为28，FU-B为29
-  uint8_t
-      nri : 2;    // 参考指示，0~3，这里对于单一nalu，将会使用2作为一组的数据包的结束
-  uint8_t f : 1;  // 强制0位，无语法冲突为0，否则为1
+  // nalu的类型，RFC3984中FU-A为28，FU-B为29
+  uint8_t type : 5;
+  // 参考指示，0~3，这里对于单一nalu，将会使用2作为一组的数据包的结束
+  uint8_t nri : 2;
+  // 强制0位，无语法冲突为0，否则为1
+  uint8_t f : 1;
 };
 
 /*FU-A分片头结构 */
 struct VideoFuHeader {
-  uint8_t type : 5;  // 分片nalu的payload类型
-  uint8_t
-      reserve : 1;  // 保留位，这里将会被用于标识是否是一组最后的一个数据包，若是则置1，否则为0
-  uint8_t end : 1;  // 分片结束位，若为nalu的最后一个分片，置1，否则置0
-  uint8_t start : 1;  // 分片开始位，若为nalu的第一个分片，置1，否则置0
+  // 分片nalu的payload类型
+  uint8_t type : 5;
+  // 保留位，这里将会被用于标识是否是一组最后的一个数据包，若是则置1，否则为0
+  uint8_t reserve : 1;
+  // 分片结束位，若为nalu的最后一个分片，置1，否则置0
+  uint8_t end : 1;
+  // 分片开始位，若为nalu的第一个分片，置1，否则置0
+  uint8_t start : 1;
 };
 
-#define VIDEO_FU_INDICATOR_SIZE \
-  (sizeof(VideoFuIndicator))  // FU_indicator的字节长度
-#define VIDEO_FU_HEADER_SIZE (sizeof(VideoFuHeader))  // FU_header的字节长度
+// FU_indicator的字节长度
+const int VIDEO_FU_INDICATOR_SIZE = sizeof(VideoFuIndicator);
+// FU_header的字节长度
+const int VIDEO_FU_HEADER_SIZE = sizeof(VideoFuHeader);
 
 // Nalu type定义，根据H264协议标准定义
 // https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-h264.c#L302
@@ -146,6 +149,12 @@ inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
     default:
       return tylib::format_string("Unknown[%d]", v);
   }
+}
+
+// H.264 nalu header type mask.
+const int kH264TypeMask = 0x1F;
+inline enVideoH264NaluType GetNALUType(const char* nalu) {
+  return static_cast<enVideoH264NaluType>(nalu[0] & kH264TypeMask);
 }
 
 }  // namespace tywebrtc

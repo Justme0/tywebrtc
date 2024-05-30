@@ -16,14 +16,6 @@
 
 namespace tywebrtc {
 
-// @see: https://tools.ietf.org/html/rfc6184#section-5.8
-
-// to refactor, use string/string_view, cancle the struct
-struct Nalu {
-  const char* data;
-  int size;
-};
-
 // parse raw stream to several NALUs
 static int ParseFrameNalus(const std::vector<char>& stream,
                            std::vector<Nalu>& nalus) {
@@ -99,6 +91,8 @@ static int ParseFrameNalus(const std::vector<char>& stream,
   return 0;
 }
 
+// may no use
+// packet SPS and PPS into a STAP
 int H264Packetizer::PacketStapA(const uint32_t timestamp,
                                 const std::vector<std::shared_ptr<Extension>>&,
                                 std::vector<RtpBizPacket>& rtpBizPackets) {
@@ -108,6 +102,7 @@ int H264Packetizer::PacketStapA(const uint32_t timestamp,
 
   uint8_t header = sps_[0];
   uint8_t nal_type = header & kH264TypeMask;
+  assert(nal_type == enVideoH264NaluType::kVideoNaluSps);
 
   std::vector<char> packet(MAX_PKT_BUF_SIZE);
   RtpHeader& rtp_header = *reinterpret_cast<RtpHeader*>(packet.data());
@@ -132,6 +127,7 @@ int H264Packetizer::PacketStapA(const uint32_t timestamp,
   // stap-a header
   uint8_t stap_a_header = kVideoNaluStapA;
   stap_a_header |= (nal_type & (~kH264TypeMask));
+  assert(stap_a_header == 24);
   *dst++ = stap_a_header;
 
   WriteBigEndian(dst, sps_.size(), 2);
@@ -153,25 +149,27 @@ int H264Packetizer::PacketStapA(const uint32_t timestamp,
   return 0;
 }
 
-int H264Packetizer::PacketSingleNalu(
-    const char* frame, const int len, const uint32_t timestamp,
-    const std::vector<std::shared_ptr<Extension>>& extensions,
+int H264Packetizer::PacketSingleNalu_(
+    const Nalu& nalu, const uint32_t timestamp,
+    const std::vector<std::shared_ptr<Extension>>&,
     std::vector<RtpBizPacket>& rtpBizPackets) {
-  if ((frame[0] & kH264TypeMask) == 0x07) {
-    sps_.assign(reinterpret_cast<const char*>(frame), len);
-    pps_.clear();
-    // return 0;
-  }
+  switch (GetNALUType(nalu.data)) {
+    case kVideoNaluIdr:
+      // PacketStapA(timestamp, extensions, rtpBizPackets);
+      break;
 
-  if ((frame[0] & kH264TypeMask) == 0x08) {
-    pps_.append(reinterpret_cast<const char*>(frame), len);
-    // why not using assign?
-    // pps_.assign(reinterpret_cast<const char*>(frame), len);
-    // return 0;
-  }
+    case kVideoNaluSps:
+      // recv sps before pps
+      sps_.assign(nalu.data, nalu.size);
+      pps_.clear();
+      break;
 
-  if ((frame[0] & kH264TypeMask) == 0x05) {
-    PacketStapA(timestamp, extensions, rtpBizPackets);
+    case kVideoNaluPps:
+      pps_.assign(nalu.data, nalu.size);
+      break;
+
+    default:
+      break;
   }
 
   std::vector<char> packet(MAX_PKT_BUF_SIZE);
@@ -186,9 +184,9 @@ int H264Packetizer::PacketSingleNalu(
 
   const int headLen = header.getHeaderLength();
   char* ptr = packet.data() + headLen;
-  memcpy(ptr, frame, len);
+  memcpy(ptr, nalu.data, nalu.size);
 
-  packet.resize(headLen + len);
+  packet.resize(headLen + nalu.size);
 
   RtpBizPacket rtpBizPacket(std::move(packet),
                             SplitPowerSeq(powerSequence_).first);
@@ -198,21 +196,20 @@ int H264Packetizer::PacketSingleNalu(
   return 0;
 }
 
-int H264Packetizer::PacketFuA(
-    const char* frame, const int len, const uint32_t timestamp,
-    const std::vector<std::shared_ptr<Extension>>& extensions,
-    std::vector<RtpBizPacket>& rtpBizPackets) {
-  assert(len > kGuessMtuByte);
-  // WEBRTC_ERROR_CHECK(stream_id_.c_str(), (nullptr == frame), 0,
-  //                    "Chn %" PRIu64 " rtp buf is nullptr!", ssrc_);
-  // WEBRTC_ERROR_CHECK(stream_id_.c_str(), (VIDEO_NALU_HEADER_LTH >= len), 0,
-  //                    "Chn %" PRIu64 " rtp data len %d error.", ssrc_, len);
+// If multiple slice encoding of a frame, NOTE check H.264 begin problem.
+// https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/modules/video_coding/packet_buffer.cc;l=329;bpv=0;bpt=1
+// https://github.com/ossrs/ffmpeg-webrtc/pull/1#known-issues
+// @see: https://tools.ietf.org/html/rfc6184#section-5.8
+int H264Packetizer::PacketFuA_(const Nalu& nalu, const uint32_t timestamp,
+                               const std::vector<std::shared_ptr<Extension>>&,
+                               std::vector<RtpBizPacket>& rtpBizPackets) {
+  assert(nalu.size > kGuessMtuByte);
 
-  if ((frame[0] & kH264TypeMask) == 0x05) {
-    PacketStapA(timestamp, extensions, rtpBizPackets);
-  }
+  // if (GetNALUType(frame) == enVideoH264NaluType::kVideoNaluIdr) {
+  //   PacketStapA(timestamp, extensions, rtpBizPackets);
+  // }
 
-  int32_t data_len = len - VIDEO_NALU_HEADER_LTH;
+  int32_t data_len = nalu.size - VIDEO_NALU_HEADER_LTH;
   assert(data_len >= kGuessMtuByte);
 
   const int RTP_HEADER_LTH = 12;
@@ -227,9 +224,9 @@ int H264Packetizer::PacketFuA(
 
   slice_len = (data_len + (pkt_num >> 1)) / pkt_num;
 
-  const char* nalu = frame + VIDEO_NALU_HEADER_LTH;
-  uint8_t fu_indicator = (frame[0] & 0xE0) | 28;  // FU-A
-  uint8_t fu_header = frame[0] & 0x1F;
+  const char* worker = nalu.data + VIDEO_NALU_HEADER_LTH;
+  uint8_t fu_indicator = (nalu.data[0] & 0xE0) | 28;  // FU-A
+  uint8_t fu_header = nalu.data[0] & 0x1F;
   int32_t pkt_cnt = 0;
   int32_t i = 0;
   for (fu_header |= kSBit; i < pkt_num; i++) {
@@ -264,7 +261,7 @@ int H264Packetizer::PacketFuA(
     *cur_pos++ = fu_indicator;
     *cur_pos++ = fu_header;
 
-    memcpy(cur_pos, nalu, copy_len);
+    memcpy(cur_pos, worker, copy_len);
 
     RtpBizPacket rtpBizPacket(std::move(packet),
                               SplitPowerSeq(powerSequence_).first);
@@ -273,7 +270,7 @@ int H264Packetizer::PacketFuA(
 
     fu_header &= 0x1F;  // clear flags, next loop use
     pkt_cnt++;
-    nalu += copy_len;
+    worker += copy_len;
   }
 
   return 0;
@@ -290,16 +287,14 @@ int32_t H264Packetizer::Packetize(
     return -1;
   }
 
-  for (std::vector<Nalu>::iterator iter = nalus.begin(); iter != nalus.end();
-       ++iter) {
-    if (iter->size <= kGuessMtuByte) {
-      if ((ret = PacketSingleNalu(iter->data, iter->size, timestamp, extensions,
-                                  rtpBizPackets)) != 0) {
+  for (const Nalu& nalu : nalus) {
+    if (nalu.size <= kGuessMtuByte) {
+      if ((ret = PacketSingleNalu_(nalu, timestamp, extensions,
+                                   rtpBizPackets)) != 0) {
         return -2;
       }
     } else {
-      if ((ret = PacketFuA(iter->data, iter->size, timestamp, extensions,
-                           rtpBizPackets)) != 0) {
+      if ((ret = PacketFuA_(nalu, timestamp, extensions, rtpBizPackets)) != 0) {
         return -3;
       }
     }

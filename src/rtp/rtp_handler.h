@@ -43,6 +43,7 @@ class SSRCInfo {
 
   std::string ToString() const;
 
+ public:
   // why define ssrc's unpacketizer: save unpacked frame e.g. FU-A
   // audio don't use h264Unpacketizer
   H264Unpacketizer h264Unpacketizer;
@@ -52,7 +53,6 @@ class SSRCInfo {
   RtpReceiver rtpReceiver;
   RtpSender rtpSender;
 
-  // received biggest pkt
   uint16_t biggestSeq = 0;
   int64_t biggestCycle = 0;
 

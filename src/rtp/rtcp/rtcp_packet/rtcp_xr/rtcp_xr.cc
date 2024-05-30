@@ -73,35 +73,4 @@ int RtcpExtendedReports::HandleExtendedReports(const RtcpHeader& chead) {
   return 0;
 }
 
-/*
-int RtcpExtendedReports::CreateExtendedReports(EnXRBlockType blockType,
-                                               std::vector<char>* io_rtcpBin) {
-  int ret = 0;
-
-  switch (blockType) {
-    case EnXRBlockType::kXRBlockDLRR: {
-      ret = dlrr_.CreateRtcpDLRR(io_rtcpBin);
-      if (ret) {
-        return ret;
-      }
-      break;
-    }
-
-    case EnXRBlockType::kXRBlockRRTR: {
-      ret = rrtr_.CreateRtcpRRTR(io_rtcpBin);
-      if (ret) {
-        return ret;
-      }
-      break;
-    }
-
-    default:
-      assert(!"not support");
-      break;
-  }
-
-  return 0;
-}
-*/
-
 }  // namespace tywebrtc

@@ -341,7 +341,7 @@ int DtlsHandler::OnHandshakeCompleted_() {
   }
 
   belongingPeerConnection_.stateMachine_ = EnumStateMachine::DTLS_DONE;
-  tylog("stateMachine=%s, handShakeCompleted",
+  tylog("set stateMachine to %s, handShakeCompleted",
         StateMachineToString(belongingPeerConnection_.stateMachine_).data());
 
   return 0;
@@ -360,9 +360,7 @@ int DtlsHandler::HandshakeCompleted(bool bSessionCompleted) {
     return 0;
   }
 
-  char fprint[MAX_FP_SIZE];
-  memset(fprint, '\0', MAX_FP_SIZE);
-
+  char fprint[MAX_FP_SIZE]{};
   if (!GetRemoteFingerprint(fprint)) {
     tylog("getRemoteFingerprint err, peer not authenticate, return succ %s.",
           ToString().data());
@@ -370,7 +368,7 @@ int DtlsHandler::HandshakeCompleted(bool bSessionCompleted) {
     return 0;
   }
 
-  bool checkOk = checkFingerprint(fprint, strlen(fprint));
+  bool checkOk = CheckFingerprint_(fprint, strlen(fprint));
   if (!checkOk) {
     // 两次获取对端指纹，应当相同
     tylog("check fingerprint fail %s", ToString().data());
@@ -616,7 +614,7 @@ int DtlsHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
   r = BIO_reset(mOutBio);
   r = BIO_write(mInBio, vBufReceive.data(), vBufReceive.size());
   if (r != static_cast<int>(vBufReceive.size())) {
-    tylog("error BIO_write() r=%d, len=%zu, should be equal, %s", r,
+    tylog("error BIO write() r=%d, len=%zu, should be equal, %s", r,
           vBufReceive.size(), ToString().data());
     // error handle ?
   }
@@ -669,8 +667,8 @@ bool DtlsHandler::GetRemoteFingerprint(char* fprint) const {
 
 // @brief 比较对端指纹和入参
 // @return 是否一致
-bool DtlsHandler::checkFingerprint(const char* fingerprint,
-                                   unsigned int len) const {
+bool DtlsHandler::CheckFingerprint_(const char* fingerprint,
+                                    unsigned int len) const {
   char fprint[MAX_FP_SIZE];
 
   if (!GetRemoteFingerprint(fprint)) {
@@ -873,7 +871,7 @@ int DtlsHandler::OnTime() {
     ++m_ReSendTime;
 
     for (int i = 0; i < m_SendBuffNum; ++i) {
-      tylog("OnTime rewrite DtlsPacket, i=%d buffer len=%d", i,
+      tylog("onTime rewrite DtlsPacket, i=%d buffer len=%d", i,
             m_SendBuff[i].len);
 
       ret = rewriteDtlsPacket(m_SendBuff[i].buff, m_SendBuff[i].len);

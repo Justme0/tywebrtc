@@ -24,7 +24,7 @@
             border: 1px solid black;
             padding: 5px;
             width: 450px;
-            height: 395px;
+            height: 405px;
         }
 
         .messagebox {
@@ -51,12 +51,14 @@
         <div id="container">
             自己 ( self ):
             <br />
-            <video id="video_container_publish" playsinline controls autoplay muted width="600" height="600"></video>
+            <video id="video_container_publish" playsinline controls autoplay muted>
+            </video>
             <br />
             <br />
             对方 ( friend ):
             <br />
-            <video id="video_container_subscribe" playsinline controls autoplay width="600" height="600"></video>
+            <video id="video_container_subscribe" playsinline controls autoplay>
+            </video>
         </div>
 
     </div>
@@ -102,6 +104,8 @@
         // ref: https://github.com/webrtc/samples/blob/gh-pages/src/content/peerconnection/pc1/js/main.js
         window.localStorage.setItem('debug', '*');
 
+        const kFrameRate = 8;
+        const kSideLenPix = 500;
         const kStatBoxMsgNum = 20;
         var pc = null;
         var sendChannel = null;
@@ -167,6 +171,8 @@
 
         async function getRemoteStream(e) {
             let videoElement = document.getElementById('video_container_subscribe');
+            videoElement.width = videoElement.height = kSideLenPix;
+
             console.log(`ontrack recv event=${JSON.stringify(e)}`)
             if (!e.streams) {
                 return;
@@ -297,6 +303,7 @@
 
             // 1, publish
             let videoElement = document.getElementById('video_container_publish');
+            videoElement.width = videoElement.height = kSideLenPix;
             // let streamid = document.getElementById("streamid").value;
             // let serverurl = document.getElementById("serverurl").value;
 
@@ -315,9 +322,9 @@
             const constraints = {
                 video: {
                     facingMode: { ideal: 'user' },
-                    frameRate: { max: 10, ideal: 10 },
-                    width: { max: 450, ideal: 450 },
-                    height: { max: 450, ideal: 450 },
+                    frameRate: { max: kFrameRate, ideal: kFrameRate },
+                    width: { max: kSideLenPix, ideal: kSideLenPix },
+                    height: { max: kSideLenPix, ideal: kSideLenPix },
                     aspectRatio: 1,
                 },
                 audio: {
@@ -342,13 +349,13 @@
                 iceTransportPolicy: "all"
             });
 
-            sendChannel = pc.createDataChannel("sendChannel");
-            sendChannel.onopen = handleSendChannelStatusChange;
-            sendChannel.onclose = handleSendChannelStatusChange;
-            sendChannel.onerror = error => {
-                console.log(`data channel error ${error}`)
-            };
-            sendChannel.onmessage = handleReceiveMessage;
+            // sendChannel = pc.createDataChannel("sendChannel");
+            // sendChannel.onopen = handleSendChannelStatusChange;
+            // sendChannel.onclose = handleSendChannelStatusChange;
+            // sendChannel.onerror = error => {
+            //     console.log(`data channel error ${error}`)
+            // };
+            // sendChannel.onmessage = handleReceiveMessage;
 
             // for uplink,
             // if have no audio or video device
@@ -377,6 +384,9 @@
             // 2, subscribe
             pc.ontrack = getRemoteStream;
             const offer = await pc.createOffer();
+            // answer SDP downlink sps-pps-idr-in-keyframe=1 useless, must add in offer sdp
+            // https://www.alibabacloud.com/help/zh/live/user-guide/specifications-of-webrtc-signaling-used-to-access-grtn
+            offer.sdp = offer.sdp.replaceAll('profile-level-id', 'sps-pps-idr-in-keyframe=1;profile-level-id');
             await pc.setLocalDescription(offer);
 
             console.log("=============== offer sdp:");
@@ -384,6 +394,7 @@
             g_vp8Payload = offer.sdp.match("a=rtpmap:([0-9]+) VP8")[1];
             console.log(`offer vp8 payload=${g_vp8Payload}`);
 
+            // a=group:BUNDLE 0 1 2 3 4
             let answerSDP = `v=0
 o=- 7595655801978680453 1 IN IP4 127.0.0.1
 s=media
@@ -391,7 +402,7 @@ c=IN IP4 0.0.0.0
 t=0 0
 a=ice-lite
 a=msid-semantic: WMS *
-a=group:BUNDLE 0 1 2 3 4
+a=group:BUNDLE 0 1 2 3
 m=audio 9 UDP/TLS/RTP/SAVPF 111
 a=rtcp:9 IN IP4 0.0.0.0
 a=candidate:1 1 udp 1686052607 36.155.205.204 8090 typ host
@@ -462,13 +473,13 @@ a=sendonly
 a=rtcp-mux
 a=rtcp-rsize
 a=rtpmap:96 VP8/90000
-a=fmtp:106 packetization-mode=1;profile-level-id=42e01f;sps-pps-idr-in-keyframe=1;level-asymmetry-allowed=1
 a=rtcp-fb:96 goog-remb
 a=rtcp-fb:96 ccm fir
 a=rtcp-fb:96 nack
 a=rtcp-fb:96 nack pli
 a=rtcp-fb:96 rrtr
 a=rtpmap:106 H264/90000
+a=fmtp:106 packetization-mode=1;profile-level-id=42e01f;sps-pps-idr-in-keyframe=1;level-asymmetry-allowed=1
 a=rtcp-fb:106 goog-remb
 a=rtcp-fb:106 ccm fir
 a=rtcp-fb:106 nack
@@ -483,17 +494,19 @@ a=ssrc:50472669 cname:ovaCctnHP9Asci9c
 a=ssrc:50472669 msid:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV 1d7fc300-9889-4f94-9f35-c0bcc77a260d
 a=ssrc:50472669 mslabel:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV
 a=ssrc:50472669 label:1d7fc300-9889-4f94-9f35-c0bcc77a260d
-m=application 9 UDP/DTLS/SCTP webrtc-datachannel
-a=setup:active
-a=mid:4
-a=sendrecv
-a=ice-ufrag:144115262675375852
-a=ice-pwd:728c90257276ed9e48aac959
-a=fingerprint:sha-256 55:9B:3E:43:91:2D:66:79:0F:B6:84:45:B3:47:3F:56:D4:4C:9E:10:EA:B4:66:C6:64:42:42:4B:5C:CD:FF:2F
-a=candidate:1 1 udp 1686052607 36.155.205.204 8090 typ host
-a=sctpmap:5000 webrtc-datachannel 1024
-a=max-message-size:262144
 `
+            /*
+            m=application 9 UDP/DTLS/SCTP webrtc-datachannel
+            a=setup:active
+            a=mid:4
+            a=sendrecv
+            a=ice-ufrag:144115262675375852
+            a=ice-pwd:728c90257276ed9e48aac959
+            a=fingerprint:sha-256 55:9B:3E:43:91:2D:66:79:0F:B6:84:45:B3:47:3F:56:D4:4C:9E:10:EA:B4:66:C6:64:42:42:4B:5C:CD:FF:2F
+            a=candidate:1 1 udp 1686052607 36.155.205.204 8090 typ host
+            a=sctpmap:5000 webrtc-datachannel 1024
+            a=max-message-size:262144
+            */
             console.log("=============== answer sdp:");
             console.log(answerSDP)
 

@@ -99,9 +99,7 @@ RtpHandler::RtpHandler(PeerConnection &pc)
   audio_stream->codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
   audio_stream->codecpar->sample_rate = 48000;
   // OPT: use const or config
-  audio_stream->codecpar->channel_layout = AV_CH_LAYOUT_MONO;
-  audio_stream->codecpar->channels =
-      av_get_channel_layout_nb_channels(audio_stream->codecpar->channel_layout);
+  audio_stream->codecpar->ch_layout = AV_CHANNEL_LAYOUT_MONO;
   audioStreamIndex_ = audio_stream->index;
   tylog("audio stream index=%d.", audioStreamIndex_);
 
@@ -610,29 +608,17 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
 
   int ret = 0;
 
-  // if we recv web's data, dtls should complete in Chrome
-  // OPT: no need call hand shake complete function each time recv rtp
-  const bool kSessionCompleted = true;
-  ret = belongingPeerConnection_.dtlsHandler_.HandshakeCompleted(
-      kSessionCompleted);
-  if (ret) {
-    tylog(
-        "already recv rtp, we can handshakeCompleted safely, but ret=%d, but "
-        "not return error",
-        ret);
-  }
-
   if (belongingPeerConnection_.stateMachine_ < EnumStateMachine::DTLS_DONE) {
     tylog("warning: recv rtp, but now state=%s, should be DTLS_DONE!!!",
           StateMachineToString(belongingPeerConnection_.stateMachine_).data());
     return -1;
   } else if (belongingPeerConnection_.stateMachine_ ==
              EnumStateMachine::DTLS_DONE) {
-    // notify others I entered
     belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_RTP;
-    tylog("stateMachine=%s, handShakeCompleted",
+    tylog("set stateMachine to %s",
           StateMachineToString(belongingPeerConnection_.stateMachine_).data());
 
+    // notify others I entered
     auto peerPC = belongingPeerConnection_.FindPeerPC();
     if (nullptr != peerPC) {
       peerPC->dataChannelHandler_.SendSctpDataForLable(
@@ -703,7 +689,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         &this->belongingPeerConnection_.pliTimer_);
   }
 
-  assert(belongingPeerConnection_.stateMachine_ == EnumStateMachine::GOT_RTP);
+  assert(belongingPeerConnection_.stateMachine_ >= EnumStateMachine::GOT_RTP);
 
   std::string mediaType =
       reinterpret_cast<const RtpHeader *>(vBufReceive.data())
@@ -720,7 +706,6 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
 
       return ret;
     }
-
     DumpRecvPacket(vBufReceive);
 
     ret = belongingPeerConnection_.rtcpHandler_.HandleRtcpPacket(vBufReceive);
@@ -730,7 +715,8 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       return ret;
     }
   } else if (mediaType == kMediaTypeAudio || mediaType == kMediaTypeVideo) {
-    tylog("before unprotect, paddinglen=%d", getRtpPaddingLength(vBufReceive));
+    tylog("before unprotect(may have) rtp, paddinglen=%d",
+          getRtpPaddingLength(vBufReceive));
     // reuse original buffer
     // taylor consider restart svr
     ret = belongingPeerConnection_.srtpHandler_.UnprotectRtp(
@@ -741,7 +727,8 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       return ret;
     }
     DumpRecvPacket(vBufReceive);
-    tylog("after unprotect, paddinglen=%d", getRtpPaddingLength(vBufReceive));
+    tylog("after unprotect(may have), paddinglen=%d",
+          getRtpPaddingLength(vBufReceive));
 
     const RtpHeader &rtpHeader =
         *reinterpret_cast<const RtpHeader *>(vBufReceive.data());
@@ -839,8 +826,24 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         std::move(const_cast<std::vector<char> &>(vBufReceive)), itemCycle);
     assert(vBufReceive.empty());
 
-    if (rtpBizPacket.GetPowerSeq() < ssrcInfo.rtpReceiver.lastPoppedPowerSeq_) {
-      tylog("current=%s < lastPop=%s, ignore current pkt.",
+    bool valid = ssrcInfo.rtpReceiver.rtp_valid_packet_in_sequence(
+        &ssrcInfo.rtpReceiver.rtpStats_,
+        reinterpret_cast<const RtpHeader *>(rtpBizPacket.rtpRawPacket.data())
+            ->getSeqNumber());
+    if (!valid) {
+      tylog("valid check false");
+      return -2396;
+    }
+
+    // https://datatracker.ietf.org/doc/html/rfc3550#appendix-A.3
+    // The number of packets received is simply the count of packets as they
+    // arrive, including any late or duplicate packets.
+    // So count before check old.
+    ssrcInfo.rtpReceiver.CountStatistics(rtpBizPacket);
+
+    if (rtpBizPacket.GetPowerSeq() <=
+        ssrcInfo.rtpReceiver.lastPoppedPowerSeq_) {
+      tylog("recv old current=%s <= lastPop=%s, ignore current pkt.",
             PowerSeqToString(rtpBizPacket.GetPowerSeq()).data(),
             PowerSeqToString(ssrcInfo.rtpReceiver.lastPoppedPowerSeq_).data());
 
@@ -890,7 +893,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
 
 std::string RtpHandler::ToString() const {
   return tylib::format_string(
-      "upAudioSSRC=%u, upVideoSSRC=%u, ssrcMapSize=%zu.", upAudioSSRC,
+      "{upAudioSSRC=%u, upVideoSSRC=%u, ssrcMapSize=%zu}", upAudioSSRC,
       upVideoSSRC, ssrcInfoMap_.size());
 }
 

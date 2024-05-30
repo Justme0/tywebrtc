@@ -173,8 +173,9 @@ int HandleRequest() {
 
   // to use memory pool for so large buffer, UDP is enough, TCP?
   // OPT: media packet should less copy as possible
-  const int kSendRecvUdpMaxLength = 4 * 1024;
-  std::vector<char> vBufReceive(kSendRecvUdpMaxLength);
+  const int kSendRecvUdpMaxLength = 1600;
+  static thread_local std::vector<char> vBufReceive;
+  vBufReceive.resize(kSendRecvUdpMaxLength);
 
   struct sockaddr_in address;
   socklen_t addr_size = sizeof(struct sockaddr_in);
@@ -581,7 +582,7 @@ int main() {
   // * init log
   INIT_LOG_V2("./log/",
               tylib::MLOG_F_TIME | tylib::MLOG_F_FILELINE | tylib::MLOG_F_FUNC,
-              6, 100 * 1024 * 1024);
+              6, 150 * 1024 * 1024);
 
   // before server launch, print log to standard out and file
 

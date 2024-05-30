@@ -29,6 +29,8 @@ struct RrPkgInfo {
   uint32_t jitter;
   uint32_t lastSr;
   uint32_t delaySinceLast;
+
+  // tostring
 };
 
 class RtcpReceiverReport {

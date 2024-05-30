@@ -146,7 +146,6 @@ class PeerConnection {
   PLITimer pliTimer_;
   DTLSTimer dtlsTimer_;
 
-  bool bNotUseSrtp = false;
   bool bUseRsfec = false;
 };
 

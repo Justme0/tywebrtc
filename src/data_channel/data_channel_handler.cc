@@ -427,7 +427,7 @@ void DataChannelHandler::HandleDataChannelPacket(const char* buf,
   usrsctp_conninput(reinterpret_cast<void*>(id_), buf, nb_buf, 0);
 }
 
-// now no use
+#ifdef NOW_NO_USE
 int DataChannelHandler::CreateDataChannel(const std::string& label) {
   DataChannel data_channel;
   data_channel.label_ = label;
@@ -477,6 +477,7 @@ int DataChannelHandler::CreateDataChannel(const std::string& label) {
 
   return 0;
 }
+#endif
 
 const std::string SctpNotifyToString(uint16_t notifyType) {
   switch (notifyType) {
