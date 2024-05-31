@@ -69,7 +69,7 @@ int RtcpPLI::CreatePLISend() {
   pli.setLength(2);
 
   const char *head = reinterpret_cast<const char *>(&pli);
-  const int len = (pli.getLength() + 1) * 4;
+  const int len = pli.getRealLength();
   assert(len == 12);                            // head len
   std::vector<char> rtcpBin(head, head + len);  // can use string view
 

@@ -33,6 +33,33 @@ namespace tywebrtc {
 class PeerConnection;
 class RtpHandler;
 
+struct RrPkgInfo {
+  int64_t recvMs;
+  uint32_t RRCount;
+  uint32_t sinkSSRC;
+  uint32_t sourceSSRC;
+  uint8_t fractionLost;
+  int32_t lostPkgNum;
+  uint32_t extendedSeq;
+  uint32_t jitter;
+  uint32_t lastSr;
+  uint32_t delaySinceLast;
+
+  // tostring
+};
+
+struct SrPkgInfo {
+  int64_t recvMs{};
+  uint32_t SRCount{};
+  uint32_t SSRC{};
+  uint32_t blockCount{};
+  uint32_t srLen{};
+  uint64_t NTPTimeStamps{};
+  uint32_t RTPTimeStamps{};
+  uint32_t sentPkgs{};
+  uint32_t sentOctets{};
+};
+
 class SSRCInfo {
  public:
   explicit SSRCInfo(RtpHandler &belongingRtpHandler);
@@ -52,6 +79,9 @@ class SSRCInfo {
 
   RtpReceiver rtpReceiver;
   RtpSender rtpSender;
+
+  RrPkgInfo rrInfo_{};
+  SrPkgInfo srInfo_{};
 
   uint16_t biggestSeq = 0;
   int64_t biggestCycle = 0;

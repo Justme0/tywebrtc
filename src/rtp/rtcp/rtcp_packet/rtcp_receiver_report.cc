@@ -21,8 +21,8 @@ RtcpReceiverReport::RtcpReceiverReport(RtcpHandler& belongingRtcpHandler)
 int RtcpReceiverReport::HandleReceiverReport(const RtcpHeader& chead) {
   uint8_t block_count = chead.getBlockCount();
   tylog("recv RR block_count=%d.", block_count);
-  uint16_t rr_length = (chead.getLength() + 1) * 4;
-  uint32_t ssrc = chead.getSSRC();
+  const uint16_t rr_length = chead.getRealLength();
+  const uint32_t ssrc = chead.getSSRC();
 
   // RR report block is 24 B
   // https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.2
@@ -72,8 +72,6 @@ int RtcpReceiverReport::HandleReceiverReport(const RtcpHeader& chead) {
     if (kLSR > 0 && kDLSR > 0) {
       rttNtp = CompactNtp(MsToNtp(g_now_ms)) - kDLSR - kLSR;
       rttMs = CompactNtpRttToMs(rttNtp);
-      // tylog("taylor in RR rtt ms=%d.", rttMs);
-
       // SaveDownLost(sourceSsrc, fractLost, lostPkgs, rtt);
       this->belongingRtcpHandler_.belongingPeerConnection_.signalHandler_
           .S2CReportRTT(rttMs);
@@ -86,8 +84,10 @@ int RtcpReceiverReport::HandleReceiverReport(const RtcpHeader& chead) {
         highestSeq, jitter, kLSR, kDLSR,
         kDLSR == 0 ? 0 : CompactNtpRttToMs(kDLSR), rttNtp, rttMs);
 
-    RrPkgInfo& info = this->ssrcRRInfo[sourceSsrc];
-    info.svrTimeMS = g_now_ms;
+    RrPkgInfo& info = this->belongingRtcpHandler_.belongingPeerConnection_
+                          .rtpHandler_.ssrcInfoMap_.at(sourceSsrc)
+                          .rrInfo_;
+    info.recvMs = g_now_ms;
     info.RRCount++;
     info.fractionLost = fractLost;
   }
@@ -103,9 +103,9 @@ int RtcpReceiverReport::CreateReceiverReport(std::vector<char>* io_rtcpBin) {
     return 0;
   }
 
-  RTPStatistics& rtpStats = this->belongingRtcpHandler_.belongingPeerConnection_
-                                .rtpHandler_.ssrcInfoMap_.at(remote_ssrc)
-                                .rtpReceiver.rtpStats_;
+  SSRCInfo& ssrcInfo = this->belongingRtcpHandler_.belongingPeerConnection_
+                           .rtpHandler_.ssrcInfoMap_.at(remote_ssrc);
+  RTPStatistics& rtpStats = ssrcInfo.rtpReceiver.rtpStats_;
 
   rtpStats.last_octet_count = rtpStats.octet_count;
   // some placeholders we should really fill...
@@ -113,8 +113,8 @@ int RtcpReceiverReport::CreateReceiverReport(std::vector<char>* io_rtcpBin) {
   uint32_t extended_max = rtpStats.cycles + rtpStats.max_seq;
   uint32_t expected = extended_max - rtpStats.base_seq;
   uint32_t lost = expected - rtpStats.received;
-  lost = std::min<uint32_t>(lost,
-                            0xffffff);  // clamp it since it's only 24 bits...
+  // clamp it since it's only 24 bits...
+  lost = std::min<uint32_t>(lost, 0xffffff);
   uint32_t expected_interval = expected - rtpStats.expected_prior;
   rtpStats.expected_prior = expected;
   uint32_t received_interval = rtpStats.received - rtpStats.received_prior;
@@ -128,46 +128,31 @@ int RtcpReceiverReport::CreateReceiverReport(std::vector<char>* io_rtcpBin) {
     fraction = (lost_interval << 8) / expected_interval;
   }
 
-  int uiLocSsrc = 23333;
+  const int uiLocSsrc = 23333;
 
-  RrPkgInfo rrPkgInfo{};
-  assert(rrPkgInfo.sinkSSRC == 0);
-  assert(rrPkgInfo.lostPkgNum == 0);
-  assert(rrPkgInfo.jitter == 0);
-  assert(rrPkgInfo.lastSr == 0);
-  rrPkgInfo.sinkSSRC = uiLocSsrc;
-  rrPkgInfo.sourceSSRC = remote_ssrc;
-  rrPkgInfo.extendedSeq = extended_max;
-  rrPkgInfo.fractionLost = fraction;
-  rrPkgInfo.lostPkgNum = lost;
-  rrPkgInfo.jitter = rtpStats.jitter >> 4;
-  rrPkgInfo.delaySinceLast = 0;
-  rrPkgInfo.lastSr = 0;
-
-  // taylor fixme
-  NtpTime rcvNtp = MsToNtp(g_now_ms - 500);
-  rrPkgInfo.delaySinceLast = CompactNtp(MsToNtp(g_now_ms)) - CompactNtp(rcvNtp);
-  rrPkgInfo.lastSr = 23333;
-  tylog("rr PkgInfo.delaySinceLast=%u, rr PkgInfo.lastSr=%u",
-        rrPkgInfo.delaySinceLast, rrPkgInfo.lastSr);
+  assert(g_now_ms >= ssrcInfo.srInfo_.recvMs);
 
   RtcpHeader receiverReport;
   receiverReport.setPacketType(RtcpPacketType::kReceiverReport);
-  receiverReport.setSSRC(rrPkgInfo.sinkSSRC);
-  receiverReport.setSourceSSRC(rrPkgInfo.sourceSSRC);
-  receiverReport.setHighestSeqnum(rrPkgInfo.extendedSeq);
-  receiverReport.setSeqnumCycles(rrPkgInfo.extendedSeq >> 16);
-  receiverReport.setLostPackets(rrPkgInfo.lostPkgNum);
-  receiverReport.setFractionLost(rrPkgInfo.fractionLost);
-  receiverReport.setJitter(rrPkgInfo.jitter);
-  receiverReport.setDelaySinceLastSr(rrPkgInfo.delaySinceLast);
-  receiverReport.setLastSr(rrPkgInfo.lastSr);
+  receiverReport.setSSRC(uiLocSsrc);
+  receiverReport.setSourceSSRC(remote_ssrc);
+  receiverReport.setHighestSeqnum(rtpStats.max_seq);
+  receiverReport.setSeqnumCycles(rtpStats.cycles);
+  receiverReport.setLostPackets(lost);
+  receiverReport.setFractionLost(fraction);
+  receiverReport.setJitter(rtpStats.jitter >> 4);
+  receiverReport.setDelaySinceLastSr(
+      CompactNtp(MsToNtp(g_now_ms)) -
+      CompactNtp(MsToNtp(ssrcInfo.srInfo_.recvMs)));
+  receiverReport.setLastSr(CompactNtp(NtpTime(ssrcInfo.srInfo_.NTPTimeStamps)));
   receiverReport.setLength(7);
   receiverReport.setBlockCount(1);
 
+  tylog("create rr=%s.", receiverReport.ToString().data());
+
   char* buf = reinterpret_cast<char*>(&receiverReport);
-  int len = (receiverReport.getLength() + 1) * 4;
-  io_rtcpBin->insert(io_rtcpBin->end(), buf, buf + len);
+  io_rtcpBin->insert(io_rtcpBin->end(), buf,
+                     buf + receiverReport.getRealLength());
 
   return 0;
 }

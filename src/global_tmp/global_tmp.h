@@ -26,6 +26,7 @@
 #include "prometheus/family.h"
 #include "prometheus/gauge.h"
 #include "tylib/string/format_string.h"
+#include "tylib/time/time_util.h"
 
 #include "src/log/log.h"
 
@@ -292,9 +293,13 @@ inline std::string RTMPToString(const RTMP& r) {
       r.m_polling, r.m_resplen, r.m_unackd, AValToString(r.m_clientID).data(),
       RTMPPacketToString(r.m_write).data(), RTMPSockBufToString(r.m_sb).data());
 }
+// January 1970, in NTP seconds.
+const uint32_t kNtpJan1970 = 2208988800UL;
 
 // from
 // https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/system_wrappers/include/ntp_time.h
+// NTP doc
+// https://tickelton.gitlab.io/articles/ntp-timestamps/
 class NtpTime {
  public:
   static constexpr uint64_t kFractionsPerSecond = 0x100000000;
@@ -315,12 +320,6 @@ class NtpTime {
   }
   void Reset() { value_ = 0; }
 
-  int64_t ToMs() const {
-    static constexpr double kNtpFracPerMs = 4.294967296E6;  // 2^32 / 1000.
-    const double frac_ms = static_cast<double>(fractions()) / kNtpFracPerMs;
-    return 1000 * static_cast<int64_t>(seconds()) +
-           static_cast<int64_t>(frac_ms + 0.5);
-  }
   // NTP standard (RFC1305, section 3.1) explicitly state value 0 is invalid.
   bool Valid() const { return value_ != 0; }
 
@@ -329,6 +328,22 @@ class NtpTime {
   }
   uint32_t fractions() const {
     return static_cast<uint32_t>(value_ % kFractionsPerSecond);
+  }
+
+  std::string ToString() const {
+    int64_t unixMs = ToUnixMs_();
+    return tylib::format_string(
+        "{value=%lu, intSec=%u, frac=%u, unixMs=%ld[%s]}", value_, seconds(),
+        fractions(), unixMs,
+        tylib::MilliSecondToLocalTimeString(unixMs).data());
+  }
+
+  // to make private but utest
+  int64_t ToUnixMs_() const {
+    static constexpr double kNtpFracPerMs = 4.294967296E6;  // 2^32 / 1000.
+    const double frac_ms = static_cast<double>(fractions()) / kNtpFracPerMs;
+    return 1000 * static_cast<int64_t>(seconds() - kNtpJan1970) +
+           static_cast<int64_t>(frac_ms + 0.5);
   }
 
  private:
@@ -352,12 +367,10 @@ inline bool operator!=(const NtpTime& n1, const NtpTime& n2) {
 //    return NtpTime(seconds, fractions);
 //}
 
-// January 1970, in NTP seconds.
-const uint32_t kNtpJan1970 = 2208988800UL;
-
 // Magic NTP fractional unit.
 const double kMagicNtpFractionalUnit = 4.294967296E+9;
 
+// Convert UNIX ms to NTP struct.
 inline NtpTime MsToNtp(uint64_t timeMs) {
   double microseconds_in_seconds = (timeMs % 1000) / 1000.0;
   uint32_t seconds = timeMs / 1000 + kNtpJan1970;

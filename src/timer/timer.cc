@@ -15,6 +15,7 @@
 namespace tywebrtc {
 
 bool MonitorStateTimer::_OnTimer() {
+  tylog("on timer");
   Singleton<PCManager>::Instance().CleanTimeoutPeerConnection();
 
   const int size = Singleton<PCManager>::Instance().GetPeerConnectionSize();
@@ -42,6 +43,7 @@ bool MonitorStateTimer::_OnTimer() {
 }
 
 bool PLITimer::_OnTimer() {
+  tylog("on timer");
   int ret = this->belongingPC_.rtcpHandler_.psfb_.pli_.CreatePLISend();
   if (ret) {
     tylog("create pli ret=%d", ret);
@@ -52,6 +54,7 @@ bool PLITimer::_OnTimer() {
 }
 
 bool DTLSTimer::_OnTimer() {
+  tylog("on timer");
   int ret = belongingPC_.dtlsHandler_.OnTime();
   if (ret) {
     tylog("dtls timer ret=%d", ret);
@@ -62,6 +65,7 @@ bool DTLSTimer::_OnTimer() {
 }
 
 bool SenderReportTimer::_OnTimer() {
+  tylog("on timer");
   std::vector<char> rtcpBin;
   int ret =
       belongingPC_.rtcpHandler_.senderReport_.CreateSenderReport(&rtcpBin);
@@ -98,6 +102,7 @@ bool SenderReportTimer::_OnTimer() {
 }
 
 bool ReceiverReportTimer::_OnTimer() {
+  tylog("on timer");
   std::vector<char> rtcpBin;
   int ret =
       belongingPC_.rtcpHandler_.receiverReport_.CreateReceiverReport(&rtcpBin);

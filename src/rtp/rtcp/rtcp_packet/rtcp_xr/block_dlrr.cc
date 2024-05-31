@@ -20,11 +20,11 @@ int RtcpDLRR::HandleRtcpDLRR(const RtcpHeader& blockHead) {
   uint32_t blockLen = blockHead.getBlockLen();
   uint32_t subBlockBytes = 12;  // 4 ssrc + 4 lasr rr + 4 delay rr,
   if ((blockLen * 4) % subBlockBytes != 0) {
-    tylog("[ExtendedReport] ((blockLen[%u])*4) %% 12 !=  0", blockLen);
+    tylog("error: ExtendedReport ((blockLen[%u])*4) %% 12 != 0", blockLen);
     return -1;
   }
 
-  uint32_t blockCount = (blockLen)*4 / subBlockBytes;
+  uint32_t blockCount = blockLen * 4 / subBlockBytes;
   const uint8_t* dlrrMovPointer = reinterpret_cast<const uint8_t*>(&blockHead);
   const RtcpHeader* pdlrrHead;
   if (blockCount > 1) {
@@ -77,9 +77,7 @@ int RtcpDLRR::CreateRtcpDLRR(std::vector<char>* io_rtcpBin) {
   dlrr.setDLRR(dlrrNtp);
 
   char* buf = reinterpret_cast<char*>(&dlrr);
-  int len = (dlrr.getLength() + 1) * 4;
-
-  io_rtcpBin->insert(io_rtcpBin->end(), buf, buf + len);
+  io_rtcpBin->insert(io_rtcpBin->end(), buf, buf + dlrr.getRealLength());
 
   return 0;
 }

@@ -51,9 +51,7 @@ int RtcpRRTR::CreateRtcpRRTR(std::vector<char>* io_rtcpBin) {
   rrtrReport.setRrtrNtp(MsToNtp(g_now_ms).GetValue());
 
   char* buf = reinterpret_cast<char*>(&rrtrReport);
-  int len = (rrtrReport.getLength() + 1) * 4;
-
-  io_rtcpBin->insert(io_rtcpBin->end(), buf, buf + len);
+  io_rtcpBin->insert(io_rtcpBin->end(), buf, buf + rrtrReport.getRealLength());
 
   return 0;
 }

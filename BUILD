@@ -50,6 +50,8 @@ cc_test(
   size = "small",
   srcs = glob(["src/**/*_test.cc", "src/**/*.h"]),
 
+  copts = ["-D SCTP_DEBUG", "-Werror", "-Wall", "-Wextra"],
+
   deps = [
     "@com_github_jupp0r_prometheus_cpp//pull",
     "@com_google_googletest//:gtest_main",

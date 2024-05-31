@@ -18,18 +18,6 @@ namespace tywebrtc {
 class RtcpHandler;
 class RtcpHeader;
 
-struct SrPkgInfo {
-  uint64_t svrTimeMS{};
-  uint32_t SRCount{};
-  uint32_t SSRC{};
-  uint32_t blockCount{};
-  uint32_t srLen{};
-  uint64_t NTPTimeStamps{};
-  uint32_t RTPTimeStamps{};
-  uint32_t sentPkgs{};
-  uint32_t sentOctets{};
-};
-
 class RtcpSenderReport {
  public:
   explicit RtcpSenderReport(RtcpHandler &belongingRtcpHandler);
@@ -40,7 +28,6 @@ class RtcpSenderReport {
 
  private:
   RtcpHandler &belongingRtcpHandler_;
-  std::unordered_map<uint32_t, SrPkgInfo> ssrcSRInfo;
 };
 
 }  // namespace tywebrtc

@@ -21,28 +21,31 @@ RtcpSenderReport::RtcpSenderReport(RtcpHandler& belongingRtcpHandler)
 
 int RtcpSenderReport::HandleSenderReport(const RtcpHeader& chead) {
   uint8_t blockCount = chead.getBlockCount();
-  uint16_t srLen = (chead.getLength() + 1) * 4;
+  uint16_t srLen = chead.getRealLength();
   uint32_t ssrc = chead.getSSRC();
-  uint64_t ntpTimestamp = chead.getNtpTimestamp();
-  uint32_t rtpTimestamp = chead.getRtpTimestamp();
+  uint64_t senderNtpTimestamp = chead.getNtpTimestamp();
+  uint32_t senderRtpTimestamp = chead.getRtpTimestamp();
   uint32_t sendPkgs = chead.getPacketsSent();  // sender send packages sum
   uint32_t sendOcts = chead.getOctetsSent();   // sender send bytes sum
 
   tylog(
-      "sender report ssrc[%u] blockCount[%u] srLen[%u] ntpTimestamp[%lu]"
-      "rtpTimestamp[%u] sendPkgs[%u] sendOcts[%u] ",
-      ssrc, blockCount, srLen, ntpTimestamp, rtpTimestamp, sendPkgs, sendOcts);
+      "SR ssrc[%u] blockCount[%u] srLen[%u] ntpTimestamp=%s, rtpTimestamp[%u] "
+      "sendPkgs[%u] sendOcts[%u]",
+      ssrc, blockCount, srLen, NtpTime(senderNtpTimestamp).ToString().data(),
+      senderRtpTimestamp, sendPkgs, sendOcts);
 
   // 存储sr用于计算rr反馈
   // to check map key number
-  SrPkgInfo& info = this->ssrcSRInfo[ssrc];
-  info.svrTimeMS = g_now_ms;
+  SrPkgInfo& info = this->belongingRtcpHandler_.belongingPeerConnection_
+                        .rtpHandler_.ssrcInfoMap_.at(ssrc)
+                        .srInfo_;
+  info.recvMs = g_now_ms;
   info.SRCount++;
   info.SSRC = ssrc;
   info.blockCount = blockCount;
   info.srLen = srLen;
-  info.NTPTimeStamps = NtpTime(ntpTimestamp).ToMs();
-  info.RTPTimeStamps = rtpTimestamp;
+  info.NTPTimeStamps = senderNtpTimestamp;
+  info.RTPTimeStamps = senderRtpTimestamp;
   info.sentPkgs = sendPkgs;
   info.sentOctets = sendOcts;
 
@@ -53,9 +56,9 @@ int RtcpSenderReport::CreateSenderReport(std::vector<char>* io_rtcpBin) {
   SrPkgInfo srPkgInfo{};
 
   // taylor mock
-  NtpTime nowNtp = MsToNtp(g_now_ms);
   srPkgInfo.SSRC = kDownlinkVideoSsrc;
-  srPkgInfo.NTPTimeStamps = nowNtp.GetValue();  // for calculate RTT
+  // for calculate RTT
+  srPkgInfo.NTPTimeStamps = MsToNtp(g_now_ms).GetValue();
   srPkgInfo.RTPTimeStamps = 999888;
   srPkgInfo.sentOctets = 10000;
   srPkgInfo.sentPkgs = 20000;
@@ -70,9 +73,12 @@ int RtcpSenderReport::CreateSenderReport(std::vector<char>* io_rtcpBin) {
   senderReport.setPacketsSent(srPkgInfo.sentPkgs);
   senderReport.setOctetsSent(srPkgInfo.sentOctets);
   senderReport.setLength(6);
+
+  tylog("create sr=%s.", senderReport.ToString().data());
+
   char* buf = reinterpret_cast<char*>(&senderReport);
-  int len = (senderReport.getLength() + 1) * 4;
-  io_rtcpBin->insert(io_rtcpBin->end(), buf, buf + len);
+  io_rtcpBin->insert(io_rtcpBin->end(), buf,
+                     buf + senderReport.getRealLength());
 
   return 0;
 }

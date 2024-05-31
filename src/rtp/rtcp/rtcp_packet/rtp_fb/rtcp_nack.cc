@@ -106,7 +106,7 @@ int RtcpNack::SendReqNackPkt_(const std::vector<uint16_t> &seqVect,
 int RtcpNack::HandleNack(const RtcpHeader &chead) {
   int ret = 0;
 
-  uint32_t rtcpLen = (chead.getLength() + 1) * 4;
+  const uint32_t rtcpLen = chead.getRealLength();
   std::vector<uint16_t> seqVect;
 
   uint32_t currPos = 12;  // 调过NACK包头12个字节的长度

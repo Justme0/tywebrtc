@@ -61,8 +61,10 @@ int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {
     tylog("sendto ret=-1 errorno=%d[%s]", errno, strerror(errno));
     return -1;
   }
-  tylog("sendto succ buf size=%ld, ip=%s, port=%d.", sendtoLen,
-        clientIP_.data(), clientPort_);
+  tylog("sendto ret=%ld, bizDataLen=%zu, ip=%s, port=%d.", sendtoLen,
+        vBufSend.size(), clientIP_.data(), clientPort_);
+
+  assert(sendtoLen == static_cast<int>(vBufSend.size()));
 
   return 0;
 }
