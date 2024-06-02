@@ -43,7 +43,7 @@ class PullHandler {
   const int *p_playSocket_ = nullptr;
 
  private:
-  // PeerConnection &belongingPeerConnection_;
+  // PeerConnection &belongingPC_;
   int initRet_ = -1;  // default error
 
   std::function<int()> initFunc_;

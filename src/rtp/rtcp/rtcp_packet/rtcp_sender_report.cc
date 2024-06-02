@@ -34,11 +34,14 @@ int RtcpSenderReport::HandleSenderReport(const RtcpHeader& chead) {
       ssrc, blockCount, srLen, NtpTime(senderNtpTimestamp).ToString().data(),
       senderRtpTimestamp, sendPkgs, sendOcts);
 
+  // when not 0?
+  assert(0 == blockCount);
+
   // 存储sr用于计算rr反馈
   // to check map key number
-  SrPkgInfo& info = this->belongingRtcpHandler_.belongingPeerConnection_
-                        .rtpHandler_.ssrcInfoMap_.at(ssrc)
-                        .srInfo_;
+  SrPkgInfo& info =
+      this->belongingRtcpHandler_.belongingPC_.rtpHandler_.ssrcInfoMap_.at(ssrc)
+          .srInfo_;
   info.recvMs = g_now_ms;
   info.SRCount++;
   info.SSRC = ssrc;
@@ -52,27 +55,25 @@ int RtcpSenderReport::HandleSenderReport(const RtcpHeader& chead) {
   return 0;
 }
 
-int RtcpSenderReport::CreateSenderReport(std::vector<char>* io_rtcpBin) {
-  SrPkgInfo srPkgInfo{};
-
-  // taylor mock
-  srPkgInfo.SSRC = kDownlinkVideoSsrc;
-  // for calculate RTT
-  srPkgInfo.NTPTimeStamps = MsToNtp(g_now_ms).GetValue();
-  srPkgInfo.RTPTimeStamps = 999888;
-  srPkgInfo.sentOctets = 10000;
-  srPkgInfo.sentPkgs = 20000;
-  tylog("[srPkgInfo]SSRC:%u, NTP TimeStamps:%lu, RTP TimeStamps:%u",
-        srPkgInfo.SSRC, srPkgInfo.NTPTimeStamps, srPkgInfo.RTPTimeStamps);
+int RtcpSenderReport::CreateSenderReport(const RtpSender& sender,
+                                         std::vector<char>* io_rtcpBin) {
+  const uint64_t kNowMs = g_now_ms;
+  const int frequencey = sender.belongingSSRCInfo_.is_audio_
+                             ? kAudioPayloadTypeFrequency
+                             : kVideoPayloadTypeFrequency;
+  const uint64_t now_rtp_timestamp =
+      sender.last_rtp_timestamp() +
+      (kNowMs - sender.last_frame_capture_time()) * frequencey / 1000;
 
   RtcpHeader senderReport;
   senderReport.setPacketType(RtcpPacketType::kSenderReport);
-  senderReport.setSSRC(srPkgInfo.SSRC);
-  senderReport.setNtpTimestamp(srPkgInfo.NTPTimeStamps);
-  senderReport.setRtpTimestamp(srPkgInfo.RTPTimeStamps);
-  senderReport.setPacketsSent(srPkgInfo.sentPkgs);
-  senderReport.setOctetsSent(srPkgInfo.sentOctets);
-  senderReport.setLength(6);
+  senderReport.setLength(6);  // OPT: magic number
+  senderReport.setSSRC(sender.belongingSSRCInfo_.ssrc_key_);
+
+  senderReport.setNtpTimestamp(MsToNtp(kNowMs).GetValue());
+  senderReport.setRtpTimestamp(now_rtp_timestamp);
+  senderReport.setPacketsSent(100);  // taylor mock
+  senderReport.setOctetsSent(200);
 
   tylog("create sr=%s.", senderReport.ToString().data());
 

@@ -686,7 +686,7 @@ class RtmpPuller {
   unsigned long long m_NowTimeMs;
   Client m_Clients[MAX_SLOT];
   RTMP rtmp_;  // librtmp ABI is disclosed
-  PeerConnection& belongingPeerConnection_;
+  PeerConnection& belongingPC_;
   int m_Socks[MAX_SLOT];  // tmp
 
  private:

@@ -29,20 +29,7 @@ PeerConnection::PeerConnection(const std::string &ip, int port)
       dataChannelHandler_(*this),
       signalHandler_(*this),
       pullHandler_(*this),
-      initTimeMs_(g_now_ms),
-      senderReportTimer_(*this),
-      receiverReportTimer_(*this),
-      pliTimer_(*this),
-      dtlsTimer_(*this) {}
-
-PeerConnection::~PeerConnection() {
-  TimerManager::Instance()->KillTimer(&this->senderReportTimer_);
-  TimerManager::Instance()->KillTimer(&this->receiverReportTimer_);
-  TimerManager::Instance()->KillTimer(&this->pliTimer_);
-
-  // OPT: when dtls completes kill timer
-  TimerManager::Instance()->KillTimer(&this->dtlsTimer_);
-}
+      initTimeMs_(g_now_ms) {}
 
 // vBufSend is encrypted data if RTP
 int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {

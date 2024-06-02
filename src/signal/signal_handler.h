@@ -20,7 +20,7 @@ class SignalHandler {
 
   // tmp
  public:
-  PeerConnection& belongingPeerConnection_;
+  PeerConnection& belongingPC_;
 };
 
 }  // namespace tywebrtc

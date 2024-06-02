@@ -57,7 +57,7 @@ class SrtpHandler {
   }
 
  public:
-  PeerConnection &belongingPeerConnection_;
+  PeerConnection &belongingPC_;
 
  private:
   static bool isInitSrtp_;

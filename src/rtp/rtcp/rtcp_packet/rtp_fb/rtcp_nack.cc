@@ -24,8 +24,8 @@ int RtcpNack::SendReqNackPkt_(const std::vector<uint16_t> &seqVect,
                               std::vector<uint16_t> &failedSeqs) {
   int ret = 0;
 
-  const auto &m = belongingRtpfb_.belongingRtcpHandler_.belongingPeerConnection_
-                      .rtpHandler_.ssrcInfoMap_;
+  const auto &m = belongingRtpfb_.belongingRtcpHandler_.belongingPC_.rtpHandler_
+                      .ssrcInfoMap_;
   auto it = m.find(sourceSSRC);
   if (it == m.end()) {
     // assert(!"we send to client firstly, SSRC should already in queue");
@@ -86,8 +86,8 @@ int RtcpNack::SendReqNackPkt_(const std::vector<uint16_t> &seqVect,
     // OPT: rawPacket is encrypted data, but exclude head
     DumpSendPacket(*rawPacket);
 
-    ret = belongingRtpfb_.belongingRtcpHandler_.belongingPeerConnection_
-              .SendToClient(*rawPacket);
+    ret = belongingRtpfb_.belongingRtcpHandler_.belongingPC_.SendToClient(
+        *rawPacket);
     if (ret) {
       tylog("send to peer ret=%d, seq=%u, continue handle other nack seq", ret,
             itemSeq);
@@ -176,16 +176,15 @@ int RtcpNack::SerializeNackSend_(const std::vector<NackBlock> &nackBlokVect,
 
   DumpSendPacket(rtcpBin);
 
-  ret =
-      this->belongingRtpfb_.belongingRtcpHandler_.belongingPeerConnection_
-          .srtpHandler_.ProtectRtcp(const_cast<std::vector<char> *>(&rtcpBin));
+  ret = this->belongingRtpfb_.belongingRtcpHandler_.belongingPC_.srtpHandler_
+            .ProtectRtcp(const_cast<std::vector<char> *>(&rtcpBin));
   if (ret) {
     tylog("uplink send to src client, protect rtcp ret=%d", ret);
     return ret;
   }
 
-  ret = this->belongingRtpfb_.belongingRtcpHandler_.belongingPeerConnection_
-            .SendToClient(rtcpBin);
+  ret = this->belongingRtpfb_.belongingRtcpHandler_.belongingPC_.SendToClient(
+      rtcpBin);
   if (ret) {
     tylog("send to client nack rtcp ret=%d", ret);
 

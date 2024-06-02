@@ -35,6 +35,12 @@ namespace tywebrtc {
 const int kUplossRateMul100 = 0;
 const int kDownlossRateMul100 = 0;
 
+// https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/modules/rtp_rtcp/include/rtp_rtcp_defines.h;l=50
+// rename kBogusRtpRateForAudioRtcp
+const int kAudioPayloadTypeFrequency = 48000;
+// https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/modules/rtp_rtcp/include/rtp_rtcp_defines.h;l=46
+const int kVideoPayloadTypeFrequency = 90000;
+
 // should be from BWE
 const double kFecRate = 0.1;
 
@@ -54,13 +60,13 @@ extern int g_sock_fd;
 extern int g_dumpRecvSockfd;
 extern int g_dumpSendSockfd;
 
-const int kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
+const uint32_t kDownlinkAudioSsrc = 16854838;  // taylor to make dynamic
 const int kDownlinkAudioPayloadType = 111;
 
-const int kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
+const uint32_t kDownlinkVideoSsrc = 33697348;  // taylor to make dynamic
 const int kDownlinkH264PayloadType = 106;
 
-// const int kDownlinkVideoFecSsrc = 13697341;  // taylor to make dynamic
+// const uint32_t kDownlinkVideoFecSsrc = 13697341;  // taylor to make dynamic
 const int kDownlinkVideoFecPayloadType = 127;
 
 const uint32_t kSelfRtcpSSRC = 1;

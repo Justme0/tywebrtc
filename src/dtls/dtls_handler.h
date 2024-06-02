@@ -16,6 +16,8 @@
 #include "openssl/err.h"
 #include "openssl/ssl.h"
 
+#include "src/timer/timer.h"
+
 namespace tywebrtc {
 
 #pragma pack(1)
@@ -107,7 +109,7 @@ class DtlsHandler {
   int DoDataChannel_(const std::vector<char>& vBufReceive);
 
  private:
-  PeerConnection& belongingPeerConnection_;
+  PeerConnection& belongingPC_;
 
   static const char* DefaultSrtpProfile;
   static X509* mCert;
@@ -137,6 +139,7 @@ class DtlsHandler {
   bool m_IsHandshakeCanComplete;
   int m_LastSslState;
   bool m_startFlag;
+  DTLSTimer dtlsTimer_;
 };
 
 }  // namespace tywebrtc

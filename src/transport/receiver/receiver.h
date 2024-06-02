@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "src/rtp/rtp_parser.h"
+#include "src/timer/timer.h"
 
 namespace tywebrtc {
 
@@ -62,12 +63,18 @@ class RtpReceiver {
  public:
   SSRCInfo& belongingSSRCInfo_;
 
-  RTPStatistics rtpStats_{};
-
   // must be ordered, cannot be hashmap
   std::map<PowerSeqT, RtpBizPacket> jitterBuffer_;
 
   PowerSeqT lastPoppedPowerSeq_ = kShitRecvPowerSeqInitValue;
+
+  mutable RTPStatistics rtpStats_{};
+
+  bool is_add_rr_timer_{};
+  ReceiverReportTimer receiverReportTimer_;
+
+  bool is_add_pli_timer_{};
+  PLITimer pliTimer_;
 };
 
 }  // namespace tywebrtc

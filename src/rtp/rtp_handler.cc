@@ -33,11 +33,11 @@ const std::string kMediaTypeRtcp = "rtcp";
 const std::string kMediaTypeVideo = "video";
 const std::string kMediaTypeAudio = "audio";
 
-const AVRational kAudioTimebase{1, 48000};
-const AVRational kVideoTimebase{1, 90000};
+const AVRational kAudioTimebase{1, kAudioPayloadTypeFrequency};
+const AVRational kVideoTimebase{1, kVideoPayloadTypeFrequency};
 
 RtpHandler::RtpHandler(PeerConnection &pc)
-    : belongingPeerConnection_(pc), videoTranscoder_(*this) {
+    : belongingPC_(pc), videoTranscoder_(*this) {
   // opt: may have no audio
   SrsAudioCodecId from = SrsAudioCodecIdOpus;  // TODO: From SDP?
   SrsAudioCodecId to = SrsAudioCodecIdAAC;     // The output audio codec.
@@ -64,9 +64,9 @@ RtpHandler::RtpHandler(PeerConnection &pc)
   // check file cmd:
   // mediainfo filename.webm
   // ffmpeg -i filename.webm -f null -
-  const std::string &webmFilename = tylib::format_string(
-      "uplink.%s_%d.webm", belongingPeerConnection_.clientIP_.data(),
-      belongingPeerConnection_.clientPort_);
+  const std::string &webmFilename =
+      tylib::format_string("uplink.%s_%d.webm", belongingPC_.clientIP_.data(),
+                           belongingPC_.clientPort_);
   avformat_alloc_output_context2(&uplinkFileCtx_, nullptr, "webm",
                                  webmFilename.data());
 
@@ -264,7 +264,7 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
         return ret;
       }
 
-      ret = this->belongingPeerConnection_.pushHandler_.SendVideoFrame(
+      ret = this->belongingPC_.pushHandler_.SendVideoFrame(
           std::vector<char>(frame.begin(), frame.end()),
           (rtpHeader.getTimestamp() - firstRtpVideoTs_) / 90);
       if (ret) {
@@ -351,7 +351,7 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
 
       WriteFile(adts_frame);
 
-      ret = this->belongingPeerConnection_.pushHandler_.SendAudioFrame(
+      ret = this->belongingPC_.pushHandler_.SendAudioFrame(
           adts_frame, (rtpHeader.getTimestamp() - firstRtpAudioTs_) / 48);
       if (ret) {
         tylog("rtmp send audio ret=%d", ret);
@@ -365,13 +365,16 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
 
 // int RtpHandler::Release
 
-SSRCInfo::SSRCInfo(RtpHandler &belongingRtpHandler)
+SSRCInfo::SSRCInfo(RtpHandler &belongingRtpHandler, uint32_t ssrc,
+                   bool is_audio)
     : rtpReceiver(*this),
       rtpSender(*this),
-      belongingRtpHandler(belongingRtpHandler) {}
+      belongingRtpHandler(belongingRtpHandler),
+      ssrc_key_(ssrc),
+      is_audio_(is_audio) {}
 
 std::vector<std::vector<char>> SSRCInfo::EncodeFec(
-    uint32_t thisSSRC, const std::vector<RtpBizPacket> &rtpBizPackets) {
+    const std::vector<RtpBizPacket> &rtpBizPackets) {
   const int originalNum = rtpBizPackets.size();
   if (originalNum == 0) {
     tylog("warn: originalNum=0");
@@ -468,7 +471,7 @@ std::vector<std::vector<char>> SSRCInfo::EncodeFec(
     RtpHeader &header = *reinterpret_cast<RtpHeader *>(packet.data());
     header.setVersion(2);                      // fix number
     header.setTimestamp(last.getTimestamp());  // same as last pkt
-    header.setSSRC(thisSSRC);
+    header.setSSRC(this->ssrc_key_);
     header.setSeqNumber(
         h264Packetizer.GeneratePowerSequence());          // should use seq
     header.setPayloadType(kDownlinkVideoFecPayloadType);  // same as video
@@ -538,7 +541,7 @@ std::string SSRCInfo::ToString() const {
 
 // to rename, now called in only one position
 int RtpHandler::SendToPeer_(RtpBizPacket &rtpBizPacket) {
-  auto peerPC = belongingPeerConnection_.FindPeerPC();
+  auto peerPC = belongingPC_.FindPeerPC();
   if (nullptr == peerPC) {
     tylog("found no other peer");
 
@@ -585,7 +588,8 @@ int RtpHandler::SendToPeer_(RtpBizPacket &rtpBizPacket) {
     auto p = peerPC->rtpHandler_.ssrcInfoMap_.emplace(
         std::piecewise_construct,
         std::forward_as_tuple(downlinkRtpHeader.getSSRC()),
-        std::forward_as_tuple(peerPC->rtpHandler_));
+        std::forward_as_tuple(peerPC->rtpHandler_, downlinkRtpHeader.getSSRC(),
+                              mediaType == kMediaTypeAudio));
     assert(p.second);
     it = p.first;
     assert(&it->second == &it->second.rtpReceiver.belongingSSRCInfo_);
@@ -608,18 +612,17 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
 
   int ret = 0;
 
-  if (belongingPeerConnection_.stateMachine_ < EnumStateMachine::DTLS_DONE) {
+  if (belongingPC_.stateMachine_ < EnumStateMachine::DTLS_DONE) {
     tylog("warning: recv rtp, but now state=%s, should be DTLS_DONE!!!",
-          StateMachineToString(belongingPeerConnection_.stateMachine_).data());
+          StateMachineToString(belongingPC_.stateMachine_).data());
     return -1;
-  } else if (belongingPeerConnection_.stateMachine_ ==
-             EnumStateMachine::DTLS_DONE) {
-    belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_RTP;
+  } else if (belongingPC_.stateMachine_ == EnumStateMachine::DTLS_DONE) {
+    belongingPC_.stateMachine_ = EnumStateMachine::GOT_RTP;
     tylog("set stateMachine to %s",
-          StateMachineToString(belongingPeerConnection_.stateMachine_).data());
+          StateMachineToString(belongingPC_.stateMachine_).data());
 
     // notify others I entered
-    auto peerPC = belongingPeerConnection_.FindPeerPC();
+    auto peerPC = belongingPC_.FindPeerPC();
     if (nullptr != peerPC) {
       peerPC->dataChannelHandler_.SendSctpDataForLable(
           "I'm coming. Give me I frame.");
@@ -636,10 +639,9 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     if (nullptr != url) {
       tylog("push url=%s", url);
 
-      RtmpHandler &rtmpPusher =
-          *new RtmpHandler(this->belongingPeerConnection_);  // FIXME
+      RtmpHandler &rtmpPusher = *new RtmpHandler(this->belongingPC_);  // FIXME
 
-      ret = this->belongingPeerConnection_.pushHandler_.InitPushHandler(
+      ret = this->belongingPC_.pushHandler_.InitPushHandler(
           std::bind(&RtmpHandler::InitProtocolHandler, &rtmpPusher, url),
           std::bind(&RtmpHandler::InitSucc, &rtmpPusher),
           std::bind(&RtmpHandler::SendAudioFrame, &rtmpPusher,
@@ -661,10 +663,9 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     if (nullptr != url) {
       tylog("pull url=%s", url);
 
-      RtmpPuller &rtmpPuller =
-          *new RtmpPuller(this->belongingPeerConnection_);  // FIXME
+      RtmpPuller &rtmpPuller = *new RtmpPuller(this->belongingPC_);  // FIXME
 
-      ret = this->belongingPeerConnection_.pullHandler_.InitPullHandler(
+      ret = this->belongingPC_.pullHandler_.InitPullHandler(
           &rtmpPuller.rtmp_.m_sb.sb_socket,
           std::bind(&RtmpPuller::InitProtocolHandler, &rtmpPuller, url),
           std::bind(&RtmpPuller::HandlePacket, &rtmpPuller),
@@ -677,19 +678,9 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     } else {
       tylog("pull url env var not exist");
     }
-
-    TimerManager::Instance()->AddTimer(
-        &this->belongingPeerConnection_.senderReportTimer_);
-
-    TimerManager::Instance()->AddTimer(
-        &this->belongingPeerConnection_.receiverReportTimer_);
-
-    // 收到RTP后定时请求I帧
-    TimerManager::Instance()->AddTimer(
-        &this->belongingPeerConnection_.pliTimer_);
   }
 
-  assert(belongingPeerConnection_.stateMachine_ >= EnumStateMachine::GOT_RTP);
+  assert(belongingPC_.stateMachine_ >= EnumStateMachine::GOT_RTP);
 
   std::string mediaType =
       reinterpret_cast<const RtpHeader *>(vBufReceive.data())
@@ -699,7 +690,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
   // should refactor if else for media type
 
   if (mediaType == kMediaTypeRtcp) {
-    ret = belongingPeerConnection_.srtpHandler_.UnprotectRtcp(
+    ret = belongingPC_.srtpHandler_.UnprotectRtcp(
         const_cast<std::vector<char> *>(&vBufReceive));
     if (ret) {
       tylog("unprotect RTCP fail, ret=%d", ret);
@@ -708,7 +699,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     }
     DumpRecvPacket(vBufReceive);
 
-    ret = belongingPeerConnection_.rtcpHandler_.HandleRtcpPacket(vBufReceive);
+    ret = belongingPC_.rtcpHandler_.HandleRtcpPacket(vBufReceive);
     if (ret) {
       tylog("handleRtcpPacket fail, ret=%d", ret);
 
@@ -719,7 +710,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
           getRtpPaddingLength(vBufReceive));
     // reuse original buffer
     // taylor consider restart svr
-    ret = belongingPeerConnection_.srtpHandler_.UnprotectRtp(
+    ret = belongingPC_.srtpHandler_.UnprotectRtp(
         const_cast<std::vector<char> *>(&vBufReceive));
     if (ret) {
       tylog("warning: unprotect RTP (not RTCP) fail ret=%d", ret);
@@ -757,9 +748,11 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       // maybe not perfect:
       // https://stackoverflow.com/questions/1935139/using-stdmapk-v-where-v-has-no-usable-default-constructor
       // good: https://juejin.cn/post/7029372430397210632
-      auto p = ssrcInfoMap_.emplace(std::piecewise_construct,
-                                    std::forward_as_tuple(rtpHeader.getSSRC()),
-                                    std::forward_as_tuple(*this));
+      // https://en.cppreference.com/w/cpp/utility/tuple/forward_as_tuple
+      auto p = ssrcInfoMap_.emplace(
+          std::piecewise_construct, std::forward_as_tuple(rtpHeader.getSSRC()),
+          std::forward_as_tuple(*this, rtpHeader.getSSRC(),
+                                mediaType == kMediaTypeAudio));
       assert(p.second);
       it = p.first;
       assert(&it->second == &it->second.rtpReceiver.belongingSSRCInfo_);
@@ -861,7 +854,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
 
     for (RtpBizPacket &packet : orderedPackets) {
       // push to other server
-      if (this->belongingPeerConnection_.pushHandler_.InitSucc()) {
+      if (this->belongingPC_.pushHandler_.InitSucc()) {
         // OPT: first frame should be I frame; if lost packet should drop the
         // gop
         ret = DumpPacket(packet.rtpRawPacket, ssrcInfo.h264Unpacketizer);

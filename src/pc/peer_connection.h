@@ -103,7 +103,6 @@ inline std::string StateMachineToString(EnumStateMachine s) {
 class PeerConnection {
  public:
   PeerConnection(const std::string& ip, int port);
-  ~PeerConnection();
 
   int HandlePacket(const std::vector<char>& vBufReceive);
 
@@ -140,11 +139,6 @@ class PeerConnection {
 
   int64_t initTimeMs_ = 0;        // construct *this obj time
   int64_t lastActiveTimeMs_ = 0;  // last receive data time
-
-  SenderReportTimer senderReportTimer_;
-  ReceiverReportTimer receiverReportTimer_;
-  PLITimer pliTimer_;
-  DTLSTimer dtlsTimer_;
 
   bool bUseRsfec = false;
 };

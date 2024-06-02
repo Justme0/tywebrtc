@@ -24,7 +24,7 @@ class SdpHandler {
   bool bNotUseSrtp = true;  // TODO: from SDP
 
  private:
-  PeerConnection &belongingPeerConnection_;
+  PeerConnection &belongingPC_;
 };
 
 }  // namespace tywebrtc

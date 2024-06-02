@@ -53,8 +53,9 @@ class RtpDepacketizerVp8 {
   char m_RtpHeadVp8[VP8_MAX_PAYLOAD_HEAD_LEN];
   CodecDecoder* decoder;
   CodecEncoder* encoder;
-  // VIDEO_FAST_UP_DATE m_pFastUpDate;
+
   VIDEO_VP8_UNPACK_PARAMS m_UnPackParams;
+  // save one frame data
   char m_Vp8RawData[VP8_RAW_DATA_LEN];
   int m_RawDataLen;
   bool is_key_frame;

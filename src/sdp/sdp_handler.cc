@@ -12,8 +12,8 @@
 
 namespace tywebrtc {
 
-SdpHandler::SdpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
-  (void)belongingPeerConnection_;
+SdpHandler::SdpHandler(PeerConnection &pc) : belongingPC_(pc) {
+  (void)belongingPC_;
 }
 
 }  // namespace tywebrtc

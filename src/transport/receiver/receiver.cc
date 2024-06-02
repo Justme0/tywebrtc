@@ -98,7 +98,10 @@ bool RtpReceiver::rtp_valid_packet_in_sequence(RTPStatistics* s, uint16_t seq) {
   return 1;
 }
 
-RtpReceiver::RtpReceiver(SSRCInfo& ssrcInfo) : belongingSSRCInfo_(ssrcInfo) {
+RtpReceiver::RtpReceiver(SSRCInfo& ssrcInfo)
+    : belongingSSRCInfo_(ssrcInfo),
+      receiverReportTimer_(*this),
+      pliTimer_(*this) {
   assert(rtpStats_.probation == 1);
 }
 
@@ -157,11 +160,20 @@ void RtpReceiver::CountStatistics(const RtpBizPacket& rtpBizPacket) {
 #endif
 }
 
-// TODO: do NACK
 void RtpReceiver::PushToJitter(RtpBizPacket&& rtpBizPacket) {
   rtpBizPacket.enterJitterTimeMs = g_now_ms;
   jitterBuffer_.emplace(rtpBizPacket.GetPowerSeq(), std::move(rtpBizPacket));
   assert(rtpBizPacket.rtpRawPacket.empty());
+
+  if (!is_add_rr_timer_) {
+    TimerManager::Instance()->AddTimer(&receiverReportTimer_);
+    is_add_rr_timer_ = true;
+  }
+
+  if (!belongingSSRCInfo_.is_audio_ && !is_add_pli_timer_) {
+    TimerManager::Instance()->AddTimer(&pliTimer_);
+    is_add_pli_timer_ = true;
+  }
 }
 
 int RtpReceiver::GetJitterSize() const { return jitterBuffer_.size(); }
@@ -253,10 +265,9 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
     assert(0 != kMediaSrcSSRC &&
            kMediaSrcSSRC == firstRtpHeader.getSSRC());  // already recv
 
-    int ret =
-        this->belongingSSRCInfo_.belongingRtpHandler.belongingPeerConnection_
-            .rtcpHandler_.rtpfb_.nack_.CreateNackSend(nackSeqs, kSelfRtcpSSRC,
-                                                      kMediaSrcSSRC);
+    int ret = this->belongingSSRCInfo_.belongingRtpHandler.belongingPC_
+                  .rtcpHandler_.rtpfb_.nack_.CreateNackSend(
+                      nackSeqs, kSelfRtcpSSRC, kMediaSrcSSRC);
     if (ret) {
       tylog("createNackReportSend ret=%d", ret);
 
@@ -287,8 +298,8 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
   tylog("PLI, first packet waitMs=%ld too long, packet=%s.", waitMs,
         firstPacket.ToString().data());
 
-  int ret = belongingSSRCInfo_.belongingRtpHandler.belongingPeerConnection_
-                .rtcpHandler_.psfb_.pli_.CreatePLISend();
+  int ret = belongingSSRCInfo_.belongingRtpHandler.belongingPC_.rtcpHandler_
+                .psfb_.pli_.CreatePLISend();
   if (ret) {
     tylog("createPLIReportSend ret=%d", ret);
     // not return

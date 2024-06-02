@@ -16,13 +16,15 @@
 namespace tywebrtc {
 
 class RtcpExtendedReports;
+class RtpSender;
 
 class RtcpDLRR {
  public:
   RtcpDLRR(RtcpExtendedReports& belongingXrHandler);
 
   int HandleRtcpDLRR(const RtcpHeader& blockHead);
-  int CreateRtcpDLRR(std::vector<char>* io_rtcpBin);
+
+  int CreateRtcpDLRR(const RtpSender& sender, std::vector<char>* io_rtcpBin);
 
   RtcpExtendedReports& belongingXr_;
 };

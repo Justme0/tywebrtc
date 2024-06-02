@@ -46,8 +46,8 @@ int RtcpDLRR::HandleRtcpDLRR(const RtcpHeader& blockHead) {
             "ms] rttNtp[%u=>%" PRIu32 "ms]",
             rrSsrc, lastRr, dlrr, CompactNtpRttToMs(dlrr), rttNtp, rttMs);
 
-      this->belongingXr_.belongingRtcpHandler_.belongingPeerConnection_
-          .signalHandler_.S2CReportRTT(rttMs);
+      this->belongingXr_.belongingRtcpHandler_.belongingPC_.signalHandler_
+          .S2CReportRTT(rttMs);
     }
 
     break;
@@ -56,7 +56,13 @@ int RtcpDLRR::HandleRtcpDLRR(const RtcpHeader& blockHead) {
   return 0;
 }
 
-int RtcpDLRR::CreateRtcpDLRR(std::vector<char>* io_rtcpBin) {
+int RtcpDLRR::CreateRtcpDLRR(const RtpSender& sender,
+                             std::vector<char>* io_rtcpBin) {
+  if (sender.belongingSSRCInfo_.rrInfo_.recvMs == 0) {
+    // not ever recv RR
+    return 0;
+  }
+
   // taylor fixme
   uint32_t dlrrNtp = CompactNtp(NtpTime(1, 0));
 
@@ -66,7 +72,7 @@ int RtcpDLRR::CreateRtcpDLRR(std::vector<char>* io_rtcpBin) {
 
   RtcpHeader dlrr;
   dlrr.setPacketType(RtcpPacketType::kExtendedReports);
-  dlrr.setSSRC(kDownlinkVideoSsrc);
+  dlrr.setSSRC(sender.belongingSSRCInfo_.ssrc_key_);
   dlrr.setLength(5);
   dlrr.setBlockCount(1);
 

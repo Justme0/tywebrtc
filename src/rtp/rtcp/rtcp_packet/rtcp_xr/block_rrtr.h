@@ -22,7 +22,7 @@ class RtcpRRTR {
   RtcpRRTR(RtcpExtendedReports& belongingXr);
 
   int HandleRtcpRRTR(const RtcpHeader& blockHead);
-  int CreateRtcpRRTR(std::vector<char>* io_rtcpBin);
+  int CreateRtcpRRTR(uint32_t ssrc, std::vector<char>* io_rtcpBin);
 
   RtcpExtendedReports& belongingXr_;
 };

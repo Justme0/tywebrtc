@@ -149,7 +149,7 @@ class IceHandler {
   void CreatUserPrio();
 
  public:  // tmp
-  PeerConnection &belongingPeerConnection_;
+  PeerConnection &belongingPC_;
 
   ICEInfo iceInfo_;
 };

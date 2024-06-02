@@ -36,18 +36,24 @@ int RtcpRRTR::HandleRtcpRRTR(const RtcpHeader& blockHead) {
   return 0;
 }
 
-int RtcpRRTR::CreateRtcpRRTR(std::vector<char>* io_rtcpBin) {
+int RtcpRRTR::CreateRtcpRRTR(uint32_t ssrc, std::vector<char>* io_rtcpBin) {
   RtcpHeader rrtrReport;
   // no need block count ?
   rrtrReport.setPacketType(RtcpPacketType::kExtendedReports);
   rrtrReport.setLength(4);
-  rrtrReport.setSSRC(this->belongingXr_.belongingRtcpHandler_
-                         .belongingPeerConnection_.rtpHandler_.upVideoSSRC);
+  rrtrReport.setSSRC(ssrc);
+
+  assert(ssrc ==
+             belongingXr_.belongingRtcpHandler_.belongingPC_.rtpHandler_
+                 .upAudioSSRC ||
+         ssrc ==
+             belongingXr_.belongingRtcpHandler_.belongingPC_.rtpHandler_
+                 .upVideoSSRC);
 
   rrtrReport.setBlockType(EnXRBlockType::kXRBlockRRTR);
   const int kRRTRBlockLen = 2;  // all block is (2+1)*4 B
   rrtrReport.setBlockLen(kRRTRBlockLen);
-  // KEY: peer SR will return this ntp time
+  // KEY: used for peer SR which will return this ntp time
   rrtrReport.setRrtrNtp(MsToNtp(g_now_ms).GetValue());
 
   char* buf = reinterpret_cast<char*>(&rrtrReport);

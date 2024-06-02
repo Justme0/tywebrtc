@@ -37,7 +37,8 @@ int RtcpReceiverReport::HandleReceiverReport(const RtcpHeader& chead) {
   // |                         last SR (LSR)                         |
   // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
   // |                   delay since last SR (DLSR)                  |
-  const int kRRReportBlockSize = sizeof(RtcpHeader::report_t::receiverReport_t);
+  constexpr const int kRRReportBlockSize =
+      sizeof(RtcpHeader::report_t::receiverReport_t);
   static_assert(24 == kRRReportBlockSize,
                 "RRReportBlockSize size should be 24");
 
@@ -73,8 +74,8 @@ int RtcpReceiverReport::HandleReceiverReport(const RtcpHeader& chead) {
       rttNtp = CompactNtp(MsToNtp(g_now_ms)) - kDLSR - kLSR;
       rttMs = CompactNtpRttToMs(rttNtp);
       // SaveDownLost(sourceSsrc, fractLost, lostPkgs, rtt);
-      this->belongingRtcpHandler_.belongingPeerConnection_.signalHandler_
-          .S2CReportRTT(rttMs);
+      this->belongingRtcpHandler_.belongingPC_.signalHandler_.S2CReportRTT(
+          rttMs);
     }
 
     tylog(
@@ -84,9 +85,17 @@ int RtcpReceiverReport::HandleReceiverReport(const RtcpHeader& chead) {
         highestSeq, jitter, kLSR, kDLSR,
         kDLSR == 0 ? 0 : CompactNtpRttToMs(kDLSR), rttNtp, rttMs);
 
-    RrPkgInfo& info = this->belongingRtcpHandler_.belongingPeerConnection_
-                          .rtpHandler_.ssrcInfoMap_.at(sourceSsrc)
-                          .rrInfo_;
+    auto& m = belongingRtcpHandler_.belongingPC_.rtpHandler_.ssrcInfoMap_;
+    auto it = m.find(sourceSsrc);
+    if (it == m.end()) {
+      tylog("rr source_ssrc=%u not in ssrc info map=%s.", sourceSsrc,
+            tylib::AnyToString(m).data());
+
+      // should continue?
+      return 0;
+    }
+
+    RrPkgInfo& info = it->second.rrInfo_;
     info.recvMs = g_now_ms;
     info.RRCount++;
     info.fractionLost = fractLost;
@@ -95,17 +104,9 @@ int RtcpReceiverReport::HandleReceiverReport(const RtcpHeader& chead) {
   return 0;
 }
 
-int RtcpReceiverReport::CreateReceiverReport(std::vector<char>* io_rtcpBin) {
-  int remote_ssrc = this->belongingRtcpHandler_.belongingPeerConnection_
-                        .rtpHandler_.upVideoSSRC;
-  if (0 == remote_ssrc) {
-    tylog("remote_ssrc is 0, may have no up");
-    return 0;
-  }
-
-  SSRCInfo& ssrcInfo = this->belongingRtcpHandler_.belongingPeerConnection_
-                           .rtpHandler_.ssrcInfoMap_.at(remote_ssrc);
-  RTPStatistics& rtpStats = ssrcInfo.rtpReceiver.rtpStats_;
+int RtcpReceiverReport::CreateReceiverReport(const RtpReceiver& receiver,
+                                             std::vector<char>* io_rtcpBin) {
+  RTPStatistics& rtpStats = receiver.rtpStats_;
 
   rtpStats.last_octet_count = rtpStats.octet_count;
   // some placeholders we should really fill...
@@ -130,23 +131,25 @@ int RtcpReceiverReport::CreateReceiverReport(std::vector<char>* io_rtcpBin) {
 
   const int uiLocSsrc = 23333;
 
-  assert(g_now_ms >= ssrcInfo.srInfo_.recvMs);
+  assert(g_now_ms >= receiver.belongingSSRCInfo_.srInfo_.recvMs);
 
   RtcpHeader receiverReport;
+  receiverReport.setBlockCount(1);
   receiverReport.setPacketType(RtcpPacketType::kReceiverReport);
+  receiverReport.setLength(7);  // OPT: magic number
   receiverReport.setSSRC(uiLocSsrc);
-  receiverReport.setSourceSSRC(remote_ssrc);
-  receiverReport.setHighestSeqnum(rtpStats.max_seq);
-  receiverReport.setSeqnumCycles(rtpStats.cycles);
-  receiverReport.setLostPackets(lost);
+
+  receiverReport.setSourceSSRC(receiver.belongingSSRCInfo_.ssrc_key_);
   receiverReport.setFractionLost(fraction);
+  receiverReport.setLostPackets(lost);
+  receiverReport.setSeqnumCycles(rtpStats.cycles);
+  receiverReport.setHighestSeqnum(rtpStats.max_seq);
   receiverReport.setJitter(rtpStats.jitter >> 4);
+  receiverReport.setLastSr(
+      CompactNtp(NtpTime(receiver.belongingSSRCInfo_.srInfo_.NTPTimeStamps)));
   receiverReport.setDelaySinceLastSr(
       CompactNtp(MsToNtp(g_now_ms)) -
-      CompactNtp(MsToNtp(ssrcInfo.srInfo_.recvMs)));
-  receiverReport.setLastSr(CompactNtp(NtpTime(ssrcInfo.srInfo_.NTPTimeStamps)));
-  receiverReport.setLength(7);
-  receiverReport.setBlockCount(1);
+      CompactNtp(MsToNtp(receiver.belongingSSRCInfo_.srInfo_.recvMs)));
 
   tylog("create rr=%s.", receiverReport.ToString().data());
 

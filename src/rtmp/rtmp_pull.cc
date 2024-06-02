@@ -781,7 +781,7 @@ int RtmpConnectTimeOut(int Timeout, RTMP* r, RTMPPacket* cp) {
   return 0;
 }
 
-RtmpPuller::RtmpPuller(PeerConnection& pc) : belongingPeerConnection_(pc) {
+RtmpPuller::RtmpPuller(PeerConnection& pc) : belongingPC_(pc) {
   RTMP_Init(&rtmp_);
 }
 
@@ -1813,11 +1813,11 @@ int RtmpPuller::DownlinkPackAndSend(bool bAudio,
 
   const int kSSRC = bAudio ? kDownlinkAudioSsrc : kDownlinkVideoSsrc;
 
-  auto it = belongingPeerConnection_.rtpHandler_.ssrcInfoMap_.find(kSSRC);
-  if (belongingPeerConnection_.rtpHandler_.ssrcInfoMap_.end() == it) {
-    auto p = belongingPeerConnection_.rtpHandler_.ssrcInfoMap_.emplace(
+  auto it = belongingPC_.rtpHandler_.ssrcInfoMap_.find(kSSRC);
+  if (belongingPC_.rtpHandler_.ssrcInfoMap_.end() == it) {
+    auto p = belongingPC_.rtpHandler_.ssrcInfoMap_.emplace(
         std::piecewise_construct, std::forward_as_tuple(kSSRC),
-        std::forward_as_tuple(belongingPeerConnection_.rtpHandler_));
+        std::forward_as_tuple(belongingPC_.rtpHandler_, kSSRC, bAudio));
     assert(p.second);
     it = p.first;
     assert(&it->second == &it->second.rtpReceiver.belongingSSRCInfo_);
@@ -1850,8 +1850,7 @@ int RtmpPuller::DownlinkPackAndSend(bool bAudio,
 
     DumpSendPacket(rtpBizPacket.rtpRawPacket);
 
-    ret = belongingPeerConnection_.srtpHandler_.ProtectRtp(
-        &rtpBizPacket.rtpRawPacket);
+    ret = belongingPC_.srtpHandler_.ProtectRtp(&rtpBizPacket.rtpRawPacket);
     if (ret) {
       tylog("downlink protect rtp ret=%d", ret);
 
@@ -1865,17 +1864,16 @@ int RtmpPuller::DownlinkPackAndSend(bool bAudio,
   // 3) extend head add n:m
   // 4) last RTP add tail zero number
   std::vector<std::vector<char>> fecPackets;
-  if (this->belongingPeerConnection_.bUseRsfec) {
+  if (this->belongingPC_.bUseRsfec) {
     if (bAudio) {
     } else {
-      fecPackets = ssrcInfo.EncodeFec(kSSRC, rtpBizPackets);
+      fecPackets = ssrcInfo.EncodeFec(rtpBizPackets);
     }
   }
 
   // S3: send original data
   for (RtpBizPacket& rtpBizPacket : rtpBizPackets) {
-    ret =
-        this->belongingPeerConnection_.SendToClient(rtpBizPacket.rtpRawPacket);
+    ret = this->belongingPC_.SendToClient(rtpBizPacket.rtpRawPacket);
     if (ret) {
       tylog("send to peer ret=%d", ret);
 
@@ -1890,7 +1888,7 @@ int RtmpPuller::DownlinkPackAndSend(bool bAudio,
   // S4: send FEC data
   for (const std::vector<char>& fecPacket : fecPackets) {
     // not save fec to sender queue, not ARQ FEC
-    ret = this->belongingPeerConnection_.SendToClient(fecPacket);
+    ret = this->belongingPC_.SendToClient(fecPacket);
     if (ret) {
       tylog("send to peer ret=%d", ret);
 
@@ -2027,7 +2025,9 @@ int RtmpPuller::HandleVideoData(Client* pClient, const RTMPPacket* pPkg) {
   int Ret = 0;
 
   if (0 == pPkg->m_nTimeStamp) {
-    tylog("Recv Err Ts:%u FlvAvcType:%d\n", pPkg->m_nTimeStamp, FlvAvcType);
+    tylog("Recv Err Ts:%u FlvAvcType:%d, rtmpPkg=%s.", pPkg->m_nTimeStamp,
+          FlvAvcType, RTMPPacketToString(*pPkg).data());
+    assert(!"should not assert :)");
   }
 
   if (e_FlvAvcPacketType_Header == FlvAvcType) {
@@ -2189,8 +2189,8 @@ int RtmpPuller::HandleAudioRawData(Client* pClient, const RTMPPacket* pPkg) {
   f.s.append(pAacBody, kAacBodyLen);
 
   std::vector<SrsAudioFrame> outFrames;
-  this->belongingPeerConnection_.rtpHandler_.audioTranscoderDownlink_.transcode(
-      f, outFrames);
+  this->belongingPC_.rtpHandler_.audioTranscoderDownlink_.transcode(f,
+                                                                    outFrames);
   if (ret) {
     tylog("audio transcode ret=%d", ret);
 

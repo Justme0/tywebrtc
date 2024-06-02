@@ -36,7 +36,7 @@ class RtcpHandler {
   RtcpRtpFeedback rtpfb_;
   RtcpExtendedReports extendedReport_;
 
-  PeerConnection& belongingPeerConnection_;
+  PeerConnection& belongingPC_;
 };
 
 }  // namespace tywebrtc

@@ -429,6 +429,7 @@ void CrossPlatformNetworkIO() {
 #endif
 
 static void InitTimer() {
+  // never kill timer
   TimerManager::Instance()->AddTimer(new tywebrtc::MonitorStateTimer);
 }
 

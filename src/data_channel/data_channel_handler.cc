@@ -186,7 +186,7 @@ static int SendSctpDataCallback(void* addr, void* data, size_t len,
     return -1;
   }
 
-  sctp->belongingPeerConnection_.dtlsHandler_.SendToDtls(data, len);
+  sctp->belongingPC_.dtlsHandler_.SendToDtls(data, len);
 
   return 0;
 }
@@ -238,8 +238,7 @@ bool SctpGlobalEnv::UnRegister(uintptr_t id) {
   return sctp_map_.erase(id) > 0;
 }
 
-DataChannelHandler::DataChannelHandler(PeerConnection& pc)
-    : belongingPeerConnection_(pc) {}
+DataChannelHandler::DataChannelHandler(PeerConnection& pc) : belongingPC_(pc) {}
 
 DataChannelHandler::~DataChannelHandler() {
   tylog("destroy datachannel sctp_socket_=%p, id=%lu.", sctp_socket_, id_);
@@ -709,13 +708,13 @@ int DataChannelHandler::OnDataChannelMsg(const struct sctp_rcvinfo& rcv,
     assert(i == 0);
     int payload = atoi(receivedBuffer.substr(size).data());
     tylog("taylor payload=%d.", payload);
-    this->belongingPeerConnection_.sdpHandler_.vp8PayloadType = payload;
+    this->belongingPC_.sdpHandler_.vp8PayloadType = payload;
 
     // not send to peer
     return 0;
   }
 
-  auto peerPC = belongingPeerConnection_.FindPeerPC();
+  auto peerPC = belongingPC_.FindPeerPC();
   if (nullptr == peerPC) {
     return 0;
   }

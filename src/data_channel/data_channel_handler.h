@@ -152,7 +152,7 @@ class DataChannelHandler {
 
   // tmp
  public:
-  PeerConnection& belongingPeerConnection_;
+  PeerConnection& belongingPC_;
 };
 
 }  // namespace tywebrtc

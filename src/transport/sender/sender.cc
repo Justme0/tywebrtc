@@ -15,11 +15,25 @@
 namespace tywebrtc {
 
 RtpSender::RtpSender(SSRCInfo& ssrcInfo)
-    : belongingSSRCInfo_(ssrcInfo), saveLast_(sendQueue_.end()) {}
+    : belongingSSRCInfo_(ssrcInfo),
+      saveLast_(sendQueue_.end()),
+      senderReportTimer_(*this) {
+  // used in timer constructor, mute clang shit warning -Wunused-private-field
+  static_cast<void>(senderReportTimer_);
+}
 
-// push to sender queue, and update SSRCInfo biggest cycle+seq
+// push to sender queue, and update SSRCInfo biggest cycle+seq.
+// @rtpBizPacket encrypted data (only for payload data) if have.
 void RtpSender::Enqueue(RtpBizPacket&& rtpBizPacket) {
   tylog("enqueue biz pkt=%s.", rtpBizPacket.ToString().data());
+
+  assert(rtpBizPacket.enterJitterTimeMs != 0);
+  // FIXME: capture time not now.
+  // RTP: use RTCP compute; RTMP: recv ts (enterJitterTimeMs is ok)
+  this->SetLastRtpTime(
+      reinterpret_cast<RtpHeader*>(rtpBizPacket.rtpRawPacket.data())
+          ->getTimestamp(),
+      rtpBizPacket.enterJitterTimeMs);
 
   sendQueue_.emplace(rtpBizPacket.GetPowerSeq(), std::move(rtpBizPacket));
   assert(rtpBizPacket.rtpRawPacket.empty());
@@ -35,6 +49,12 @@ void RtpSender::Enqueue(RtpBizPacket&& rtpBizPacket) {
   }
 
   tylog("after enqueue, queue size=%zu.", sendQueue_.size());
+
+  // should move to pop queue function, TODO: add pacing
+  if (!is_add_sr_timer_) {
+    TimerManager::Instance()->AddTimer(&senderReportTimer_);
+    is_add_sr_timer_ = true;
+  }
 }
 
 // To avoid copy, return value points to internal memory, note concurrent

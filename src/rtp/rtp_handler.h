@@ -62,17 +62,22 @@ struct SrPkgInfo {
 
 class SSRCInfo {
  public:
-  explicit SSRCInfo(RtpHandler &belongingRtpHandler);
+  explicit SSRCInfo(RtpHandler &belongingRtpHandler, uint32_t ssrc,
+                    bool is_audio);
 
   // OPT: use a fec handler
   std::vector<std::vector<char>> EncodeFec(
-      uint32_t thisSSRC, const std::vector<RtpBizPacket> &rtpBizPackets);
+      const std::vector<RtpBizPacket> &rtpBizPackets);
 
   std::string ToString() const;
 
+  // should be private
  public:
   // why define ssrc's unpacketizer: save unpacked frame e.g. FU-A
-  // audio don't use h264Unpacketizer
+  // audio don't use h264Unpacketizer.
+  // why cannot use union, to fix:
+  // destructor of 'SSRCInfo' is implicitly deleted because variant field
+  // 'h264Unpacketizer' has a non-trivial destructor
   H264Unpacketizer h264Unpacketizer;
   H264Packetizer h264Packetizer;
   AudioPacketizer audioPacketizer;
@@ -80,13 +85,16 @@ class SSRCInfo {
   RtpReceiver rtpReceiver;
   RtpSender rtpSender;
 
-  RrPkgInfo rrInfo_{};
-  SrPkgInfo srInfo_{};
-
   uint16_t biggestSeq = 0;
   int64_t biggestCycle = 0;
 
   RtpHandler &belongingRtpHandler;
+
+  RrPkgInfo rrInfo_{};
+  SrPkgInfo srInfo_{};
+
+  const uint32_t ssrc_key_{};
+  const bool is_audio_{};
 };
 
 class RtpHandler {
@@ -108,7 +116,7 @@ class RtpHandler {
   int SendToPeer_(RtpBizPacket &rtpBizPacket);
 
  public:
-  PeerConnection &belongingPeerConnection_;
+  PeerConnection &belongingPC_;
 
   // OPT: should assign from SDP
   uint32_t upAudioSSRC = 0;

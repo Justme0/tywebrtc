@@ -24,7 +24,7 @@ namespace tywebrtc {
 
 bool SrtpHandler::isInitSrtp_ = false;
 
-SrtpHandler::SrtpHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
+SrtpHandler::SrtpHandler(PeerConnection &pc) : belongingPC_(pc) {
   if (SrtpHandler::isInitSrtp_) {
     return;
   }
@@ -133,7 +133,7 @@ bool SrtpHandler::SetRtpParams(const std::string &sending_key,
 // Encrypted portion is only payload.
 // https://mp.weixin.qq.com/s/u7eStMiCGxNyEWsYkG8UYg
 int SrtpHandler::ProtectRtp(std::vector<char> *io_vBufForSrtp) {
-  if (this->belongingPeerConnection_.sdpHandler_.bNotUseSrtp) {
+  if (this->belongingPC_.sdpHandler_.bNotUseSrtp) {
     return 0;
   }
 
@@ -167,7 +167,7 @@ int SrtpHandler::ProtectRtp(std::vector<char> *io_vBufForSrtp) {
 }
 
 int SrtpHandler::UnprotectRtp(std::vector<char> *io_vBufForSrtp) {
-  if (this->belongingPeerConnection_.sdpHandler_.bNotUseSrtp) {
+  if (this->belongingPC_.sdpHandler_.bNotUseSrtp) {
     return 0;
   }
 
@@ -206,7 +206,7 @@ int SrtpHandler::UnprotectRtp(std::vector<char> *io_vBufForSrtp) {
 // WebRTC 传输安全机制第二话：深入显出 SRTP 协议
 // https://mp.weixin.qq.com/s/u7eStMiCGxNyEWsYkG8UYg
 int SrtpHandler::ProtectRtcp(std::vector<char> *io_vBufForSrtp) {
-  if (this->belongingPeerConnection_.sdpHandler_.bNotUseSrtp) {
+  if (this->belongingPC_.sdpHandler_.bNotUseSrtp) {
     return 0;
   }
 
@@ -244,7 +244,7 @@ int SrtpHandler::ProtectRtcp(std::vector<char> *io_vBufForSrtp) {
 
 // taylor may error
 int SrtpHandler::UnprotectRtcp(std::vector<char> *io_vBufForSrtp) {
-  if (this->belongingPeerConnection_.sdpHandler_.bNotUseSrtp) {
+  if (this->belongingPC_.sdpHandler_.bNotUseSrtp) {
     return 0;
   }
 

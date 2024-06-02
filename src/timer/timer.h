@@ -15,11 +15,14 @@
 
 namespace tywebrtc {
 
-class PeerConnection;
+class DtlsHandler;
+class RtpSender;
+class RtpReceiver;
 
 class MonitorStateTimer : public Timer {
  public:
   MonitorStateTimer() : Timer(1000, -1) {}
+  ~MonitorStateTimer() override { TimerManager::Instance()->KillTimer(this); }
 
  private:
   bool _OnTimer() override;
@@ -28,47 +31,52 @@ class MonitorStateTimer : public Timer {
 // DTLS handshake timeout resend
 class DTLSTimer : public Timer {
  public:
-  DTLSTimer(PeerConnection& belongingPC)
-      : Timer(10, -1), belongingPC_(belongingPC) {}
+  DTLSTimer(DtlsHandler& belongingDtlsHandler)
+      : Timer(10, -1), belongingDtlsHandler_(belongingDtlsHandler) {}
+
+  ~DTLSTimer() override { TimerManager::Instance()->KillTimer(this); }
 
  private:
   bool _OnTimer() override;
 
-  PeerConnection& belongingPC_;
-};
-
-// RTCP
-class PLITimer : public Timer {
- public:
-  PLITimer(PeerConnection& belongingPC)
-      : Timer(5000, -1), belongingPC_(belongingPC) {}
-
- private:
-  bool _OnTimer() override;
-
-  PeerConnection& belongingPC_;
+  DtlsHandler& belongingDtlsHandler_;
 };
 
 struct SenderReportTimer : public Timer {
  public:
-  SenderReportTimer(PeerConnection& belongingPC)
-      : Timer(500, -1), belongingPC_(belongingPC) {}
+  SenderReportTimer(RtpSender& rtpSender)
+      : Timer(500, -1), belongingRtpSender_(rtpSender) {}
+  ~SenderReportTimer() override { TimerManager::Instance()->KillTimer(this); }
 
  private:
   bool _OnTimer() override;
 
-  PeerConnection& belongingPC_;
+  RtpSender& belongingRtpSender_;
 };
 
 struct ReceiverReportTimer : public Timer {
  public:
-  ReceiverReportTimer(PeerConnection& belongingPC)
-      : Timer(500, -1), belongingPC_(belongingPC) {}
+  ReceiverReportTimer(RtpReceiver& rtpReceiver)
+      : Timer(500, -1), belongingRtpReceiver_(rtpReceiver) {}
+  ~ReceiverReportTimer() override { TimerManager::Instance()->KillTimer(this); }
 
  private:
   bool _OnTimer() override;
 
-  PeerConnection& belongingPC_;
+  RtpReceiver& belongingRtpReceiver_;
+};
+
+class PLITimer : public Timer {
+ public:
+  PLITimer(RtpReceiver& rtpReceiver)
+      : Timer(5000, -1), belongingRtpReceiver_(rtpReceiver) {}
+
+  ~PLITimer() override { TimerManager::Instance()->KillTimer(this); }
+
+ private:
+  bool _OnTimer() override;
+
+  RtpReceiver& belongingRtpReceiver_;
 };
 
 }  // namespace tywebrtc

@@ -29,13 +29,13 @@ RtcpHandler::RtcpHandler(PeerConnection &pc)
       psfb_(*this),
       rtpfb_(*this),
       extendedReport_(*this),
-      belongingPeerConnection_(pc) {}
+      belongingPC_(pc) {}
 
 // 处理解密后的 RTCP 包
 int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
   // if peer doesn't exist, not handle it.
   // OPT: handle RRTR, RR, SR ...
-  // auto peerPC = belongingPeerConnection_.FindPeerPC();
+  // auto peerPC = belongingPC_.FindPeerPC();
   // if pull rtmp/srt/... stream, it's null;
   // if pull another webrtc, it's not null.
 

@@ -60,7 +60,7 @@ char *CreatRandString(char *str, int len) {
   return str;
 }
 
-IceHandler::IceHandler(PeerConnection &pc) : belongingPeerConnection_(pc) {
+IceHandler::IceHandler(PeerConnection &pc) : belongingPC_(pc) {
   CreatLocalUserStunInfo();
   CreatUserFoundation();
   CreatUserPrio();
@@ -244,10 +244,8 @@ int IceHandler::EncoderXORMappedAddress(char *pBuff, int Len) {
   pMapAddr->Len = htons(STUN_IPV4_ADDR_LEN);
   pMapAddr->Reserved = 0;
   pMapAddr->ProtocolFamily = 0x01;
-  pMapAddr->Port =
-      htons(belongingPeerConnection_.clientPort_) ^ htons(STUN_MAGIC >> 16);
-  pMapAddr->Ip =
-      inet_addr(belongingPeerConnection_.clientIP_.data()) ^ htonl(STUN_MAGIC);
+  pMapAddr->Port = htons(belongingPC_.clientPort_) ^ htons(STUN_MAGIC >> 16);
+  pMapAddr->Ip = inet_addr(belongingPC_.clientIP_.data()) ^ htonl(STUN_MAGIC);
 
   return (int)sizeof(STUN_XOR_MSG_MAPPED_V4_ADDRESS);
 }
@@ -444,32 +442,26 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   }
 
   if (bUseCandidate &&
-      EnumStateMachine::GOT_USE_CANDIDATE_ICE >
-          belongingPeerConnection_.stateMachine_) {
+      EnumStateMachine::GOT_USE_CANDIDATE_ICE > belongingPC_.stateMachine_) {
     // When in communication, will always recv use-candiate ice, so check
     // machine state before assigning
-    belongingPeerConnection_.stateMachine_ =
-        EnumStateMachine::GOT_USE_CANDIDATE_ICE;
+    belongingPC_.stateMachine_ = EnumStateMachine::GOT_USE_CANDIDATE_ICE;
     tylog("set stateMachine to %s, ice done, now start dtls if needed.",
-          StateMachineToString(belongingPeerConnection_.stateMachine_).data());
+          StateMachineToString(belongingPC_.stateMachine_).data());
 
-    if (!this->belongingPeerConnection_.sdpHandler_.bNotUseSrtp) {
+    if (!this->belongingPC_.sdpHandler_.bNotUseSrtp) {
       // 收到带UseCandidate属性的STUN包后启动DTLS
-      ret = belongingPeerConnection_.dtlsHandler_.StartDTLS();
+      ret = belongingPC_.dtlsHandler_.StartDTLS();
       if (ret) {
         tylog("dtls start fail, ret=%d", ret);
 
         return ret;
       }
-
-      TimerManager::Instance()->AddTimer(
-          &this->belongingPeerConnection_.dtlsTimer_);
     }
-  } else if (EnumStateMachine::GOT_FIRST_ICE >
-             belongingPeerConnection_.stateMachine_) {
-    belongingPeerConnection_.stateMachine_ = EnumStateMachine::GOT_FIRST_ICE;
+  } else if (EnumStateMachine::GOT_FIRST_ICE > belongingPC_.stateMachine_) {
+    belongingPC_.stateMachine_ = EnumStateMachine::GOT_FIRST_ICE;
     tylog("set stateMachine to %s.",
-          StateMachineToString(belongingPeerConnection_.stateMachine_).data());
+          StateMachineToString(belongingPC_.stateMachine_).data());
   }
 
   /*回包*/
@@ -524,7 +516,7 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   // to avoid copy
   std::vector<char> bufToSend(SndBuff, SndBuff + SndLen);
   DumpSendPacket(bufToSend);
-  ret = belongingPeerConnection_.SendToClient(bufToSend);
+  ret = belongingPC_.SendToClient(bufToSend);
   if (ret) {
     tylog("send to client ret=%d.", ret);
 
@@ -570,8 +562,7 @@ int IceHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
   const STUN_MSG_HEAD *pHead =
       reinterpret_cast<const STUN_MSG_HEAD *>(vBufReceive.data());
 
-  if (EnumStateMachine::GOT_CANDIDATE >
-      belongingPeerConnection_.stateMachine_) {
+  if (EnumStateMachine::GOT_CANDIDATE > belongingPC_.stateMachine_) {
     return -1;
   }
 

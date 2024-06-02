@@ -16,8 +16,7 @@
 #include "src/pc/peer_connection.h"
 namespace tywebrtc {
 
-SignalHandler::SignalHandler(PeerConnection& pc)
-    : belongingPeerConnection_(pc) {}
+SignalHandler::SignalHandler(PeerConnection& pc) : belongingPC_(pc) {}
 
 int SignalHandler::S2CReportRTT(int rttMs) {
   int ret = 0;
@@ -38,8 +37,7 @@ int SignalHandler::S2CReportRTT(int rttMs) {
   }
   tylog("json=%s.", s.data());
 
-  ret = this->belongingPeerConnection_.dataChannelHandler_.SendSctpDataForLable(
-      s);
+  ret = this->belongingPC_.dataChannelHandler_.SendSctpDataForLable(s);
   if (ret) {
     tylog("send data channel ret=%d.", ret);
 

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "src/rtp/rtp_parser.h"
+#include "src/timer/timer.h"
 
 namespace tywebrtc {
 
@@ -30,10 +31,19 @@ class RtpSender {
   // int GetQueueSize() const;
   const std::vector<char>* GetSeqPacket(PowerSeqT powerSeq) const;
 
- private:
+  void SetLastRtpTime(uint32_t rtp_timestamp, uint64_t capture_time_ms) {
+    last_rtp_timestamp_ = rtp_timestamp;
+    last_frame_capture_time_ = capture_time_ms;
+  }
+
+  uint32_t last_rtp_timestamp() const { return last_rtp_timestamp_; }
+
+  uint64_t last_frame_capture_time() const { return last_frame_capture_time_; }
+
   SSRCInfo& belongingSSRCInfo_;
 
-  std::map<PowerSeqT, RtpBizPacket> sendQueue_;
+ private:
+  std::map<PowerSeqT, RtpBizPacket> sendQueue_{};
 
   // [begin, saveLast_] is already sent, saved for downlink NACK, len <=
   // kSendQueueSaveLen
@@ -42,6 +52,12 @@ class RtpSender {
   // must be initialized to map end(), and defined after sendQueue_, see
   // constructor
   std::map<PowerSeqT, RtpBizPacket>::const_iterator saveLast_;
+
+  uint32_t last_rtp_timestamp_{};
+  uint64_t last_frame_capture_time_{};
+
+  bool is_add_sr_timer_{};
+  SenderReportTimer senderReportTimer_;
 };
 
 }  // namespace tywebrtc

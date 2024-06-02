@@ -91,7 +91,7 @@ static int ParseFrameNalus(const std::vector<char>& stream,
   return 0;
 }
 
-// may no use
+// now no use
 // packet SPS and PPS into a STAP
 int H264Packetizer::PacketStapA(const uint32_t timestamp,
                                 const std::vector<std::shared_ptr<Extension>>&,
@@ -159,7 +159,7 @@ int H264Packetizer::PacketSingleNalu_(
       break;
 
     case kVideoNaluSps:
-      // recv sps before pps
+      // sps before pps
       sps_.assign(nalu.data, nalu.size);
       pps_.clear();
       break;

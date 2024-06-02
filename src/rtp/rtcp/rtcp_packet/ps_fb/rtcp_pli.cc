@@ -23,8 +23,8 @@ RtcpPLI::RtcpPLI(RtcpPayloadSpecificFeedback &belongingPsfb)
 int RtcpPLI::HandlePLI(const RtcpHeader &) {
   int ret = 0;
 
-  auto peerPC = this->belongingPsfb_.belongingRtcpHandler_
-                    .belongingPeerConnection_.FindPeerPC();
+  auto peerPC =
+      this->belongingPsfb_.belongingRtcpHandler_.belongingPC_.FindPeerPC();
   if (nullptr == peerPC) {
     tylog(
         "another peerPC null(may only pull rtmp/srt/...), can not "
@@ -55,9 +55,8 @@ int RtcpPLI::HandlePLI(const RtcpHeader &) {
 int RtcpPLI::CreatePLISend() {
   int ret = 0;
 
-  const uint32_t sourceSSRC =
-      this->belongingPsfb_.belongingRtcpHandler_.belongingPeerConnection_
-          .rtpHandler_.upVideoSSRC;
+  const uint32_t sourceSSRC = this->belongingPsfb_.belongingRtcpHandler_
+                                  .belongingPC_.rtpHandler_.upVideoSSRC;
 
   tylog("create PLI, localSSRC=%u, remoteSSRC=%u.", kSelfRtcpSSRC, sourceSSRC);
 
@@ -75,17 +74,16 @@ int RtcpPLI::CreatePLISend() {
 
   DumpSendPacket(rtcpBin);
 
-  ret =
-      this->belongingPsfb_.belongingRtcpHandler_.belongingPeerConnection_
-          .srtpHandler_.ProtectRtcp(const_cast<std::vector<char> *>(&rtcpBin));
+  ret = this->belongingPsfb_.belongingRtcpHandler_.belongingPC_.srtpHandler_
+            .ProtectRtcp(const_cast<std::vector<char> *>(&rtcpBin));
   if (ret) {
     tylog("protect rtcp ret=%d", ret);
 
     return ret;
   }
 
-  ret = this->belongingPsfb_.belongingRtcpHandler_.belongingPeerConnection_
-            .SendToClient(rtcpBin);
+  ret = this->belongingPsfb_.belongingRtcpHandler_.belongingPC_.SendToClient(
+      rtcpBin);
   if (ret) {
     tylog("send to client ret=%d", ret);
 

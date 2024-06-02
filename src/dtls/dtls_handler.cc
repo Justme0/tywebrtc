@@ -248,7 +248,7 @@ void DtlsHandler::InitOpensslAndCert() {
 }
 
 DtlsHandler::DtlsHandler(PeerConnection& pc, bool isServer)
-    : belongingPeerConnection_(pc),
+    : belongingPC_(pc),
       m_isServer(isServer),
       mHandshakeCompleted(false),
       mGetKeyFlag(false),
@@ -266,7 +266,8 @@ DtlsHandler::DtlsHandler(PeerConnection& pc, bool isServer)
 #else
       m_LastSslState(TLS_ST_BEFORE),
 #endif
-      m_startFlag(false) {
+      m_startFlag(false),
+      dtlsTimer_(*this) {
   InitOpensslAndCert();
 
   memset(m_SendBuff, 0, sizeof(m_SendBuff));
@@ -332,17 +333,17 @@ int DtlsHandler::OnHandshakeCompleted_() {
     sendingRtpKey_.swap(receivingRtpKey_);
   }
 
-  bool ok = belongingPeerConnection_.srtpHandler_.SetRtpParams(
-      sendingRtpKey_, receivingRtpKey_);
+  bool ok =
+      belongingPC_.srtpHandler_.SetRtpParams(sendingRtpKey_, receivingRtpKey_);
   if (!ok) {
     tylog("NOTE!!! srtpHandler_ setRtpParams fail");
 
     return -1;
   }
 
-  belongingPeerConnection_.stateMachine_ = EnumStateMachine::DTLS_DONE;
+  belongingPC_.stateMachine_ = EnumStateMachine::DTLS_DONE;
   tylog("set stateMachine to %s, handShakeCompleted",
-        StateMachineToString(belongingPeerConnection_.stateMachine_).data());
+        StateMachineToString(belongingPC_.stateMachine_).data());
 
   return 0;
 }
@@ -505,7 +506,7 @@ void DtlsHandler::CheckHandshakeComplete_() {
 int DtlsHandler::DoDataChannel_(const std::vector<char>& vBufReceive) {
   int ret = 0;
 
-  ret = this->belongingPeerConnection_.dataChannelHandler_.InitSocket();
+  ret = this->belongingPC_.dataChannelHandler_.InitSocket();
   if (ret) {
     tylog("init sctp socket ret=%d.", ret);
     assert(!"init sctp socket fail");  // tmp
@@ -526,7 +527,7 @@ int DtlsHandler::DoDataChannel_(const std::vector<char>& vBufReceive) {
       break;
     }
 
-    this->belongingPeerConnection_.dataChannelHandler_.HandleDataChannelPacket(
+    this->belongingPC_.dataChannelHandler_.HandleDataChannelPacket(
         sctp_read_buf, size);
   }
 
@@ -740,6 +741,8 @@ int DtlsHandler::StartDTLS() {
   tylog("Start DTLSRTP as %s, ret=%d, %s", (m_isServer ? "server" : "client"),
         ret, ToString().data());
 
+  TimerManager::Instance()->AddTimer(&dtlsTimer_);
+
   return 0;
 }
 
@@ -782,7 +785,7 @@ int DtlsHandler::WriteDtlsPacket(const void* data, size_t len) {
   std::vector<char> bufToSend(static_cast<const char*>(data),
                               static_cast<const char*>(data) + len);
   DumpSendPacket(bufToSend);
-  ret = belongingPeerConnection_.SendToClient(bufToSend);
+  ret = belongingPC_.SendToClient(bufToSend);
   if (ret) {
     tylog("send to client ret=%d.", ret);
 
@@ -808,7 +811,7 @@ int DtlsHandler::rewriteDtlsPacket(const void* data, size_t len) {
   std::vector<char> bufToSend(static_cast<const char*>(data),
                               static_cast<const char*>(data) + len);
   DumpSendPacket(bufToSend);
-  ret = belongingPeerConnection_.SendToClient(bufToSend);
+  ret = belongingPC_.SendToClient(bufToSend);
   if (ret) {
     tylog("send to client ret=%d.", ret);
 

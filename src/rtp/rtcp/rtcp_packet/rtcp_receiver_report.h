@@ -17,6 +17,7 @@ namespace tywebrtc {
 
 class RtcpHandler;
 class RtcpHeader;
+class RtpReceiver;
 
 class RtcpReceiverReport {
  public:
@@ -24,7 +25,8 @@ class RtcpReceiverReport {
 
   int HandleReceiverReport(const RtcpHeader &chead);
 
-  int CreateReceiverReport(std::vector<char> *io_rtcpBin);
+  int CreateReceiverReport(const RtpReceiver &receiver,
+                           std::vector<char> *io_rtcpBin);
 
  private:
   RtcpHandler &belongingRtcpHandler_;

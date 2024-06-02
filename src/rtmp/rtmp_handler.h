@@ -52,7 +52,7 @@ class RtmpHandler {
   int ReconnectRtmp_();
 
  private:
-  // PeerConnection &belongingPeerConnection_;
+  // PeerConnection &belongingPC_;
   FlvAssist flvAssist;
   // uint32_t mMaxRtmpPacketLength = 0;
 
