@@ -292,24 +292,30 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
     }
 
     return orderedPackets;
+  } else {
+    assert(!jitterBuffer_.empty());
+
+    // wait too long for video, clear and do PLI
+    tylog("PLI, first packet waitMs=%ld too long, packet=%s.", waitMs,
+          firstPacket.ToString().data());
+
+    int ret = belongingSSRCInfo_.belongingRtpHandler.belongingPC_.rtcpHandler_
+                  .psfb_.pli_.CreatePLISend();
+    if (ret) {
+      tylog("createPLIReportSend ret=%d", ret);
+      // not return
+    }
+
+    // OPT: discard P frame, recognize I frame and pop
+    lastPoppedPowerSeq_ = (--jitterBuffer_.end())->first;
+    tylog("pop all pkt in jitter=%s, set lastPoppedPowerSeq=%ld.",
+          tylib::AnyToString(jitterBuffer_).data(), lastPoppedPowerSeq_);
+    jitterBuffer_.clear();
+
+    // OPT: next recv pkt, check and only recv I frame
+
+    return {};
   }
-
-  // wait too long for video, clear and do PLI
-  tylog("PLI, first packet waitMs=%ld too long, packet=%s.", waitMs,
-        firstPacket.ToString().data());
-
-  int ret = belongingSSRCInfo_.belongingRtpHandler.belongingPC_.rtcpHandler_
-                .psfb_.pli_.CreatePLISend();
-  if (ret) {
-    tylog("createPLIReportSend ret=%d", ret);
-    // not return
-  }
-
-  // OPT: discard P frame, reserve and pop I frame
-  jitterBuffer_.clear();
-  lastPoppedPowerSeq_ = kShitRecvPowerSeqInitValue;
-
-  return {};
 }
 
 }  // namespace tywebrtc

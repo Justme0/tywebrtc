@@ -617,9 +617,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
           StateMachineToString(belongingPC_.stateMachine_).data());
     return -1;
   } else if (belongingPC_.stateMachine_ == EnumStateMachine::DTLS_DONE) {
-    belongingPC_.stateMachine_ = EnumStateMachine::GOT_RTP;
-    tylog("set stateMachine to %s",
-          StateMachineToString(belongingPC_.stateMachine_).data());
+    SET_PC_STATE(belongingPC_, EnumStateMachine::GOT_RTP);
 
     // notify others I entered
     auto peerPC = belongingPC_.FindPeerPC();
@@ -768,6 +766,8 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       tylog("monitor corner case, packet=%s.", rtpHeader.ToString().data());
     }
 
+    assert(ssrcInfo.biggestCycle >= 0);
+
     // update 3 var: ssrcInfo.biggestSeq, ssrcInfo.biggestCycle, itemCycle
     if (itemSeq == ssrcInfo.biggestSeq) {
       // todo more logic
@@ -782,13 +782,13 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         itemCycle = ssrcInfo.biggestCycle;
       } else {
         // case 2 recv old, but is last cycle
-        if (ssrcInfo.biggestCycle <= 0) {
-          // todo more logic, should return?
-          tylog("recv shit packet(usually sender not browser, e.g. server)=%s.",
+        if (ssrcInfo.biggestCycle == 0) {
+          tylog("recv unusual packet (pull stream or ICE change)=%s.",
                 rtpHeader.ToString().data());
-          // web browser first seq is always AheadOf 0
-          // assert(!"should not reach here unless hacker attacks us, now we
-          // assert it");
+          // web browser first seq is always AheadOf 0,
+          // but ICE change, the seq is e.g. 63606 is not AheadOf 0.
+          // TODO: ICE change, reserve session
+          ssrcInfo.biggestSeq = itemSeq;
           itemCycle = 0;
         } else {
           itemCycle = ssrcInfo.biggestCycle - 1;  // notice

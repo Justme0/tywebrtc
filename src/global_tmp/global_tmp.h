@@ -118,8 +118,6 @@ class PCManager {
                                                     int port,
                                                     const std::string& ufrag);
 
-  std::shared_ptr<PeerConnection> GetPeerConnection(int targetFd) const;
-
   // should be private
  public:
   // don't use global variable STL

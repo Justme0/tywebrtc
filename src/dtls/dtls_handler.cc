@@ -341,9 +341,7 @@ int DtlsHandler::OnHandshakeCompleted_() {
     return -1;
   }
 
-  belongingPC_.stateMachine_ = EnumStateMachine::DTLS_DONE;
-  tylog("set stateMachine to %s, handShakeCompleted",
-        StateMachineToString(belongingPC_.stateMachine_).data());
+  SET_PC_STATE(belongingPC_, EnumStateMachine::DTLS_DONE);
 
   return 0;
 }
@@ -538,6 +536,9 @@ int DtlsHandler::DoDataChannel_(const std::vector<char>& vBufReceive) {
 // @param [in] vBufReceive DTLS包
 // @return 处理成功返0
 int DtlsHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
+  belongingPC_.sdpHandler_.bNotUseSrtp = false;  // hack
+  DumpRecvPacket(vBufReceive);
+
   int ret = 0;
 
   tylog("read Dtls message len:%zu %s", vBufReceive.size(), ToString().data());

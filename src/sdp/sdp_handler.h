@@ -18,10 +18,13 @@ class SdpHandler {
   explicit SdpHandler(PeerConnection &pc);
 
  public:
+  // TODO: from SDP
   // should be private,
   // chrome default value
   int vp8PayloadType = 96;
-  bool bNotUseSrtp = true;  // TODO: from SDP
+  bool bNotUseSrtp = true;
+  bool bUseRsfec = false;
+  bool bDtlsSetupActive = false;
 
  private:
   PeerConnection &belongingPC_;

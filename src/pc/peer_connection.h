@@ -100,6 +100,13 @@ inline std::string StateMachineToString(EnumStateMachine s) {
   }
 }
 
+// why not use function: we want log line number to see where to set state
+#define SET_PC_STATE(pc, newState)                       \
+  tylog("set stateMachine %s->%s.",                      \
+        StateMachineToString((pc).stateMachine_).data(), \
+        StateMachineToString(newState).data());          \
+  (pc).stateMachine_ = newState
+
 class PeerConnection {
  public:
   PeerConnection(const std::string& ip, int port);
@@ -139,8 +146,6 @@ class PeerConnection {
 
   int64_t initTimeMs_ = 0;        // construct *this obj time
   int64_t lastActiveTimeMs_ = 0;  // last receive data time
-
-  bool bUseRsfec = false;
 };
 
 }  // namespace tywebrtc

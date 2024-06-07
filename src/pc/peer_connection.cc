@@ -22,7 +22,7 @@ PeerConnection::PeerConnection(const std::string &ip, int port)
       clientPort_(port),
       sdpHandler_(*this),
       iceHandler_(*this),
-      dtlsHandler_(*this, false),  // taylor 写死 dtls client
+      dtlsHandler_(*this, !this->sdpHandler_.bDtlsSetupActive),
       rtpHandler_(*this),
       rtcpHandler_(*this),
       srtpHandler_(*this),
@@ -71,7 +71,6 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
   // switch-case
   switch (packType) {
     case PacketType::STUN: {
-      DumpRecvPacket(vBufReceive);
       ret = iceHandler_.HandleIcePacket(vBufReceive);
       if (ret) {
         tylog("handle ice packet fail, ret=%d", ret);
@@ -81,7 +80,6 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
     }
 
     case PacketType::DTLS: {
-      DumpRecvPacket(vBufReceive);
       ret = dtlsHandler_.HandleDtlsPacket(vBufReceive);
       if (ret) {
         tylog("handle dtls packet fail, ret=%d", ret);
@@ -100,9 +98,7 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
 
           // set to DTLS_DONE for rtp handler launch timer and others,
           // OPT
-          this->stateMachine_ = EnumStateMachine::DTLS_DONE;
-          tylog("set stateMachine to %s.",
-                StateMachineToString(stateMachine_).data());
+          SET_PC_STATE(*this, EnumStateMachine::DTLS_DONE);
         }
       } else {
         // if we recv web's data, dtls should complete in Chrome
@@ -131,11 +127,9 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
 
       if (std::string(vBufReceive.begin(), vBufReceive.end()) == "Hello Qt!" &&
           stateMachine_ < EnumStateMachine::GOT_RTP) {
-        this->stateMachine_ = EnumStateMachine::GOT_RTP;
-        tylog("set stateMachine to %s.",
-              StateMachineToString(stateMachine_).data());
+        SET_PC_STATE(*this, EnumStateMachine::GOT_RTP);
         this->sdpHandler_.bNotUseSrtp = true;
-        this->bUseRsfec = true;
+        this->sdpHandler_.bUseRsfec = true;
 
         // if pull fail, retry?
         // but current branch is run only once
@@ -207,4 +201,5 @@ std::shared_ptr<PeerConnection> PeerConnection::FindPeerPC() const {
 
   return pc;
 }
+
 }  // namespace tywebrtc

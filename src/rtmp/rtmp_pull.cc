@@ -1864,7 +1864,7 @@ int RtmpPuller::DownlinkPackAndSend(bool bAudio,
   // 3) extend head add n:m
   // 4) last RTP add tail zero number
   std::vector<std::vector<char>> fecPackets;
-  if (this->belongingPC_.bUseRsfec) {
+  if (this->belongingPC_.sdpHandler_.bUseRsfec) {
     if (bAudio) {
     } else {
       fecPackets = ssrcInfo.EncodeFec(rtpBizPackets);

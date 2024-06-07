@@ -445,9 +445,7 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
       EnumStateMachine::GOT_USE_CANDIDATE_ICE > belongingPC_.stateMachine_) {
     // When in communication, will always recv use-candiate ice, so check
     // machine state before assigning
-    belongingPC_.stateMachine_ = EnumStateMachine::GOT_USE_CANDIDATE_ICE;
-    tylog("set stateMachine to %s, ice done, now start dtls if needed.",
-          StateMachineToString(belongingPC_.stateMachine_).data());
+    SET_PC_STATE(belongingPC_, EnumStateMachine::GOT_USE_CANDIDATE_ICE);
 
     if (!this->belongingPC_.sdpHandler_.bNotUseSrtp) {
       // 收到带UseCandidate属性的STUN包后启动DTLS
@@ -459,9 +457,7 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
       }
     }
   } else if (EnumStateMachine::GOT_FIRST_ICE > belongingPC_.stateMachine_) {
-    belongingPC_.stateMachine_ = EnumStateMachine::GOT_FIRST_ICE;
-    tylog("set stateMachine to %s.",
-          StateMachineToString(belongingPC_.stateMachine_).data());
+    SET_PC_STATE(belongingPC_, EnumStateMachine::GOT_FIRST_ICE);
   }
 
   /*回包*/
@@ -550,6 +546,7 @@ int IceHandler::CheckIcePacket(const std::vector<char> &vBufReceive) {
 }
 
 int IceHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
+  DumpRecvPacket(vBufReceive);
   int ret = 0;
 
   ret = CheckIcePacket(vBufReceive);

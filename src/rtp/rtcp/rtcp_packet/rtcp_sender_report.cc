@@ -39,18 +39,31 @@ int RtcpSenderReport::HandleSenderReport(const RtcpHeader& chead) {
 
   // 存储sr用于计算rr反馈
   // to check map key number
-  SrPkgInfo& info =
-      this->belongingRtcpHandler_.belongingPC_.rtpHandler_.ssrcInfoMap_.at(ssrc)
-          .srInfo_;
-  info.recvMs = g_now_ms;
-  info.SRCount++;
-  info.SSRC = ssrc;
-  info.blockCount = blockCount;
-  info.srLen = srLen;
-  info.NTPTimeStamps = senderNtpTimestamp;
-  info.RTPTimeStamps = senderRtpTimestamp;
-  info.sentPkgs = sendPkgs;
-  info.sentOctets = sendOcts;
+  try {
+    SrPkgInfo& info =
+        this->belongingRtcpHandler_.belongingPC_.rtpHandler_.ssrcInfoMap_
+            .at(ssrc)
+            .srInfo_;
+    info.recvMs = g_now_ms;
+    info.SRCount++;
+    info.SSRC = ssrc;
+    info.blockCount = blockCount;
+    info.srLen = srLen;
+    info.NTPTimeStamps = senderNtpTimestamp;
+    info.RTPTimeStamps = senderRtpTimestamp;
+    info.sentPkgs = sendPkgs;
+    info.sentOctets = sendOcts;
+  } catch (const std::out_of_range& e) {
+    tylog(
+        "catch exception=%s, ssrc=%u, ssrcMap=%s. should not reach here, tmp "
+        "avoid problem. OPT: fix",
+        e.what(), ssrc,
+        tylib::AnyToString(
+            this->belongingRtcpHandler_.belongingPC_.rtpHandler_.ssrcInfoMap_)
+            .data());
+
+    return 0;
+  }
 
   return 0;
 }

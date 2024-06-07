@@ -42,6 +42,8 @@ std::shared_ptr<PeerConnection> PCManager::GetPeerConnection(
     tylog("get old pc done");
     return lb->second;
   } else {
+    // TODO: ICE change
+
     // Use lb as a hint to insert, so it can avoid another lookup
     // OPT: ICE未选上的地址也会为它生成PC，可优化为PC池
     auto i = client2PC_.emplace_hint(
@@ -55,7 +57,9 @@ std::shared_ptr<PeerConnection> PCManager::GetPeerConnection(
   }
 }
 
+// now no use
 // get rtmp play fd, O(n).
+/*
 std::shared_ptr<PeerConnection> PCManager::GetPeerConnection(
     int targetFd) const {
   for (const std::pair<ClientSrcId, std::shared_ptr<PeerConnection>> &p :
@@ -68,6 +72,7 @@ std::shared_ptr<PeerConnection> PCManager::GetPeerConnection(
 
   return nullptr;
 }
+*/
 
 void PCManager::CleanTimeoutPeerConnection() {
   for (auto it = this->client2PC_.begin(); it != client2PC_.end();) {
@@ -142,7 +147,7 @@ class SrsFFmpegLogHelper {
  public:
   SrsFFmpegLogHelper() {
     // ffmpeg
-    av_log_set_level(AV_LOG_TRACE);
+    av_log_set_level(AV_LOG_VERBOSE);
     av_log_set_callback(ffmpegLog);
 
     // rtmp lib
