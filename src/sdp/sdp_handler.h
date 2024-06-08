@@ -9,6 +9,8 @@
 #ifndef SRC_SDP_SDP_HANDLER_H_
 #define SRC_SDP_SDP_HANDLER_H_
 
+#include <string>
+
 namespace tywebrtc {
 
 class PeerConnection;
@@ -16,6 +18,8 @@ class PeerConnection;
 class SdpHandler {
  public:
   explicit SdpHandler(PeerConnection &pc);
+
+  std::string ToString() const;
 
  public:
   // TODO: from SDP

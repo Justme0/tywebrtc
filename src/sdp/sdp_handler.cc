@@ -16,4 +16,10 @@ SdpHandler::SdpHandler(PeerConnection &pc) : belongingPC_(pc) {
   (void)belongingPC_;
 }
 
+std::string SdpHandler::ToString() const {
+  return tylib::format_string(
+      "{vp8PayloadType=%d, bNotUseSrtp=%d, bUseRsfec=%d, bDtlsSetupActive=%d}",
+      vp8PayloadType, bNotUseSrtp, bUseRsfec, bDtlsSetupActive);
+}
+
 }  // namespace tywebrtc

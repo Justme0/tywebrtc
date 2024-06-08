@@ -1938,9 +1938,8 @@ int RtmpPuller::HandleVideoSliceNormal(Client* pClient,
       }
     }
 
-    // tylog(
-    // "TotalLen=%d,BodySize=%d,NaluLen=%u,NaluType=%d,FrameType=%d", TotalLen,
-    // pPkg->m_nBodySize, NaluLen, NaluType, FrameType);
+    tylog("TotalLen=%d,BodySize=%d,NaluLen=%u,NaluType=%d,FrameType=%d",
+          TotalLen, pPkg->m_nBodySize, NaluLen, NaluType, FrameType);
 
     if (kVideoNaluSei == NaluType) {
       if (pClient->IsSeiPass) {

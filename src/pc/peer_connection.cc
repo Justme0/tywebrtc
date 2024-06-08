@@ -162,9 +162,10 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
 
 std::string PeerConnection::ToString() const {
   return tylib::format_string(
-      "{state=%s, client=%s:%d, rtpHandler=%s, initTime=%s, lastLiveTime=%s}",
+      "{state=%s, client=%s:%d, sdpHandler=%s, rtpHandler=%s, initTime=%s, "
+      "lastLiveTime=%s}",
       StateMachineToString(stateMachine_).data(), clientIP_.data(), clientPort_,
-      rtpHandler_.ToString().data(),
+      sdpHandler_.ToString().data(), rtpHandler_.ToString().data(),
       tylib::MilliSecondToLocalTimeString(initTimeMs_).data(),
       tylib::MilliSecondToLocalTimeString(lastActiveTimeMs_).data());
 }

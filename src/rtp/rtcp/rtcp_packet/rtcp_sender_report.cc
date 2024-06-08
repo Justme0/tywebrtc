@@ -80,7 +80,8 @@ int RtcpSenderReport::CreateSenderReport(const RtpSender& sender,
 
   RtcpHeader senderReport;
   senderReport.setPacketType(RtcpPacketType::kSenderReport);
-  senderReport.setLength(6);  // OPT: magic number
+  // OPT: magic number as constant
+  senderReport.setLength(6);
   senderReport.setSSRC(sender.belongingSSRCInfo_.ssrc_key_);
 
   senderReport.setNtpTimestamp(MsToNtp(kNowMs).GetValue());

@@ -67,6 +67,8 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
       tylog("NOTE: totalLen=%zu > all input len=%zu, break", totalLen,
             vBufReceive.size());
 
+      assert(totalLen - vBufReceive.size() <= 10);
+
       break;
     }
 
