@@ -24,70 +24,6 @@ int g_sock_fd;
 int g_dumpRecvSockfd;
 int g_dumpSendSockfd;
 
-// if construct map's value is expensive
-// https://stackoverflow.com/questions/97050/stdmap-insert-or-stdmap-find
-// here we can also use insert and update, but lower_bound is more general
-// OPT: add ufrag logic
-std::shared_ptr<PeerConnection> PCManager::GetPeerConnection(
-    const std::string &ip, int port, const std::string &ufrag) {
-  ClientSrcId clientSrcId{ip, port};
-  auto lb = client2PC_.lower_bound(clientSrcId);
-  tylog("client to pc map size=%zu", client2PC_.size());
-
-  if (lb != client2PC_.end() &&
-      !(client2PC_.key_comp()(clientSrcId, lb->first))) {
-    assert(nullptr != lb->second);
-    assert(lb->second->clientIP_ == ip && lb->second->clientPort_ == port);
-
-    tylog("get old pc done");
-    return lb->second;
-  } else {
-    // TODO: ICE change
-
-    // Use lb as a hint to insert, so it can avoid another lookup
-    // OPT: ICE未选上的地址也会为它生成PC，可优化为PC池
-    auto i = client2PC_.emplace_hint(
-        lb, std::make_pair(clientSrcId,
-                           std::make_shared<PeerConnection>(ip, port)));
-    assert(nullptr != i->second);
-    i->second->StoreClientIPPort(ip, port);
-
-    tylog("new pc, ip=%s, port=%d, ufrag=%s", ip.data(), port, ufrag.data());
-    return i->second;
-  }
-}
-
-// now no use
-// get rtmp play fd, O(n).
-/*
-std::shared_ptr<PeerConnection> PCManager::GetPeerConnection(
-    int targetFd) const {
-  for (const std::pair<ClientSrcId, std::shared_ptr<PeerConnection>> &p :
-       client2PC_) {
-    if (p.second->pullHandler_.p_playSocket_ != nullptr &&
-        *p.second->pullHandler_.p_playSocket_ == targetFd) {
-      return p.second;
-    }
-  }
-
-  return nullptr;
-}
-*/
-
-void PCManager::CleanTimeoutPeerConnection() {
-  for (auto it = this->client2PC_.begin(); it != client2PC_.end();) {
-    if (it->second->lastActiveTimeMs_ + kPCDeadTimeoutMs <
-        static_cast<int64_t>(g_now_ms)) {
-      tylog("timeout pc, clean it=%s. after clean, client2PC size=%zu.",
-            it->second->ToString().data(), client2PC_.size() - 1);
-      it = client2PC_.erase(it);
-      // FIXME: destroy coroutine of the pc?
-    } else {
-      ++it;
-    }
-  }
-}
-
 // 收到 rtp/rtcp 时dump，注意下行也会收到rtcp
 void DumpRecvPacket(const std::vector<char> &packet) {
   sockaddr_in addr = tylib::ConstructSockAddr("127.0.0.1", 12347);
@@ -147,7 +83,7 @@ class SrsFFmpegLogHelper {
  public:
   SrsFFmpegLogHelper() {
     // ffmpeg
-    av_log_set_level(AV_LOG_VERBOSE);
+    av_log_set_level(AV_LOG_ERROR);
     av_log_set_callback(ffmpegLog);
 
     // rtmp lib
@@ -179,9 +115,9 @@ class SrsFFmpegLogHelper {
   // int *print_prefix, int type[2]) at
   // https://ffmpeg.org/doxygen/3.4/log_8c_source.html#l00248
   static void ffmpegLog(void *avcl, int level, const char *fmt, va_list vargs) {
-    if (level > AV_LOG_TRACE) {
-      return;
-    }
+    // if (level > AV_LOG_TRACE) {
+    //   return;
+    // }
 
     std::stringstream nameInfo;
 

@@ -130,18 +130,26 @@ class PeerConnection;
 class IceHandler {
  public:
   explicit IceHandler(PeerConnection &pc);
-  int HandleIcePacket(const std::vector<char> &vBufReceive);
+  int HandleIcePacket(const std::vector<char> &vBufReceive,
+                      const std::string &ip, int port);
+
+  static int DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
+                                            int LeftLen, bool *o_bUseCandidate,
+                                            std::string *o_username);
+  static int GetUfragFromIcePacket(const std::vector<char> &vBufReceive,
+                                   std::string *o_username,
+                                   bool *o_has_use_candidate);
 
  private:
-  int CheckIcePacket(const std::vector<char> &vBufReceive);
-  int HandleBindReq(const std::vector<char> &vBufReceive);
-  int EncoderXORMappedAddress(char *pBuff, int Len);
-  int DecodeStunBindingAttributesMsg_(const STUN_MSG_COMMON *pMsgComm,
-                                      int LeftLen, bool *o_bUseCandidate);
+  static int CheckIcePacket(const std::vector<char> &vBufReceive);
+  int HandleBindReq(const std::vector<char> &vBufReceive, const std::string &ip,
+                    int port);
+  static int EncoderXORMappedAddress(char *pBuff, int Len,
+                                     const std::string &ip, int port);
   int EncoderMsgIntergrity(char *pMsgIntergrityBuff, int LeftLen,
                            char *pHeadBuf, int Len);
-  int EncoderFingerprint(const char *pFingerprintBuff, int FingerprintLen,
-                         char *pHeadBuf, int Len);
+  static int EncoderFingerprint(const char *pFingerprintBuff,
+                                int FingerprintLen, char *pHeadBuf, int Len);
 
   void CreatLocalUserStunInfo();
   int CreatUserFoundation();

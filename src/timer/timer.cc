@@ -11,6 +11,7 @@
 #include "src/global_tmp/global_tmp.h"
 #include "src/monitor/monitor.h"
 #include "src/pc/peer_connection.h"
+#include "src/pc/peer_connection_manager.h"
 
 namespace tywebrtc {
 
@@ -18,8 +19,9 @@ bool MonitorStateTimer::_OnTimer() {
   tylog("on timer");
   Singleton<PCManager>::Instance().CleanTimeoutPeerConnection();
 
-  const int size = Singleton<PCManager>::Instance().GetPeerConnectionSize();
-  tylog("client2pc size=%d.", size);
+  tylog("pc num=%d, client num=%d.",
+        Singleton<PCManager>::Instance().GetPeerConnectionSize(),
+        Singleton<PCManager>::Instance().GetClientAddrSize());
 
   static prometheus::Family<prometheus::Gauge>* s_sessionNum = nullptr;
   // first time maybe null
@@ -32,10 +34,10 @@ bool MonitorStateTimer::_OnTimer() {
                       .Help("Number of sessions")
                       .Register(*g_pRegistry);
 
-  for (auto& session : Singleton<PCManager>::Instance().client2PC_) {
+  for (auto& session : Singleton<PCManager>::Instance().pc_map_) {
     s_sessionNum
-        ->Add({{"clientIP", session.first.ip},
-               {"clientPort", tylib::AnyToString(session.first.port)}})
+        ->Add({{"clientIP", session.second.clientIP()},
+               {"clientPort", tylib::AnyToString(session.second.clientPort())}})
         .Set(1);
   }
 

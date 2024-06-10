@@ -128,9 +128,10 @@ void IceHandler::CreatUserPrio() {
 
 // always return 0, should return error for wrong packet
 // todo parameter can be std::span or std::string_view
-int IceHandler::DecodeStunBindingAttributesMsg_(const STUN_MSG_COMMON *pMsgComm,
-                                                int LeftLen,
-                                                bool *o_bUseCandidate) {
+int IceHandler::DecodeStunBindingAttributesMsg(const STUN_MSG_COMMON *pMsgComm,
+                                               int LeftLen,
+                                               bool *o_bUseCandidate,
+                                               std::string *o_username) {
   const int kStunAttributeCommonFieldLength = 4;  // attr type 2B, len 2B
   while (kStunAttributeCommonFieldLength <= LeftLen) {
     // TLV structure
@@ -143,26 +144,11 @@ int IceHandler::DecodeStunBindingAttributesMsg_(const STUN_MSG_COMMON *pMsgComm,
           AttributeLen, pData);
 
     switch (AttributeType) {
-      case ATTRIBUTE_USER_NAME: {    // todo use enum
-        const int kEnoughLen = 513;  // input must not too long
-
-        if (AttributeLen > kEnoughLen) {
-          // log warning
-          // monitro
-        }
-
-        std::string username(pData, std::min(kEnoughLen, AttributeLen));
-        // taylor last char is '\0' ?
-        tylog("ice username=%s", username.data());
-
-        if (iceInfo_.remoteUsername.empty()) {
-          // TODO check username should include ICEInfo::RemoteUfrag,
-          // signal SDP should assign ICEInfo::RemoteUfrag firstly.
-          // tmp record and check:
-          iceInfo_.remoteUsername = username;
-        } else {
-          assert(iceInfo_.remoteUsername == username);
-        }
+      case ATTRIBUTE_USER_NAME: {  // todo use enum
+        const int kEnoughLen = 200;
+        assert(AttributeLen <= kEnoughLen && "username too long");
+        o_username->assign(pData, pData + AttributeLen);
+        tylog("ice username=%s.", o_username->data());
 
         break;
       }
@@ -234,7 +220,8 @@ int IceHandler::DecodeStunBindingAttributesMsg_(const STUN_MSG_COMMON *pMsgComm,
 }
 
 // taylor return not error code
-int IceHandler::EncoderXORMappedAddress(char *pBuff, int Len) {
+int IceHandler::EncoderXORMappedAddress(char *pBuff, int Len,
+                                        const std::string &ip, int port) {
   // taylor should check Len
   (void)Len;
   STUN_XOR_MSG_MAPPED_V4_ADDRESS *pMapAddr =
@@ -244,8 +231,8 @@ int IceHandler::EncoderXORMappedAddress(char *pBuff, int Len) {
   pMapAddr->Len = htons(STUN_IPV4_ADDR_LEN);
   pMapAddr->Reserved = 0;
   pMapAddr->ProtocolFamily = 0x01;
-  pMapAddr->Port = htons(belongingPC_.clientPort_) ^ htons(STUN_MAGIC >> 16);
-  pMapAddr->Ip = inet_addr(belongingPC_.clientIP_.data()) ^ htonl(STUN_MAGIC);
+  pMapAddr->Port = htons(port) ^ htons(STUN_MAGIC >> 16);
+  pMapAddr->Ip = inet_addr(ip.data()) ^ htonl(STUN_MAGIC);
 
   return (int)sizeof(STUN_XOR_MSG_MAPPED_V4_ADDRESS);
 }
@@ -426,19 +413,30 @@ int IceHandler::EncoderFingerprint(const char *pFingerprintBuff,
   return (int)sizeof(STUN_MSG_FINGERPRINT);
 }
 
-int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
+int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive,
+                              const std::string &ip, int port) {
   int ret = 0;
 
   bool bUseCandidate = false;
-  ret = DecodeStunBindingAttributesMsg_(
+  std::string username;
+  ret = DecodeStunBindingAttributesMsg(
       reinterpret_cast<const STUN_MSG_COMMON *>(vBufReceive.data() +
                                                 sizeof(STUN_MSG_HEAD)),
-      vBufReceive.size() - sizeof(STUN_MSG_HEAD), &bUseCandidate);
+      vBufReceive.size() - sizeof(STUN_MSG_HEAD), &bUseCandidate, &username);
   // now always return 0
   if (0 != ret) {
     tylog("decodeStunBindingAttributesMsg fail, ret=%d", ret);
 
     return ret;
+  }
+
+  if (iceInfo_.remoteUsername.empty()) {
+    // TODO check username should include ICEInfo::RemoteUfrag,
+    // signal SDP should assign ICEInfo::RemoteUfrag firstly.
+    // tmp record and check:
+    iceInfo_.remoteUsername = username;
+  } else {
+    assert(iceInfo_.remoteUsername == username);
   }
 
   if (bUseCandidate &&
@@ -472,7 +470,7 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   // ok
   char *pOffset = SndBuff + sizeof(STUN_MSG_HEAD);
   int LeftLen = STUN_MSG_MAX_LEN - sizeof(STUN_MSG_HEAD);
-  int EncLen = EncoderXORMappedAddress(pOffset, LeftLen);
+  int EncLen = EncoderXORMappedAddress(pOffset, LeftLen, ip, port);
   if (4 >= EncLen) {
     tylog("encoderXORMappedAddress enclen=%d", EncLen);
     return -1;
@@ -512,7 +510,7 @@ int IceHandler::HandleBindReq(const std::vector<char> &vBufReceive) {
   // to avoid copy
   std::vector<char> bufToSend(SndBuff, SndBuff + SndLen);
   DumpSendPacket(bufToSend);
-  ret = belongingPC_.SendToClient(bufToSend);
+  ret = belongingPC_.SendToAddr(bufToSend, ip, port);
   if (ret) {
     tylog("send to client ret=%d.", ret);
 
@@ -545,7 +543,8 @@ int IceHandler::CheckIcePacket(const std::vector<char> &vBufReceive) {
   return 0;
 }
 
-int IceHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
+int IceHandler::HandleIcePacket(const std::vector<char> &vBufReceive,
+                                const std::string &ip, int port) {
   DumpRecvPacket(vBufReceive);
   int ret = 0;
 
@@ -568,7 +567,7 @@ int IceHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
 
   switch (MsgType) {
     case CMD_STUN_BINDING_REQ: {
-      ret = HandleBindReq(vBufReceive);
+      ret = HandleBindReq(vBufReceive, ip, port);
       if (ret) {
         tylog("handleBindReq ret=%d", ret);
         return ret;
@@ -581,6 +580,70 @@ int IceHandler::HandleIcePacket(const std::vector<char> &vBufReceive) {
       break;
     }
     default: { break; }
+  }
+
+  return 0;
+}
+
+int IceHandler::GetUfragFromIcePacket(const std::vector<char> &vBufReceive,
+                                      std::string *o_username,
+                                      bool *o_has_use_candidate) {
+  int Ret = CheckIcePacket(vBufReceive);
+
+  if (0 != Ret) {
+    tylog("StunMsgCheck1 err[%d]", Ret);
+    return Ret;
+  }
+
+  STUN_MSG_HEAD *pHead = (STUN_MSG_HEAD *)vBufReceive.data();
+  uint16_t MsgType = ntohs(pHead->StunMsgType);
+
+  if (CMD_STUN_BINDING_REQ != MsgType) {
+    tylog("msg type=%d, err", MsgType);
+
+    return -6;
+  }
+
+  const char *pAttributesMsg = vBufReceive.data() + sizeof(STUN_MSG_HEAD);
+  int left_len = vBufReceive.size() - sizeof(STUN_MSG_HEAD);
+
+  while (4 <= left_len) {
+    STUN_MSG_COMMON *pMsgComm = (STUN_MSG_COMMON *)pAttributesMsg;
+    uint16_t attribute_type = ntohs(pMsgComm->AttributeType);
+    char *pData = (char *)pMsgComm + 4;
+    int AttributeLen = ntohs(pMsgComm->Len);
+
+    switch (attribute_type) {
+      /*string*/
+      case ATTRIBUTE_USER_NAME: {
+        const int kEnoughLen = 200;
+        assert(AttributeLen <= kEnoughLen && "username too long");
+        o_username->assign(pData, pData + AttributeLen);
+        tylog("ice username=%s.", o_username->data());
+
+        break;
+      }
+      case ATTRIBUTE_USE_CANDIDATE: {
+        // important!
+        // m_pStunUseCandidate = pMsgComm;
+        *o_has_use_candidate = true;
+        tylog("recv candidate");
+        break;
+      }
+
+      default: { break; }
+    }
+
+    /*长度只标记实际value长度，真个结构长度四字节对齐，后面可能会有padding数据*/
+    AttributeLen = (AttributeLen + 3) & (~3);
+
+    if (AttributeLen + (int)sizeof(AttributeLen) >= left_len) {
+      pAttributesMsg += left_len;
+      left_len = 0;
+    } else {
+      pAttributesMsg += (AttributeLen + sizeof(AttributeLen));
+      left_len -= (AttributeLen + sizeof(AttributeLen));
+    }
   }
 
   return 0;

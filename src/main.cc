@@ -34,6 +34,7 @@
 #include "src/log/log.h"
 #include "src/monitor/monitor.h"
 #include "src/pc/peer_connection.h"
+#include "src/pc/peer_connection_manager.h"
 #include "src/rtmp/rtmp_pull.h"
 #include "src/timer/timer.h"
 
@@ -131,41 +132,6 @@ int GetLanIp(std::string* o_ip) {
   }
 
   return 0;
-
-  /*
-  const int kIpNumber = 20;
-  char aip[kIpNumber][20];
-  char* ips[kIpNumber];
-
-  for (int i = 0; i < kIpNumber; i++) {
-    ips[i] = aip[i];
-  }
-
-  int num = GetEthAddrs(ips, kIpNumber);
-  if (num <= 0) {
-    tylogAndPrintfln("get eth addrs fail, num=%d", num);
-    return -1;
-  }
-
-  for (int i = 0; i < num; ++i) {
-    if (strcmp(ips[i], "127.0.0.1") == 0) {
-      tylogAndPrintfln("i=%d get local addresses 127.0.0.1, ignore", i);
-
-      continue;
-    }
-    tylogAndPrintfln("i=%d get local addresses %s", i, ips[i]);
-
-    if (IsLanAddr(ips[i])) {
-      *o_ip = ips[i];
-
-      return 0;
-    }
-  }
-
-  tylogAndPrintfln("not found eth addr, get ip num=%d", num);
-
-  return -2;
-  */
 }
 
 int HandleRequest() {
@@ -196,7 +162,7 @@ int HandleRequest() {
     if (EAGAIN == errno) {
       return 0;
     } else {
-      return -1;
+      return -2;
     }
   } else if (iRecvLen == 0) {
     tylog("peer shutdown (not error)");
@@ -221,9 +187,14 @@ int HandleRequest() {
 
   // get some pc according to clientip, port or ICE username (to FIX),
   // cannot handle ICE connection change
-  std::shared_ptr<tywebrtc::PeerConnection> pc =
+  tywebrtc::PeerConnection* pc =
       tywebrtc::Singleton<tywebrtc::PCManager>::Instance().GetPeerConnection(
-          ip, port, "");
+          ip, port, vBufReceive);
+
+  if (pc == nullptr) {
+    tylog("cannot get pc, may cold restart svr");
+    return -4;
+  }
 
   // must before srtp if it's rtp, otherwise srtp_err_status_replay_fail
   // https://segmentfault.com/a/1190000040211375
@@ -234,7 +205,7 @@ int HandleRequest() {
     return 0;
   }
 
-  ret = pc->HandlePacket(vBufReceive);
+  ret = pc->HandlePacket(vBufReceive, ip, port);
   if (ret) {
     tylog("pc handlePacket fail, ret=%d", ret);
     return ret;

@@ -13,13 +13,14 @@
 #include "tylib/time/timer.h"
 
 #include "src/log/log.h"
+#include "src/pc/peer_connection_manager.h"
 
 namespace tywebrtc {
 
 PeerConnection::PeerConnection(const std::string &ip, int port)
-    : stateMachine_(EnumStateMachine::GOT_CANDIDATE),  // sdp has candiate
-      clientIP_(ip),
+    : clientIP_(ip),
       clientPort_(port),
+      stateMachine_(EnumStateMachine::GOT_CANDIDATE),  // sdp has candiate
       sdpHandler_(*this),
       iceHandler_(*this),
       dtlsHandler_(*this, !this->sdpHandler_.bDtlsSetupActive),
@@ -31,8 +32,10 @@ PeerConnection::PeerConnection(const std::string &ip, int port)
       pullHandler_(*this),
       initTimeMs_(g_now_ms) {}
 
-// vBufSend is encrypted data if RTP
-int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {
+int PeerConnection::SendToAddr(const std::vector<char> &vBufSend,
+                               const std::string &ip, int port) const {
+  assert(!ip.empty() && 0 != port);
+
   int r = rand() % 100;
   if (r < kDownlossRateMul100) {
     tylog("down rand=%d lostrate=%d%%, drop!", r, kDownlossRateMul100);
@@ -40,7 +43,7 @@ int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {
     return 0;
   }
 
-  sockaddr_in addr = tylib::ConstructSockAddr(clientIP_, clientPort_);
+  sockaddr_in addr = tylib::ConstructSockAddr(ip, port);
   ssize_t sendtoLen =
       sendto(g_sock_fd, vBufSend.data(), vBufSend.size(), 0,
              reinterpret_cast<sockaddr *>(&addr), sizeof(struct sockaddr_in));
@@ -49,14 +52,20 @@ int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {
     return -1;
   }
   tylog("sendto ret=%ld, bizDataLen=%zu, ip=%s, port=%d.", sendtoLen,
-        vBufSend.size(), clientIP_.data(), clientPort_);
+        vBufSend.size(), ip.data(), port);
 
   assert(sendtoLen == static_cast<int>(vBufSend.size()));
 
   return 0;
 }
 
-int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
+// vBufSend is encrypted data if RTP
+int PeerConnection::SendToClient(const std::vector<char> &vBufSend) const {
+  return SendToAddr(vBufSend, clientIP(), clientPort());
+}
+
+int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive,
+                                 const std::string &ip, int port) {
   this->lastActiveTimeMs_ = g_now_ms;
 
   int ret = 0;
@@ -71,7 +80,7 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
   // switch-case
   switch (packType) {
     case PacketType::STUN: {
-      ret = iceHandler_.HandleIcePacket(vBufReceive);
+      ret = iceHandler_.HandleIcePacket(vBufReceive, ip, port);
       if (ret) {
         tylog("handle ice packet fail, ret=%d", ret);
         return ret;
@@ -89,6 +98,14 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive) {
     }
 
     case PacketType::RTP: {
+      if (!(clientIP() == ip && clientPort() == port)) {
+        tylog(
+            "warning: not recv use-candiate STUN, but recv RTP, update pc's "
+            "client addr %s:%d -> %s:%d.",
+            clientIP().data(), clientPort(), ip.data(), port);
+        SetClientIPPort(ip, port);
+      }
+
       if (this->sdpHandler_.bNotUseSrtp) {
         if (this->stateMachine_ < EnumStateMachine::DTLS_DONE) {
           tylog(
@@ -170,27 +187,26 @@ std::string PeerConnection::ToString() const {
       tylib::MilliSecondToLocalTimeString(lastActiveTimeMs_).data());
 }
 
-std::shared_ptr<PeerConnection> PeerConnection::FindPeerPC() const {
-  std::shared_ptr<PeerConnection> pc;
+PeerConnection *PeerConnection::FindPeerPC() const {
+  PeerConnection *pc = nullptr;
 
-  for (const auto &p : Singleton<PCManager>::Instance().client2PC_) {
-    if (clientIP_ == p.first.ip && clientPort_ == p.first.port) {
+  for (auto &p : Singleton<PCManager>::Instance().pc_map_) {
+    if (clientIP() == p.second.clientIP() &&
+        clientPort() == p.second.clientPort()) {
       continue;
     }
 
-    // OPT: pc's key should be ice username, and add map(addr=>pc) for quick
-    // find.
     if (iceHandler_.iceInfo_.remoteUsername ==
-        p.second->iceHandler_.iceInfo_.remoteUsername) {
+        p.second.iceHandler_.iceInfo_.remoteUsername) {
       continue;
     }
 
-    if (p.second->stateMachine_ < EnumStateMachine::GOT_RTP) {
+    if (p.second.stateMachine_ < EnumStateMachine::GOT_RTP) {
       continue;
     }
 
-    if (nullptr == pc || pc->lastActiveTimeMs_ < p.second->lastActiveTimeMs_) {
-      pc = p.second;
+    if (nullptr == pc || pc->lastActiveTimeMs_ < p.second.lastActiveTimeMs_) {
+      pc = &p.second;
     }
   }
 

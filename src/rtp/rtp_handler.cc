@@ -65,8 +65,8 @@ RtpHandler::RtpHandler(PeerConnection &pc)
   // mediainfo filename.webm
   // ffmpeg -i filename.webm -f null -
   const std::string &webmFilename =
-      tylib::format_string("uplink.%s_%d.webm", belongingPC_.clientIP_.data(),
-                           belongingPC_.clientPort_);
+      tylib::format_string("uplink.%s_%d.webm", belongingPC_.clientIP().data(),
+                           belongingPC_.clientPort());
   avformat_alloc_output_context2(&uplinkFileCtx_, nullptr, "webm",
                                  webmFilename.data());
 

@@ -111,25 +111,39 @@ class PeerConnection {
  public:
   PeerConnection(const std::string& ip, int port);
 
-  int HandlePacket(const std::vector<char>& vBufReceive);
+  PeerConnection(const PeerConnection&) = delete;
+  void operator=(const PeerConnection&) = delete;
+
+  int HandlePacket(const std::vector<char>& vBufReceive, const std::string& ip,
+                   int port);
 
   int SendToClient(const std::vector<char>& vBufSend) const;
+  int SendToAddr(const std::vector<char>& vBufSend, const std::string& ip,
+                 int port) const;
 
-  void StoreClientIPPort(const std::string& ip, int port) {
+  const std::string& clientIP() const { return clientIP_; }
+
+  int clientPort() const { return clientPort_; }
+
+  void SetClientIPPort(const std::string& ip, int port) {
+    tylog("update addr %s:%d -> %s:%d.", clientIP_.data(), clientPort_,
+          ip.data(), port);
     clientIP_ = ip;
     clientPort_ = port;
-    tylog("src ip=%s, port=%d", clientIP_.data(), clientPort_);
   }
 
-  std::shared_ptr<PeerConnection> FindPeerPC() const;
+  PeerConnection* FindPeerPC() const;
 
   std::string ToString() const;
 
-  // private:
-  enum EnumStateMachine stateMachine_;
-
+ private:
+  // first set in initialize-list, the following member use them.
+  // OPT: edge style is bad
   std::string clientIP_;
-  int clientPort_ = 0;
+  int clientPort_{};
+
+ public:  // tmp
+  enum EnumStateMachine stateMachine_;
 
   SdpHandler sdpHandler_;  // for signal
 
