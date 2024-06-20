@@ -371,7 +371,13 @@ SSRCInfo::SSRCInfo(RtpHandler &belongingRtpHandler, uint32_t ssrc,
       rtpSender(*this),
       belongingRtpHandler(belongingRtpHandler),
       ssrc_key_(ssrc),
-      is_audio_(is_audio) {}
+      is_audio_(is_audio) {
+  assert(rtpReceiver.rtpStats_.last_payload_type_frequency_ == 0);
+  assert(rtpReceiver.rtpStats_.max_seq == 0);
+  assert(rtpReceiver.rtpStats_.last_receive_time_ == 0);
+  assert(rtpReceiver.rtpStats_.last_received_timestamp_ == 0);
+  assert(rtpReceiver.rtpStats_.probation == 0);
+}
 
 std::vector<std::vector<char>> SSRCInfo::EncodeFec(
     const std::vector<RtpBizPacket> &rtpBizPackets) {
@@ -628,7 +634,7 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       ret = peerPC->rtcpHandler_.psfb_.pli_.CreatePLISend();
       if (ret) {
         tylog("create pli ret=%d", ret);
-        assert(!"why fail!");
+        // maybe peer pc not complete DTLS when start.
       }
     }
 
@@ -754,6 +760,25 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
       assert(p.second);
       it = p.first;
       assert(&it->second == &it->second.rtpReceiver.belongingSSRCInfo_);
+
+      // https://datatracker.ietf.org/doc/html/rfc3550#appendix-A.1
+      // When a new source is heard for the first time, that is, its SSRC
+      // identifier is not in the table (see Section 8.2), and the per-source
+      // state is allocated for it, s->probation is set to the number of
+      // sequential packets required before declaring a source valid
+      // (parameter MIN_SEQUENTIAL) and other variables are initialized:
+      //    init_seq(s, seq);
+      //    s->max_seq = seq - 1;
+      //    s->probation = MIN_SEQUENTIAL;
+      // A non-zero s->probation marks the source as not yet valid so the
+      // state may be discarded after a short timeout rather than a long one,
+      // as discussed in Section 6.2.1.
+      RTPStatistics *s = &it->second.rtpReceiver.rtpStats_;
+      s->rtp_init_sequence(rtpHeader.getSeqNumber());
+      s->max_seq = rtpHeader.getSeqNumber() - 1;
+      // OPT: use MIN_SEQUENTIAL and add queue to tmp save, otherwise the first
+      // I frame may be broken. (FFmpeg RTSP uses 1.)
+      s->probation = 1;
     }
     SSRCInfo &ssrcInfo = it->second;
     assert(&ssrcInfo == &ssrcInfo.rtpReceiver.belongingSSRCInfo_);
@@ -781,14 +806,17 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         ssrcInfo.biggestSeq = itemSeq;
         itemCycle = ssrcInfo.biggestCycle;
       } else {
+        assert(ssrcInfo.biggestCycle >= 0);
         // case 2 recv old, but is last cycle
         if (ssrcInfo.biggestCycle == 0) {
-          tylog("recv unusual packet (pull stream or ICE change)=%s.",
+          tylog("recv unusual packet (pull stream or ICE switch)=%s.",
                 rtpHeader.ToString().data());
           // web browser first seq is always AheadOf 0,
-          // but ICE change, the seq is e.g. 63606 is not AheadOf 0.
-          // TODO: ICE change, reserve session
+          // but ICE switch, the seq is e.g. 63606 is not AheadOf 0.
+          // TODO: ICE switch, reserve session,
+          // but now fixed ICE switch, the case should be absent.
           ssrcInfo.biggestSeq = itemSeq;
+          // OPT: cycle should be saved in db for hot restart svr.
           itemCycle = 0;
         } else {
           itemCycle = ssrcInfo.biggestCycle - 1;  // notice
@@ -819,20 +847,20 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
         std::move(const_cast<std::vector<char> &>(vBufReceive)), itemCycle);
     assert(vBufReceive.empty());
 
-    bool valid = ssrcInfo.rtpReceiver.rtp_valid_packet_in_sequence(
-        &ssrcInfo.rtpReceiver.rtpStats_,
-        reinterpret_cast<const RtpHeader *>(rtpBizPacket.rtpRawPacket.data())
-            ->getSeqNumber());
-    if (!valid) {
-      tylog("valid check false");
-      return -2396;
+    ret = ssrcInfo.rtpReceiver.rtpStats_.rtp_valid_packet_in_sequence(
+        rtpBizPacket.GetRtpHeader().getSeqNumber());
+    if (ret) {
+      tylog("valid check ret=%d.", ret);
+      // assert(!"shouldn't use assert :)");
+
+      return ret;
     }
 
     // https://datatracker.ietf.org/doc/html/rfc3550#appendix-A.3
     // The number of packets received is simply the count of packets as they
     // arrive, including any late or duplicate packets.
     // So count before check old.
-    ssrcInfo.rtpReceiver.CountStatistics(rtpBizPacket);
+    ssrcInfo.rtpReceiver.rtpStats_.CountStatistics(rtpBizPacket);
 
     if (rtpBizPacket.GetPowerSeq() <=
         ssrcInfo.rtpReceiver.lastPoppedPowerSeq_) {

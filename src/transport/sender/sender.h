@@ -19,6 +19,11 @@ namespace tywebrtc {
 
 class SSRCInfo;
 
+struct RTPSendStatistics {
+  unsigned int packet_count{};
+  unsigned int octet_count{};
+};
+
 // audio should not in pacing
 class RtpSender {
  public:
@@ -58,6 +63,9 @@ class RtpSender {
 
   bool is_add_sr_timer_{};
   SenderReportTimer senderReportTimer_;
+
+ public:
+  mutable RTPSendStatistics rtpSendStats_{};
 };
 
 }  // namespace tywebrtc

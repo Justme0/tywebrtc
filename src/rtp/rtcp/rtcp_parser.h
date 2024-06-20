@@ -27,6 +27,9 @@
 
 namespace tywebrtc {
 
+// OPT: make dynamic, now reference licode
+const int kSsrcFeedbackMaxNumber = 50;
+
 enum class EnXRBlockType {
   kXRBlockRRTR = 4,
   kXRBlockDLRR = 5,
@@ -232,6 +235,7 @@ class NackBlock {
 //
 //
 // max = mantissa*2^exp
+// from https://datatracker.ietf.org/doc/html/draft-alvestrand-rmcat-remb-03
 //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |V=2|P| FMT=15  |   PT=206      |             length            |
@@ -262,7 +266,7 @@ class NackBlock {
 // :                         report blocks                         :
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 //
-// Extended report block:
+// XR block:
 //  0                   1                   2                   3
 //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -310,6 +314,7 @@ class RtcpHeader {
   //  avoids a validity check for a multiple of 4.)
   uint32_t length : 16;
 
+  // The synchronization source identifier for the originator of this XR packet.
   uint32_t ssrc;
 
   union report_t {
@@ -328,7 +333,21 @@ class RtcpHeader {
     struct senderReport_t {
       uint64_t ntptimestamp;
       uint32_t rtprts;
+
+      // sender's packet count: 32 bits
+      // The total number of RTP data packets transmitted by the sender
+      // since starting transmission up until the time this SR packet was
+      // generated.  The count SHOULD be reset if the sender changes its
+      // SSRC identifier.
       uint32_t packetsent;
+
+      // sender's octet count: 32 bits
+      // The total number of payload octets (i.e., not including header or
+      // padding) transmitted in RTP data packets by the sender since
+      // starting transmission up until the time this SR packet was
+      // generated.  The count SHOULD be reset if the sender changes its
+      // SSRC identifier.  This field can be used to estimate the average
+      // payload data rate.
       uint32_t octetssent;
       struct receiverReport_t rrlist[1];
     } senderReport;
@@ -349,7 +368,7 @@ class RtcpHeader {
       uint32_t uniqueid;
       uint32_t numssrc : 8;
       uint32_t brLength : 24;
-      uint32_t ssrcfeedb;
+      uint32_t ssrcfeedb[kSsrcFeedbackMaxNumber];
     } rembPacket;
 
     struct pli_t {
@@ -377,8 +396,31 @@ class RtcpHeader {
       // of only the BT, type-specific, and block length fields, with a
       // null type-specific block contents field.
       uint32_t blocklen : 16;
+
+      // SSRC of nth receiver
       uint32_t rrssrc;
+
+      // last RR timestamp (LRR): 32 bits
+      // The middle 32 bits out of 64 in the NTP timestamp (as explained
+      // in the previous section), received as part of a Receiver
+      // Reference Time Report Block from participant SSRC_n.  If no
+      // such block has been received, the field is set to zero.
       uint32_t lastrr;
+
+      // delay since last RR (DLRR): 32 bits
+      // The delay, expressed in units of 1/65536 seconds, between
+      // receiving the last Receiver Reference Time Report Block from
+      // participant SSRC_n and sending this DLRR Report Block.  If a
+      // Receiver Reference Time Report Block has yet to be received
+      // from SSRC_n, the DLRR field is set to zero (or the DLRR is
+      // omitted entirely).  Let SSRC_r denote the receiver issuing this
+      // DLRR Report Block.  Participant SSRC_n can compute the round-
+      // trip propagation delay to SSRC_r by recording the time A when
+      // this Receiver Timestamp Report Block is received.  It
+      // calculates the total round-trip time A-LRR using the last RR
+      // timestamp (LRR) field, and then subtracting this field to leave
+      // the round-trip propagation delay as A-LRR-DLRR.  This is
+      // illustrated in [9, Fig. 2].
       uint32_t dlrr;
     } xr_dlrr;
 
@@ -386,6 +428,23 @@ class RtcpHeader {
       EnXRBlockType blocktype : 8;
       uint32_t reserved : 8;
       uint32_t blocklen : 16;
+
+      // NTP timestamp: 64 bits
+      // Indicates the wallclock time when this block was sent so that
+      // it may be used in combination with timestamps returned in DLRR
+      // Report Blocks (see next section) from other receivers to
+      // measure round-trip propagation to those receivers.  Receivers
+      // should expect that the measurement accuracy of the timestamp
+      // may be limited to far less than the resolution of the NTP
+      // timestamp.  The measurement uncertainty of the timestamp is not
+      // indicated as it may not be known.  A report block sender that
+      // can keep track of elapsed time but has no notion of wallclock
+      // time may use the elapsed time since joining the session
+      // instead.  This is assumed to be less than 68 years, so the high
+      // bit will be zero.  It is permissible to use the sampling clock
+      // to estimate elapsed wallclock time.  A report sender that has
+      // no notion of wallclock or elapsed time may set the NTP
+      // timestamp to zero.
       uint32_t seconds;
       uint32_t fractions;
     } xr_rrtr;
@@ -546,11 +605,11 @@ class RtcpHeader {
   uint8_t getREMBNumSSRC() const { return report.rembPacket.numssrc; }
   void setREMBNumSSRC(uint8_t num) { report.rembPacket.numssrc = num; }
 
-  uint32_t getREMBFeedSSRC() const {
-    return ntohl(report.rembPacket.ssrcfeedb);
+  uint32_t getREMBFeedSSRC(uint8_t index) const {
+    return ntohl(report.rembPacket.ssrcfeedb[index]);
   }
-  void setREMBFeedSSRC(uint32_t ssrc) {
-    report.rembPacket.ssrcfeedb = htonl(ssrc);
+  void setREMBFeedSSRC(uint8_t index, uint32_t ssrc) {
+    report.rembPacket.ssrcfeedb[index] = htonl(ssrc);
   }
 
   uint32_t getFCI() const { return ntohl(report.pli.fci); }
@@ -588,7 +647,6 @@ class RtcpHeader {
 
     return ntp;
   }
-
   void setRrtrNtp(uint64_t ntp_timestamp) {
     report.xr_rrtr.seconds = htonl(ntp_timestamp >> 32);
     report.xr_rrtr.fractions = htonl(ntp_timestamp & 0xFFFFFFFF);

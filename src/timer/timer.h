@@ -18,6 +18,7 @@ namespace tywebrtc {
 class DtlsHandler;
 class RtpSender;
 class RtpReceiver;
+class RtpHandler;
 
 class MonitorStateTimer : public Timer {
  public:
@@ -26,6 +27,19 @@ class MonitorStateTimer : public Timer {
 
  private:
   bool _OnTimer() override;
+};
+
+class PLITimer : public Timer {
+ public:
+  PLITimer(RtpReceiver& rtpReceiver)
+      : Timer(5000, -1), belongingRtpReceiver_(rtpReceiver) {}
+
+  ~PLITimer() override { TimerManager::Instance()->KillTimer(this); }
+
+ private:
+  bool _OnTimer() override;
+
+  RtpReceiver& belongingRtpReceiver_;
 };
 
 // DTLS handshake timeout resend
@@ -66,17 +80,16 @@ struct ReceiverReportTimer : public Timer {
   RtpReceiver& belongingRtpReceiver_;
 };
 
-class PLITimer : public Timer {
+struct RembTimer : public Timer {
  public:
-  PLITimer(RtpReceiver& rtpReceiver)
-      : Timer(5000, -1), belongingRtpReceiver_(rtpReceiver) {}
-
-  ~PLITimer() override { TimerManager::Instance()->KillTimer(this); }
+  RembTimer(RtpHandler& rtpHandler)
+      : Timer(500, -1), belongingRtpHandler_(rtpHandler) {}
+  ~RembTimer() override { TimerManager::Instance()->KillTimer(this); }
 
  private:
   bool _OnTimer() override;
 
-  RtpReceiver& belongingRtpReceiver_;
+  RtpHandler& belongingRtpHandler_;
 };
 
 }  // namespace tywebrtc

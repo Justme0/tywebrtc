@@ -86,8 +86,8 @@ int RtcpSenderReport::CreateSenderReport(const RtpSender& sender,
 
   senderReport.setNtpTimestamp(MsToNtp(kNowMs).GetValue());
   senderReport.setRtpTimestamp(now_rtp_timestamp);
-  senderReport.setPacketsSent(100);  // taylor mock
-  senderReport.setOctetsSent(200);
+  senderReport.setPacketsSent(sender.rtpSendStats_.packet_count);
+  senderReport.setOctetsSent(sender.rtpSendStats_.octet_count);
 
   tylog("create sr=%s.", senderReport.ToString().data());
 

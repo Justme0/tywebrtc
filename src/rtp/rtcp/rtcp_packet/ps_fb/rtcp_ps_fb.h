@@ -12,6 +12,7 @@
 #define SRC_RTP_RTCP_RTCP_PACKET_PS_FB_RTCP_PS_FB_H_
 
 #include "src/rtp/rtcp/rtcp_packet/ps_fb/rtcp_pli.h"
+#include "src/rtp/rtcp/rtcp_packet/ps_fb/rtcp_remb.h"
 
 #include <vector>
 
@@ -33,6 +34,7 @@ class RtcpPayloadSpecificFeedback {
   RtcpHandler &belongingRtcpHandler_;
 
   RtcpPLI pli_;
+  RtcpREMB remb_;
 };
 
 }  // namespace tywebrtc

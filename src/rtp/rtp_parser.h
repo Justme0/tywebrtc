@@ -709,6 +709,16 @@ class RtpHeader {
     return "";
   }
 
+  bool IsAudio() const {
+    // OPT: first save result
+    return kMediaTypeAudio == ComputeMediaType();
+  }
+
+  int GetPayloadTypeFrequency() const {
+    // OPT: support more audio frequency
+    return IsAudio() ? kAudioPayloadTypeFrequency : kVideoPayloadTypeFrequency;
+  }
+
   std::string ToString() const {
     return tylib::format_string(
         "{CSRC count=%d, has ext=%d, has padding=%d, version=%d, "
@@ -778,6 +788,14 @@ struct RtpBizPacket {
                ->getSeqNumber();
   }
 
+  const RtpHeader& GetRtpHeader() {
+    return *reinterpret_cast<const RtpHeader*>(rtpRawPacket.data());
+  }
+
+  const RtpHeader& GetRtpHeader() const {
+    return *reinterpret_cast<const RtpHeader*>(rtpRawPacket.data());
+  }
+
   std::string ToString() const {
     assert(!rtpRawPacket.empty());
     return tylib::format_string(
@@ -807,7 +825,9 @@ struct RtpBizPacket {
 //       may be needed by some encryption algorithms with fixed block sizes
 //       or for carrying several RTP packets in a lower-layer protocol data
 //       unit.
-// OPT: define RTPPacket, make getRtpPaddingLength member function
+//
+// OPT: define RTPPacket, make getRtpPaddingLength member function,
+// now have to be defined as global function.
 inline int getRtpPaddingLength(const std::vector<char>& vBufReceive) {
   const RtpHeader& rtpHeader =
       *reinterpret_cast<const RtpHeader*>(vBufReceive.data());

@@ -67,6 +67,7 @@ bool DTLSTimer::_OnTimer() {
   return true;
 }
 
+// OPT: frequence should be up to traffic, not timer
 bool SenderReportTimer::_OnTimer() {
   tylog("on timer");
 
@@ -147,6 +148,36 @@ bool ReceiverReportTimer::_OnTimer() {
   }
   ret = this->belongingRtpReceiver_.belongingSSRCInfo_.belongingRtpHandler
             .belongingPC_.SendToClient(rtcpBin);
+  if (ret) {
+    tylog("send to client ret=%d", ret);
+
+    return true;
+  }
+
+  return true;
+}
+
+bool RembTimer::_OnTimer() {
+  tylog("on timer");
+  std::vector<char> rtcpBin;
+  int ret =
+      belongingRtpHandler_.belongingPC_.rtcpHandler_.psfb_.remb_.CreateREMB(
+          {/*todo*/}, &rtcpBin);
+  if (ret) {
+    tylog("create rr ret=%d.", ret);
+
+    return true;
+  }
+
+  DumpSendPacket(rtcpBin);
+  ret = this->belongingRtpHandler_.belongingPC_.srtpHandler_.ProtectRtcp(
+      const_cast<std::vector<char>*>(&rtcpBin));
+  if (ret) {
+    tylog("send to client, protect rtcp ret=%d", ret);
+
+    return true;
+  }
+  ret = this->belongingRtpHandler_.belongingPC_.SendToClient(rtcpBin);
   if (ret) {
     tylog("send to client ret=%d", ret);
 

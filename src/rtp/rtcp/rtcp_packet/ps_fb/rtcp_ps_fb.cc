@@ -19,7 +19,7 @@ namespace tywebrtc {
 
 RtcpPayloadSpecificFeedback::RtcpPayloadSpecificFeedback(
     RtcpHandler& belongingRtcpHandler)
-    : belongingRtcpHandler_(belongingRtcpHandler), pli_(*this) {}
+    : belongingRtcpHandler_(belongingRtcpHandler), pli_(*this), remb_(*this) {}
 
 int RtcpPayloadSpecificFeedback::HandlePayloadSpecificFeedback(
     const RtcpHeader& chead) {

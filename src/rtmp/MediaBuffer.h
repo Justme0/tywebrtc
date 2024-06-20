@@ -67,8 +67,8 @@ class MediaBuffer {
   uint32_t mDestContentLength;
 
   uint32_t mMediaTime;
-  uint32_t mCompositionTimeOffset;  // AVC Video Packet特有，值为PTS -
-  // DTS，有符号3字节数（从不为负）
+  // AVC Video Packet特有，值为PTS - DTS，有符号3字节数（从不为负）
+  uint32_t mCompositionTimeOffset;
   enVideoH264NaluType mframeType;
 };
 

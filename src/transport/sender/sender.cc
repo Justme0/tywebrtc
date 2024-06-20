@@ -28,12 +28,24 @@ void RtpSender::Enqueue(RtpBizPacket&& rtpBizPacket) {
   tylog("enqueue biz pkt=%s.", rtpBizPacket.ToString().data());
 
   assert(rtpBizPacket.enterJitterTimeMs != 0);
+
+  const RtpHeader& rtpHeader =
+      *reinterpret_cast<const RtpHeader*>(rtpBizPacket.rtpRawPacket.data());
+
   // FIXME: capture time not now.
   // RTP: use RTCP compute; RTMP: recv ts (enterJitterTimeMs is ok)
-  this->SetLastRtpTime(
-      reinterpret_cast<RtpHeader*>(rtpBizPacket.rtpRawPacket.data())
-          ->getTimestamp(),
-      rtpBizPacket.enterJitterTimeMs);
+  // OPT: move to this->dequeue
+  this->SetLastRtpTime(rtpHeader.getTimestamp(),
+                       rtpBizPacket.enterJitterTimeMs);
+
+  // OPT: should include NACK send
+  // count sender statistics for RTCP
+  // not include header(include CSRC, ext) and padding
+  // https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/modules/rtp_rtcp/source/rtp_packet.cc;l=560
+  rtpSendStats_.octet_count += rtpBizPacket.rtpRawPacket.size() -
+                               rtpHeader.getHeaderLength() -
+                               getRtpPaddingLength(rtpBizPacket.rtpRawPacket);
+  ++rtpSendStats_.packet_count;
 
   sendQueue_.emplace(rtpBizPacket.GetPowerSeq(), std::move(rtpBizPacket));
   assert(rtpBizPacket.rtpRawPacket.empty());

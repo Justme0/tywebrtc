@@ -67,6 +67,7 @@ int RtcpExtendedReports::HandleExtendedReports(const RtcpHeader& chead) {
 
     if (blockBufSize <= 0) break;
 
+    // next blockHead is not real RtcpHeader, can only get block attribute
     blockMovPointer += blockHead.getBlockRealLen();
   }
 

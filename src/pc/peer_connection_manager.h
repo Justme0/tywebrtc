@@ -49,8 +49,9 @@ struct PCKey {
       : username(username), lastActiveTimeMs(lastActiveTimeMs) {}
 
   std::string ToString() const {
-    return tylib::format_string("{username=%s, lastActiveTimeMs=%" PRId64 "}",
-                                username.data(), lastActiveTimeMs);
+    return tylib::format_string(
+        "{username=%s, lastActiveTimeMs=%s}", username.data(),
+        tylib::MilliSecondToLocalTimeString(lastActiveTimeMs).data());
   }
 };
 

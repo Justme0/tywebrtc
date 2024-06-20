@@ -277,7 +277,9 @@ int FlvAssist::makeAvcTag(MediaBuffer& mediaBuffer) {
   AvcBuffer.setFrameType(mediaBuffer.getFrameType());
   ret = toAvc(AvcBuffer);
 
-  if (0 != ret) return -1;
+  if (0 != ret) {
+    return ret;
+  }
 
   int dataSizePos = 0;
   int configTagSize = 0;

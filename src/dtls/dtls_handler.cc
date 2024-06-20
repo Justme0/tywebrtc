@@ -542,6 +542,7 @@ int DtlsHandler::HandleDtlsPacket(const std::vector<char>& vBufReceive) {
   int ret = 0;
 
   tylog("read Dtls message len:%zu %s", vBufReceive.size(), ToString().data());
+  // OPT: parse dtls e.g. alert pkt
 
   // do data channel
   if (this->mHandshakeCompleted) {

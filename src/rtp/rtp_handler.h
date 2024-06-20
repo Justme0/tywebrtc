@@ -48,6 +48,11 @@ struct RrPkgInfo {
   // tostring
 };
 
+struct RrtrPkgInfo {
+  int64_t recvMs{};
+  uint64_t rrtrNtp{};
+};
+
 struct SrPkgInfo {
   int64_t recvMs{};
   uint32_t SRCount{};
@@ -122,9 +127,11 @@ class RtpHandler {
   uint32_t upAudioSSRC = 0;
   uint32_t upVideoSSRC = 0;
 
+  // no related with SSRC, receiver's SSRC no use
+  RrtrPkgInfo rrtrInfo_{};
+
   std::unordered_map<uint32_t, SSRCInfo> ssrcInfoMap_;
 
- public:  // tmp
   // downlink may have multiple
   SrsAudioTranscoder audioTranscoderDownlink_;
 

@@ -17,21 +17,23 @@
 namespace tywebrtc {
 
 RtcpRRTR::RtcpRRTR(RtcpExtendedReports& belongingXr)
-    : belongingXr_(belongingXr) {
-  (void)belongingXr_;
-}
+    : belongingXr_(belongingXr) {}
 
 int RtcpRRTR::HandleRtcpRRTR(const RtcpHeader& blockHead) {
+  // no use? or should set in DLRR?
   uint32_t rrtrSsrc = blockHead.getSSRC();
   uint64_t rrtrNtp = blockHead.getRrtrNtp();
-  uint64_t netNtp = *((uint64_t*)((char*)&blockHead + 12));
 
-  tylog("[RRTR] rrtrSsrc:%u, rrtrNtp:%" PRIu64 ", ntp:%" PRIu64 ".", rrtrSsrc,
-        rrtrNtp, be64toh(netNtp));
+  tylog("[RRTR] rrtrSsrc:%u, rrtrNtp:%" PRIu64 ".", rrtrSsrc, rrtrNtp);
 
-  // auto lastRrtrNtp = CompactNtp(NtpTime(rrtrNtp));
-  // auto rcvRrtrTime = g_now_ms;
-  // auto rrtrSsrc = rrtrSsrc;
+  assert(rrtrNtp != 0 &&
+         "A report sender that has no notion of wallclock or elapsed time may "
+         "set the NTP timestamp to zero.");
+
+  RrtrPkgInfo* info = &this->belongingXr_.belongingRtcpHandler_.belongingPC_
+                           .rtpHandler_.rrtrInfo_;
+  info->recvMs = g_now_ms;
+  info->rrtrNtp = rrtrNtp;
 
   return 0;
 }

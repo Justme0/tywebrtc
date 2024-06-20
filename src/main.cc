@@ -192,7 +192,10 @@ int HandleRequest() {
           ip, port, vBufReceive);
 
   if (pc == nullptr) {
-    tylog("cannot get pc, may cold restart svr");
+    tylog(
+        "cannot get pc, may cold restart svr, or client send after long time "
+        "but svr already timeout");
+
     return -4;
   }
 

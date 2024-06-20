@@ -14,150 +14,11 @@
 
 namespace tywebrtc {
 
-#define RTP_SEQ_MOD (1 << 16)
-
-/*
- * Called whenever there is a large jump in sequence numbers,
- * or when they get out of probation...
- */
-// only called by rtp_valid_packet_in_sequence
-static void rtp_init_sequence(RTPStatistics* s, uint16_t seq) {
-  s->max_seq = seq;
-  s->cycles = 0;
-  s->base_seq = seq - 1;
-  s->bad_seq = RTP_SEQ_MOD + 1;
-  s->received = 0;
-  s->expected_prior = 0;
-  s->received_prior = 0;
-  s->jitter = 0;
-  s->transit = 0;
-}
-
-[[maybe_unused]] static void rtcp_update_jitter(RTPStatistics* s,
-                                                uint32_t sent_timestamp,
-                                                uint32_t arrival_timestamp) {
-  // Most of this is pretty straight from RFC 3550 appendix A.8
-  uint32_t transit = arrival_timestamp - sent_timestamp;
-  uint32_t prev_transit = s->transit;
-  int32_t d = transit - prev_transit;
-  // Doing the FFABS() call directly on the "transit - prev_transit"
-  // expression doesn't work, since it's an unsigned expression. Doing the
-  // transit calculation in unsigned is desired though, since it most
-  // probably will need to wrap around.
-  d = FFABS(d);
-  s->transit = transit;
-  if (!prev_transit) return;
-  s->jitter += d - (int32_t)((s->jitter + 8) >> 4);
-}
-
-/* Returns 1 if we should handle this packet. */
-bool RtpReceiver::rtp_valid_packet_in_sequence(RTPStatistics* s, uint16_t seq) {
-  uint16_t udelta = seq - s->max_seq;
-  const int MAX_DROPOUT = 3000;
-  const int MAX_MISORDER = 100;
-  const int MIN_SEQUENTIAL = 2;
-
-  /* source not valid until MIN_SEQUENTIAL packets with sequence
-   * seq. numbers have been received */
-  if (s->probation) {
-    if (seq == s->max_seq + 1) {
-      s->probation--;
-      s->max_seq = seq;
-      if (s->probation == 0) {
-        rtp_init_sequence(s, seq);
-        s->received++;
-        return 1;
-      }
-    } else {
-      s->probation = MIN_SEQUENTIAL - 1;
-      s->max_seq = seq;
-    }
-  } else if (udelta < MAX_DROPOUT) {
-    // in order, with permissible gap
-    if (seq < s->max_seq) {
-      // sequence number wrapped; count another 64k cycles
-      s->cycles += RTP_SEQ_MOD;
-    }
-    s->max_seq = seq;
-  } else if (udelta <= RTP_SEQ_MOD - MAX_MISORDER) {
-    // sequence made a large jump...
-    tylog("seq=%u, udelta[%u]<=%d, s=%s.", seq, udelta,
-          RTP_SEQ_MOD - MAX_MISORDER, s->ToString().data());
-    if (seq == s->bad_seq) {
-      /* two sequential packets -- assume that the other side
-       * restarted without telling us; just resync. */
-      rtp_init_sequence(s, seq);
-    } else {
-      s->bad_seq = (seq + 1) & (RTP_SEQ_MOD - 1);
-      return 0;
-    }
-  } else {
-    // duplicate or reordered packet...
-  }
-  s->received++;
-  return 1;
-}
-
 RtpReceiver::RtpReceiver(SSRCInfo& ssrcInfo)
     : belongingSSRCInfo_(ssrcInfo),
       receiverReportTimer_(*this),
       pliTimer_(*this) {
-  assert(rtpStats_.probation == 1);
-}
-
-void RtpReceiver::CountStatistics(const RtpBizPacket& rtpBizPacket) {
-  rtpStats_.octet_count += rtpBizPacket.rtpRawPacket.size();
-
-  /* TODO: I think this is way too often; RFC 1889 has algorithm for this */
-  /* XXX: MPEG pts hardcoded. RTCP send every 0.5 seconds */
-
-  /* RTCP packets use 0.5% of the bandwidth */
-  const int RTCP_TX_RATIO_NUM = 5;
-  const int RTCP_TX_RATIO_DEN = 1000;
-  int rtcp_bytes = ((rtpStats_.octet_count - rtpStats_.last_octet_count) *
-                    RTCP_TX_RATIO_NUM) /
-                   RTCP_TX_RATIO_DEN;
-
-  // mmu_man: that's enough for me... VLC sends much less btw !?
-  rtcp_bytes /= 50;
-  if (rtcp_bytes < 28) {
-    // return;
-  };
-
-#ifdef SHIITTT
-  avio_wb32(pb,
-            fraction); /* 8 bits of fraction, 24 bits of total packets lost */
-  avio_wb32(pb, extended_max);          /* max sequence received */
-  avio_wb32(pb, rtpStats_.jitter >> 4); /* jitter */
-
-  if (rtpStats_.last_rtcp_ntp_time == AV_NOPTS_VALUE) {
-    avio_wb32(pb, 0); /* last SR timestamp */
-    avio_wb32(pb, 0); /* delay since last SR */
-  } else {
-    uint32_t middle_32_bits = rtpStats_.last_rtcp_ntp_time >>
-                              16;  // this is valid, right? do we need to
-                                   // handle 64 bit values special?
-    uint32_t delay_since_last =
-        av_rescale(av_gettime_relative() - rtpStats_.last_rtcp_reception_time,
-                   65536, AV_TIME_BASE);
-
-    avio_wb32(pb, middle_32_bits);   /* last SR timestamp */
-    avio_wb32(pb, delay_since_last); /* delay since last SR */
-  }
-
-  // CNAME
-  avio_w8(pb, (RTP_VERSION << 6) + 1); /* 1 report block */
-  avio_w8(pb, RTCP_SDES);
-  int len = strlen(rtpStats_.hostname);
-  avio_wb16(pb, (7 + len + 3) / 4); /* length in words - 1 */
-  avio_wb32(pb, rtpStats_.ssrc + 1);
-  avio_w8(pb, 0x01);
-  avio_w8(pb, len);
-  avio_write(pb, rtpStats_.hostname, len);
-  avio_w8(pb, 0); /* END */
-  // padding
-  for (len = (7 + len) % 4; len % 4; len++) avio_w8(pb, 0);
-#endif
+  assert(rtpStats_.probation == 0);
 }
 
 void RtpReceiver::PushToJitter(RtpBizPacket&& rtpBizPacket) {
@@ -179,9 +40,10 @@ void RtpReceiver::PushToJitter(RtpBizPacket&& rtpBizPacket) {
 int RtpReceiver::GetJitterSize() const { return jitterBuffer_.size(); }
 
 std::string RtpReceiver::ToString() const {
-  return tylib::format_string("{jitterSize=%zu, lastPowerSeq=%s}",
+  return tylib::format_string("{jitterSize=%zu, lastPowerSeq=%s, rtpStats=%s}",
                               jitterBuffer_.size(),
-                              PowerSeqToString(lastPoppedPowerSeq_).data());
+                              PowerSeqToString(lastPoppedPowerSeq_).data(),
+                              rtpStats_.ToString().data());
 }
 
 // OPT: use not wait stategy
@@ -279,7 +141,10 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
 
   // wait too long for audio, pop all
   if (bAudioType) {
-    tylog("audio wait too long %ldms, not wait, pop all", waitMs);
+    tylog(
+        "audio wait too long %ldms or jitterSize=%zu too long, not wait, pop "
+        "all",
+        waitMs, jitterBuffer_.size());
     // OPT: should pop only first, and pop remaining in normal way
     for (auto it = jitterBuffer_.begin(); it != jitterBuffer_.end();) {
       tylog("pop from jitter rtp=%s.", it->second.ToString().data());
@@ -296,8 +161,8 @@ std::vector<RtpBizPacket> RtpReceiver::PopOrderedPackets() {
     assert(!jitterBuffer_.empty());
 
     // wait too long for video, clear and do PLI
-    tylog("PLI, first packet waitMs=%ld too long, packet=%s.", waitMs,
-          firstPacket.ToString().data());
+    tylog("PLI, first packet waitMs=%ld or jitterSize=%zu too long, packet=%s.",
+          waitMs, jitterBuffer_.size(), firstPacket.ToString().data());
 
     int ret = belongingSSRCInfo_.belongingRtpHandler.belongingPC_.rtcpHandler_
                   .psfb_.pli_.CreatePLISend();

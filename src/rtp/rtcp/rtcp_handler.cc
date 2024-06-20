@@ -67,7 +67,8 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
       tylog("NOTE: totalLen=%zu > all input len=%zu, break", totalLen,
             vBufReceive.size());
 
-      assert(totalLen - vBufReceive.size() <= 10);
+      // after OPT check if use srtp via signal, open this assert.
+      // assert(totalLen - vBufReceive.size() <= 10);
 
       break;
     }
@@ -132,7 +133,7 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
       case RtcpPacketType::kExtendedReports: {
         ret = this->extendedReport_.HandleExtendedReports(chead);
         if (ret) {
-          tylog("handle SR ret=%d.", ret);
+          tylog("handle XR ret=%d.", ret);
           assert(!"should not user assert :)");
           return ret;
         }
@@ -145,29 +146,6 @@ int RtcpHandler::HandleRtcpPacket(const std::vector<char> &vBufReceive) {
         break;
     }
   }
-
-  /*
-    if (nullptr == peerPC) {
-      tylog("another peerPC null, not transparent transfer.");
-
-      return 0;
-    }
-
-    DumpSendPacket(vBufReceive);
-    ret = peerPC->srtpHandler_.ProtectRtcp(
-        const_cast<std::vector<char> *>(&vBufReceive));
-    if (ret) {
-      tylog("downlink protect rtcp ret=%d", ret);
-      return ret;
-    }
-
-    // unvarnished transmission to peer
-    ret = peerPC->SendToClient(vBufReceive);
-    if (ret) {
-      tylog("send ret=%d", ret);
-      return ret;
-    }
-    */
 
   return 0;
 }

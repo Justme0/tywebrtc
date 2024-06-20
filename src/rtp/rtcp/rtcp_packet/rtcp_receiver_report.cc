@@ -95,10 +95,10 @@ int RtcpReceiverReport::HandleReceiverReport(const RtcpHeader& chead) {
       return 0;
     }
 
-    RrPkgInfo& info = it->second.rrInfo_;
-    info.recvMs = g_now_ms;
-    info.RRCount++;
-    info.fractionLost = fractLost;
+    RrPkgInfo* info = &it->second.rrInfo_;
+    info->recvMs = g_now_ms;
+    info->RRCount++;
+    info->fractionLost = fractLost;
   }
 
   return 0;
@@ -144,7 +144,8 @@ int RtcpReceiverReport::CreateReceiverReport(const RtpReceiver& receiver,
   receiverReport.setLostPackets(lost);
   receiverReport.setSeqnumCycles(rtpStats.cycles);
   receiverReport.setHighestSeqnum(rtpStats.max_seq);
-  receiverReport.setJitter(rtpStats.jitter >> 4);
+  // Note: internal jitter value is in Q4 and needs to be scaled by 1/16.
+  receiverReport.setJitter(rtpStats.jitter_q4_ >> 4);
   receiverReport.setLastSr(
       CompactNtp(NtpTime(receiver.belongingSSRCInfo_.srInfo_.NTPTimeStamps)));
   receiverReport.setDelaySinceLastSr(
@@ -153,7 +154,7 @@ int RtcpReceiverReport::CreateReceiverReport(const RtpReceiver& receiver,
 
   tylog("create rr=%s.", receiverReport.ToString().data());
 
-  char* buf = reinterpret_cast<char*>(&receiverReport);
+  const char* buf = reinterpret_cast<const char*>(&receiverReport);
   io_rtcpBin->insert(io_rtcpBin->end(), buf,
                      buf + receiverReport.getRealLength());
 
