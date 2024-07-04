@@ -412,12 +412,13 @@ a=fingerprint:sha-256 55:9B:3E:43:91:2D:66:79:0F:B6:84:45:B3:47:3F:56:D4:4C:9E:1
 a=setup:passive
 a=mid:0
 a=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level
+a=extmap:2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
 a=recvonly
 a=rtcp-mux
 a=rtpmap:111 opus/48000/2
 a=rtcp-fb:111 nack
 a=rtcp-fb:111 rrtr
-a=fmtp:111 minptime=20;sprop-stereo=1;stereo=1
+a=fmtp:111 minptime=20;sprop-stereo=0;stereo=0
 m=video 9 UDP/TLS/RTP/SAVPF 96
 c=IN IP4 0.0.0.0
 a=rtcp:9 IN IP4 0.0.0.0
@@ -448,12 +449,13 @@ a=fingerprint:sha-256 55:9B:3E:43:91:2D:66:79:0F:B6:84:45:B3:47:3F:56:D4:4C:9E:1
 a=setup:passive
 a=mid:2
 a=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level
+a=extmap:2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
 a=sendonly
 a=rtcp-mux
 a=rtpmap:111 opus/48000/2
 a=rtcp-fb:111 nack
 a=rtcp-fb:111 rrtr
-a=fmtp:111 minptime=20;sprop-stereo=1;stereo=1
+a=fmtp:111 minptime=20;sprop-stereo=0;stereo=0
 a=ssrc:16854838 cname:YZcxBwerFFm6GH69
 a=ssrc:16854838 msid:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV 128f4fa0-81dd-4c3a-bbcd-22e71e29d178
 a=ssrc:16854838 mslabel:5Y2wZK8nANNAoVw6dSAHVjNxrD1ObBM2kBPV
@@ -467,8 +469,8 @@ a=ice-pwd:728c90257276ed9e48aac959
 a=fingerprint:sha-256 55:9B:3E:43:91:2D:66:79:0F:B6:84:45:B3:47:3F:56:D4:4C:9E:10:EA:B4:66:C6:64:42:42:4B:5C:CD:FF:2F
 a=setup:passive
 a=mid:3
-a=extmap:4 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
-a=extmap:5 urn:ietf:params:rtp-hdrext:toffset
+a=extmap:2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+a=extmap:14 urn:ietf:params:rtp-hdrext:toffset
 a=sendonly
 a=rtcp-mux
 a=rtcp-rsize

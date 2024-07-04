@@ -558,7 +558,7 @@ class RtpFixedHeaderExt {
 
     // 4 * this->getExtLength() should check:
     // profile == 0xBEDE || (profile & 0xFFF0) == 0x1000
-    // ref: https://www.rfc-editor.org/rfc/rfc5285#section-4
+    // ref: https://datatracker.ietf.org/doc/html/rfc8285#autoid-4
     return kSelfHeadExtLen + 4 * this->getExtLength();
   }
 

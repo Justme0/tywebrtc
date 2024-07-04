@@ -41,11 +41,9 @@ RtpHandler::RtpHandler(PeerConnection &pc)
   // opt: may have no audio
   SrsAudioCodecId from = SrsAudioCodecIdOpus;  // TODO: From SDP?
   SrsAudioCodecId to = SrsAudioCodecIdAAC;     // The output audio codec.
-  int channels = 2;                            // The output audio channels.
-  int sample_rate = 48000;  // The output audio sample rate in HZ.
-  int bitrate = 64000;      // The output audio bitrate in bps.
-  int ret =
-      audioTranscoder_.initialize(from, to, channels, sample_rate, bitrate);
+  const int sample_rate = 48000;  // The output audio sample rate in HZ.
+  int ret = audioTranscoderUplink_.initialize(from, to, kAudioChannelNumber,
+                                              sample_rate, 32000);
   if (ret) {
     tylog("init audio transcoder ret=%d", ret);
 
@@ -53,7 +51,8 @@ RtpHandler::RtpHandler(PeerConnection &pc)
   }
 
   ret = audioTranscoderDownlink_.initialize(
-      SrsAudioCodecIdAAC, SrsAudioCodecIdOpus, 2, 48000, 64000);
+      SrsAudioCodecIdAAC, SrsAudioCodecIdOpus, kAudioChannelNumber, sample_rate,
+      32000);
   if (ret) {
     tylog("init downlink audio transcoder ret=%d", ret);
 
@@ -304,7 +303,7 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
     f.ts_ms = nowMs;
 
     std::vector<SrsAudioFrame> outFrames;
-    ret = this->audioTranscoder_.transcode(f, outFrames);
+    ret = this->audioTranscoderUplink_.transcode(f, outFrames);
     if (ret) {
       tylog("audio transcode ret=%d", ret);
 

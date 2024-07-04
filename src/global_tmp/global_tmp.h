@@ -32,6 +32,13 @@
 
 namespace tywebrtc {
 
+// may move to RTPHeaderExtension
+constexpr int kAbsSendTimeFraction = 18;
+constexpr int64_t kProcessInterval = 500;
+constexpr int64_t kStreamTimeOut = 2000;
+
+const int kAudioChannelNumber = 1;
+
 const int kUplossRateMul100 = 0;
 const int kDownlossRateMul100 = 0;
 

@@ -2024,9 +2024,8 @@ int RtmpPuller::HandleVideoData(Client* pClient, const RTMPPacket* pPkg) {
   int Ret = 0;
 
   if (0 == pPkg->m_nTimeStamp) {
-    tylog("Recv Err Ts:%u FlvAvcType:%d, rtmpPkg=%s.", pPkg->m_nTimeStamp,
-          FlvAvcType, RTMPPacketToString(*pPkg).data());
-    assert(!"should not assert :)");
+    tylog("warning? Recv Err Ts:%u FlvAvcType:%d, rtmpPkg=%s.",
+          pPkg->m_nTimeStamp, FlvAvcType, RTMPPacketToString(*pPkg).data());
   }
 
   if (e_FlvAvcPacketType_Header == FlvAvcType) {
@@ -2214,6 +2213,8 @@ int RtmpPuller::HandleAudioRawData(Client* pClient, const RTMPPacket* pPkg) {
 }
 
 int RtmpPuller::HandleAudioData(Client* pClient, const RTMPPacket* pPkg) {
+  int ret = 0;
+
   if ((NULL == pClient) || (NULL == pPkg) || (NULL == pPkg->m_body)) {
     return -11;
   }
@@ -2231,11 +2232,13 @@ int RtmpPuller::HandleAudioData(Client* pClient, const RTMPPacket* pPkg) {
 
   switch (pFlvAudTagHead->AACPackType) {
     case e_FlvAacPacketType_Header:
-      HandleAudioHead(pClient, pPkg);
+      ret = HandleAudioHead(pClient, pPkg);
+      assert(ret == 0 && "should not use assert");
       break;
 
     case e_FlvAacPacketType_Raw:
-      HandleAudioRawData(pClient, pPkg);
+      ret = HandleAudioRawData(pClient, pPkg);
+      assert(ret == 0 && "should not use assert");
       break;
 
     default:

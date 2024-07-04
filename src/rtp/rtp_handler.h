@@ -155,7 +155,7 @@ class RtpHandler {
 
  private:
   // uplink
-  SrsAudioTranscoder audioTranscoder_;
+  SrsAudioTranscoder audioTranscoderUplink_;
   RtpDepacketizerVp8 videoTranscoder_;
 };
 

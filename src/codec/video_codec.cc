@@ -31,6 +31,7 @@ CodecDecoder::CodecDecoder() {
   width_ = 0;
   height_ = 0;
 }
+
 CodecDecoder::~CodecDecoder() {
   if (av_frame_) {
     av_frame_free(&av_frame_);
@@ -156,7 +157,7 @@ AVFrame *CodecDecoder::ScaleImg(AVFrame *srcFrame, int nDstW, int nDstH) {
     }
     width_ = nDstW;
     height_ = nDstH;
-    tylog("ffmpeg ScaleImg src:%dx%d -> dst:%dx%d", srcFrame->width,
+    tylog("ffmpeg scaleImg src:%dx%d -> dst:%dx%d", srcFrame->width,
           srcFrame->height, nDstW, nDstH);
   }
 
