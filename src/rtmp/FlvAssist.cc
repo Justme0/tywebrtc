@@ -16,11 +16,11 @@
 #include "src/global_tmp/h264SpsDec.h"
 #include "src/log/log.h"
 #include "src/rtmp/CommonAssist.h"
-#include "src/rtmp/rtmp_handler.h"
+#include "src/rtmp/rtmp_push.h"
 
 namespace tywebrtc {
 
-FlvAssist::FlvAssist(RtmpHandler& belongingRtmpHandler)
+FlvAssist::FlvAssist(RtmpPusher& belongingRtmpHandler)
     : belongingRtmpHandler_(belongingRtmpHandler) {
   mStartTimeAud = 0;
   mStartTimeVid = 0;
@@ -244,19 +244,6 @@ int FlvAssist::CheckNalu(unsigned char* buffer, unsigned int buffer_len) {
   return 0;
 }
 
-char* VideoDumpHex(char* data, int len) {
-  static char buf[65535];
-  int size = 0;
-  int i = 0;
-  size += sprintf(buf + size, "\nData len %d\n", len);
-  for (i = 0; i < len; ++i) {
-    size += sprintf(buf + size, "%02X ", (unsigned char)data[i]);
-    if ((i % 4) == 3) size += sprintf(buf + size, "| ");
-    if ((i % 16) == 15) size += sprintf(buf + size, "\n");
-  }
-  return buf;
-}
-
 int FlvAssist::makeAvcTag(MediaBuffer& mediaBuffer) {
   // FLV Tag
   // | TagType(8) | DataSize(24) | Timestamp(24) | TimestampExtended(8) |
@@ -283,7 +270,7 @@ int FlvAssist::makeAvcTag(MediaBuffer& mediaBuffer) {
 
   int dataSizePos = 0;
   int configTagSize = 0;
-  unsigned int timeStamp = mediaBuffer.getMediaTime();
+  uint32_t timeStamp = mediaBuffer.getMediaTime();
   CommonAssist commonAssist;
   commonAssist.setupBuffer(mediaBuffer.getDestBuffer(),
                            mediaBuffer.getDestBufferLength());

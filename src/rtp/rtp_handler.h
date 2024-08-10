@@ -18,8 +18,8 @@ extern "C" {
 
 #include "src/codec/audio_codec.h"
 #include "src/push/push_handler.h"
-#include "src/rtmp/rtmp_handler.h"
 #include "src/rtmp/rtmp_pull.h"
+#include "src/rtmp/rtmp_push.h"
 #include "src/rtp/pack_unpack/audio_to_rtp.h"
 #include "src/rtp/pack_unpack/h264_to_rtp.h"
 #include "src/rtp/pack_unpack/rtp_to_h264.h"
@@ -113,6 +113,9 @@ class RtpHandler {
   int DumpPacket(const std::vector<char> &packet, H264Unpacketizer &unpacker);
   int WriteWebmFile(const std::string &frame, uint32_t rtpTs,
                     const std::string &mediaType, bool bKeyFrame);
+
+  int DownlinkPackAndSend(bool bAudio, const std::vector<char> &rawStream,
+                          uint32_t rtpTime);
 
   std::string ToString() const;
 

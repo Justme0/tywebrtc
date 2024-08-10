@@ -25,6 +25,10 @@ struct ClientSrcId {
   bool operator==(const ClientSrcId& other) const {
     return ip == other.ip && port == other.port;
   }
+
+  std::string ToString() const {
+    return tylib::format_string("{ip=%s, port=%d}", ip.data(), port);
+  }
 };
 }
 
@@ -62,6 +66,8 @@ class PCManager {
   int GetClientAddrSize() const { return addr2username_.size(); }
 
   void CleanTimeoutPeerConnection();
+
+  PeerConnection* FindOnePeerPC() const;
 
   PeerConnection* GetPeerConnection(const std::string& ip, int port,
                                     const std::vector<char>& vBufReceive);

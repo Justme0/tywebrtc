@@ -82,9 +82,9 @@ RtpHandler::RtpHandler(PeerConnection &pc)
   }
   video_stream->codecpar->codec_id = AV_CODEC_ID_VP8;
   video_stream->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
-  // OPT: use const or config
-  video_stream->codecpar->width = 450;
-  video_stream->codecpar->height = 450;
+  // OPT: get from src stream, if not use scale, this is no used.
+  video_stream->codecpar->width = kSideLenPix;
+  video_stream->codecpar->height = kSideLenPix;
   videoStreamIndex_ = video_stream->index;
   tylog("video stream index=%d.", videoStreamIndex_);
 
@@ -98,7 +98,7 @@ RtpHandler::RtpHandler(PeerConnection &pc)
   audio_stream->codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
   audio_stream->codecpar->sample_rate = 48000;
   // OPT: use const or config
-  audio_stream->codecpar->ch_layout = AV_CHANNEL_LAYOUT_MONO;
+  // audio_stream->codecpar->ch_layout = AV_CHANNEL_LAYOUT_MONO;
   audioStreamIndex_ = audio_stream->index;
   tylog("audio stream index=%d.", audioStreamIndex_);
 
@@ -216,6 +216,101 @@ int RtpHandler::WriteWebmFile(const std::string &frame, uint32_t rtpTs,
   return 0;
 }
 
+// param to use string view
+int RtpHandler::DownlinkPackAndSend(bool bAudio,
+                                    const std::vector<char> &rawStream,
+                                    uint32_t rtpTime) {
+  int ret = 0;
+
+  const int kSSRC = bAudio ? kDownlinkAudioSsrc : kDownlinkVideoSsrc;
+
+  auto it = belongingPC_.rtpHandler_.ssrcInfoMap_.find(kSSRC);
+  if (belongingPC_.rtpHandler_.ssrcInfoMap_.end() == it) {
+    auto p = belongingPC_.rtpHandler_.ssrcInfoMap_.emplace(
+        std::piecewise_construct, std::forward_as_tuple(kSSRC),
+        std::forward_as_tuple(belongingPC_.rtpHandler_, kSSRC, bAudio));
+    assert(p.second);
+    it = p.first;
+    assert(&it->second == &it->second.rtpReceiver.belongingSSRCInfo_);
+  }
+  SSRCInfo &ssrcInfo = it->second;
+
+  std::vector<RtpBizPacket> rtpBizPackets;
+
+  if (bAudio) {
+    ret = ssrcInfo.audioPacketizer.Packetize(rawStream, rtpTime, {},
+                                             rtpBizPackets);
+    if (ret) {
+      tylog("ssrcInfo audio packetize ret=%d.", ret);
+
+      return ret;
+    }
+  } else {
+    ret = ssrcInfo.h264Packetizer.Packetize(rawStream, rtpTime, {},
+                                            rtpBizPackets);
+    if (ret) {
+      tylog("ssrcInfo h264 packetize ret=%d.", ret);
+
+      return ret;
+    }
+  }
+
+  // S1: encrypt original data
+  for (RtpBizPacket &rtpBizPacket : rtpBizPackets) {
+    tylog("rtmp to rtp(biz)=%s", rtpBizPacket.ToString().data());
+
+    DumpSendPacket(rtpBizPacket.rtpRawPacket);
+
+    ret = belongingPC_.srtpHandler_.ProtectRtp(&rtpBizPacket.rtpRawPacket);
+    if (ret) {
+      tylog("downlink protect rtp ret=%d", ret);
+
+      return ret;
+    }
+  }
+
+  // S2: do fec for encrypted original data
+  // 1) ts identify protecting same packets
+  // 2) seq self-increasing
+  // 3) extend head add n:m
+  // 4) last RTP add tail zero number
+  std::vector<std::vector<char>> fecPackets;
+  if (this->belongingPC_.sdpHandler_.bUseRsfec) {
+    if (bAudio) {
+    } else {
+      fecPackets = ssrcInfo.EncodeFec(rtpBizPackets);
+    }
+  }
+
+  // S3: send original data
+  for (RtpBizPacket &rtpBizPacket : rtpBizPackets) {
+    ret = this->belongingPC_.SendToClient(rtpBizPacket.rtpRawPacket);
+    if (ret) {
+      tylog("send to peer ret=%d", ret);
+
+      // should continue :)
+      return ret;
+    }
+
+    ssrcInfo.rtpSender.Enqueue(std::move(rtpBizPacket));
+    assert(rtpBizPacket.rtpRawPacket.empty());
+  }
+
+  // S4: send FEC data
+  for (const std::vector<char> &fecPacket : fecPackets) {
+    // not save fec to sender queue, not ARQ FEC
+    ret = this->belongingPC_.SendToClient(fecPacket);
+    if (ret) {
+      tylog("send to peer ret=%d", ret);
+
+      // should not return?
+      return ret;
+    }
+  }
+
+  return 0;
+}
+
 // dump 264 or rtmp push
 int RtpHandler::DumpPacket(const std::vector<char> &packet,
                            H264Unpacketizer &unpacker) {
@@ -287,7 +382,7 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
 
     tylog("before audio transcode, time(ms)=%ld, opus size=%ld.", nowMs,
           payloadEnd - payloadBegin);
-    assert(payloadBegin < payloadEnd);  // may have probe packet(size=0) ?
+    assert(payloadBegin <= payloadEnd);  // OPT: may have probe packet(size=0)
 
     ret = WriteWebmFile({payloadBegin, payloadEnd}, rtpHeader.getTimestamp(),
                         kMediaTypeAudio, false);
@@ -320,9 +415,9 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
       // https://stackoverflow.com/questions/65013622/ffmpeg-encoding-aac-audio-encoded-file-can-not-be-played#comment115182982_65150073
 
       // https://wiki.multimedia.cx/index.php/MPEG-4_Audio#Channel_Configurations
-      int aac_profile = 2;            // AAC LC
-      int frequencey_index = 3;       // 48000 Hz
-      int channel_configuration = 2;  // stereo (left, right)
+      int aac_profile = 2;       // AAC LC
+      int frequencey_index = 3;  // 48000 Hz
+      int channel_configuration = kAACChannelNumber;
 
       unsigned char adts_header[7];
       const int kADTSHeaderLen = sizeof adts_header;
@@ -350,6 +445,7 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
 
       WriteFile(adts_frame);
 
+      // OPT: if output more than one frame, the ts should not be rtp ts
       ret = this->belongingPC_.pushHandler_.SendAudioFrame(
           adts_frame, (rtpHeader.getTimestamp() - firstRtpAudioTs_) / 48);
       if (ret) {
@@ -642,14 +738,14 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     if (nullptr != url) {
       tylog("push url=%s", url);
 
-      RtmpHandler &rtmpPusher = *new RtmpHandler(this->belongingPC_);  // FIXME
+      RtmpPusher &rtmpPusher = *new RtmpPusher(this->belongingPC_);  // FIXME
 
       ret = this->belongingPC_.pushHandler_.InitPushHandler(
-          std::bind(&RtmpHandler::InitProtocolHandler, &rtmpPusher, url),
-          std::bind(&RtmpHandler::InitSucc, &rtmpPusher),
-          std::bind(&RtmpHandler::SendAudioFrame, &rtmpPusher,
+          std::bind(&RtmpPusher::InitProtocolHandler, &rtmpPusher, url),
+          std::bind(&RtmpPusher::InitSucc, &rtmpPusher),
+          std::bind(&RtmpPusher::SendAudioFrame, &rtmpPusher,
                     std::placeholders::_1, std::placeholders::_2),
-          std::bind(&RtmpHandler::SendVideoFrame, &rtmpPusher,
+          std::bind(&RtmpPusher::SendVideoFrame, &rtmpPusher,
                     std::placeholders::_1, std::placeholders::_2));
       if (ret) {
         tylog("Handler.handshakeTo ret=%d.", ret);
@@ -666,12 +762,14 @@ int RtpHandler::HandleRtpPacket(const std::vector<char> &vBufReceive) {
     if (nullptr != url) {
       tylog("pull url=%s", url);
 
-      RtmpPuller &rtmpPuller = *new RtmpPuller(this->belongingPC_);  // FIXME
+      RtmpPuller &rtmpPuller =
+          *new RtmpPuller(this->belongingPC_);  // FIXME memleak
 
       ret = this->belongingPC_.pullHandler_.InitPullHandler(
           &rtmpPuller.rtmp_.m_sb.sb_socket,
           std::bind(&RtmpPuller::InitProtocolHandler, &rtmpPuller, url),
-          std::bind(&RtmpPuller::HandlePacket, &rtmpPuller),
+          std::bind(&RtmpPuller::HandleRtmpFd, &rtmpPuller,
+                    std::placeholders::_1),
           std::bind(&RtmpPuller::CloseStream, &rtmpPuller));
       if (ret) {
         tylog("Handler.handshakeTo ret=%d.", ret);

@@ -20,11 +20,11 @@ namespace tywebrtc {
 #define AAC_ADTS_HEADER_LENGTH 7
 #define DST_BUF_LEN (2048 * 1024)
 
-class RtmpHandler;
+class RtmpPusher;
 
 class FlvAssist {
  public:
-  FlvAssist(RtmpHandler& belongingRtmpHandler);
+  FlvAssist(RtmpPusher& belongingRtmpHandler);
 
   int SendVideoFrame(const std::vector<char>& h264Frame, uint64_t frameMs);
   int SendAudioFrame(const std::vector<char>& audioFrame, uint64_t frameMs);
@@ -50,12 +50,12 @@ class FlvAssist {
   int makeAacTag(MediaBuffer& mediaBuffer);
 
  public:
-  RtmpHandler& belongingRtmpHandler_;
+  RtmpPusher& belongingRtmpHandler_;
 
   static const unsigned char sFrameStartCode[];
   static const unsigned char sSliceStartCode[];
-  unsigned int mStartTimeAud;
-  unsigned int mStartTimeVid;
+  uint32_t mStartTimeAud;
+  uint32_t mStartTimeVid;
   bool mVideoConfigTag;  // 是否已有config tag
   bool mAudioConfigTag;  // 是否已有config tag
 

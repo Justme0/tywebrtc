@@ -10,6 +10,29 @@
 
 namespace tywebrtc {
 
+// OPT: merge with FindPeerPC
+PeerConnection *PCManager::FindOnePeerPC() const {
+  PeerConnection *pc = nullptr;
+
+  for (auto &p : Singleton<PCManager>::Instance().pc_map_) {
+    if (p.second.stateMachine_ < EnumStateMachine::GOT_RTP) {
+      continue;
+    }
+
+    if (nullptr == pc || pc->lastActiveTimeMs_ < p.second.lastActiveTimeMs_) {
+      pc = &p.second;
+    }
+  }
+
+  if (nullptr != pc) {
+    tylog("found peer=%s.", pc->ToString().data());
+  } else {
+    tylog("not found peer");
+  }
+
+  return pc;
+}
+
 // if construct map's value is expensive
 // https://stackoverflow.com/questions/97050/stdmap-insert-or-stdmap-find
 // here we can also use insert and update, but lower_bound is more general
@@ -99,7 +122,7 @@ void PCManager::CleanTimeoutPeerConnection() {
     if (it->second.lastActiveTimeMs_ + kPCDeadTimeoutMs <
         static_cast<int64_t>(g_now_ms)) {
       tylog("timeout pc, clean it=%s. after clean, pc_map size=%zu.",
-            it->second.ToString().data(), pc_map_.size() - 1);
+            tylib::AnyToString(*it).data(), pc_map_.size() - 1);
       it = pc_map_.erase(it);
       // FIXME: destroy coroutine of the pc?
     } else {

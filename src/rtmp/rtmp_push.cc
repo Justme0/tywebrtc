@@ -6,7 +6,7 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
-#include "src/rtmp/rtmp_handler.h"
+#include "src/rtmp/rtmp_push.h"
 
 #include <poll.h>
 
@@ -20,9 +20,9 @@
 
 namespace tywebrtc {
 
-RtmpHandler::RtmpHandler(PeerConnection &) : flvAssist(*this) {}
+RtmpPusher::RtmpPusher(PeerConnection &) : flvAssist(*this) {}
 
-RtmpHandler::~RtmpHandler() {
+RtmpPusher::~RtmpPusher() {
   if (mRtmpInstance != NULL) {
     RTMP_Close(mRtmpInstance);
     RTMP_Free(mRtmpInstance);
@@ -31,7 +31,7 @@ RtmpHandler::~RtmpHandler() {
 
 // init rtmp and connect
 // OPT: block mode
-int RtmpHandler::InitProtocolHandler(const std::string &rtmpUrl) {
+int RtmpPusher::InitProtocolHandler(const std::string &rtmpUrl) {
   int ret = 0;
 
   ret = InitRtmp_();
@@ -52,21 +52,21 @@ int RtmpHandler::InitProtocolHandler(const std::string &rtmpUrl) {
   return 0;
 }
 
-bool RtmpHandler::InitSucc() const { return initSucc_; }
+bool RtmpPusher::InitSucc() const { return initSucc_; }
 
 // to cancle wrap
-int RtmpHandler::SendAudioFrame(const std::vector<char> &audioFrame,
-                                uint64_t frameMs) {
+int RtmpPusher::SendAudioFrame(const std::vector<char> &audioFrame,
+                               uint64_t frameMs) {
   return flvAssist.SendAudioFrame(audioFrame, frameMs);
 }
 
-int RtmpHandler::SendVideoFrame(const std::vector<char> &h264Frame,
-                                uint64_t frameMs) {
+int RtmpPusher::SendVideoFrame(const std::vector<char> &h264Frame,
+                               uint64_t frameMs) {
   return flvAssist.SendVideoFrame(h264Frame, frameMs);
 }
 
 // now no use
-int RtmpHandler::RecvRtmpPacket(std::vector<char> *o_recvBuf) {
+int RtmpPusher::RecvRtmpPacket(std::vector<char> *o_recvBuf) {
   if (NULL == mRtmpInstance) {
     return -1;
   }
@@ -91,7 +91,7 @@ int RtmpHandler::RecvRtmpPacket(std::vector<char> *o_recvBuf) {
 }
 
 // no network operation
-int RtmpHandler::InitRtmp_() {
+int RtmpPusher::InitRtmp_() {
   if (mRtmpInstance != NULL) {
     return 0;
   }
@@ -107,8 +107,8 @@ int RtmpHandler::InitRtmp_() {
 }
 
 // no network operation
-int RtmpHandler::SetupRtmp_(std::string rtmpUrl, bool writeable,
-                            uint32_t timeout, const bool liveSource) {
+int RtmpPusher::SetupRtmp_(std::string rtmpUrl, bool writeable,
+                           uint32_t timeout, const bool liveSource) {
   if (NULL == mRtmpInstance) {
     tylog("rtmp connect setup failed\n");
 
@@ -175,16 +175,16 @@ int RTMP_SwitchToNonBlocking(RTMP *r)
 }
 */
 
-int RtmpHandler::ConnectRtmp_() {
+int RtmpPusher::ConnectRtmp_() {
   if (NULL == mRtmpInstance) {
     return -1;
   }
 
   uint64_t timeBegin = g_now_ms;
-  // int ret = RTMP_Connect(mRtmpInstance, NULL, outip, selfPort, &dnsresutl);
+  // should set non block in connect
   bool ok = RTMP_Connect(mRtmpInstance, NULL);
   if (!ok) {
-    tylog("RTMP_Connect fail");
+    tylog("RTMP Connect fail");
     RTMP_Free(mRtmpInstance);
     mRtmpInstance = NULL;
     mRtmpUrl.clear();
@@ -194,19 +194,11 @@ int RtmpHandler::ConnectRtmp_() {
 
   uint64_t timeEnd = g_now_ms;  // same as timeBegin?
   uint64_t costTime = timeEnd - timeBegin;
-  tylog("RTMP_Connect success, timecostMs=%lu, fd=%d.", costTime,
+  tylog("RTMP Connect success, timecostMs=%lu, fd=%d.", costTime,
         mRtmpInstance->m_sb.sb_socket);
   if (1000 < costTime) {
-    tylog("RTMP_Connect cost too long, timecost:%lu (ms)", costTime);
+    tylog("RTMP Connect cost too long, timecost:%lu (ms)", costTime);
   }
-
-  // OPT: should set in RTMP_Connect
-  // ret = SetNonBlock(mRtmpInstance->m_sb.sb_socket);
-  // if (ret) {
-  //   tylog("setNonBlock ret=%d.", ret);
-
-  //   return ret;
-  // }
 
   timeBegin = g_now_ms;
 
@@ -236,14 +228,9 @@ int RtmpHandler::ConnectRtmp_() {
     }
   }
 
-  // if (RTMP_SwitchToNonBlocking(mRtmpInstance)) {
-  //   tylog("RTMP_ConnectStream, success to set the connection to
-  //   non-blocking");
-  // }
-
   timeEnd = g_now_ms;  // same as timeBegin?
   costTime = timeEnd - timeBegin;
-  tylog("RTMP_ConnectStream success, timecost:%lu (ms)", costTime);
+  tylog("rTMP_ConnectStream success, timecost:%lu (ms)", costTime);
   if (1000 < costTime) {
     tylog("connect cost too long=%ld.", costTime);
   }
@@ -254,7 +241,7 @@ int RtmpHandler::ConnectRtmp_() {
 }
 
 // now no use
-int RtmpHandler::ReconnectRtmp_() {
+int RtmpPusher::ReconnectRtmp_() {
   int ret = SetupRtmp_(mRtmpUrl, mWriteable, mTimeOut, mLiveSource);
   if (ret != 0) {
     tylog("rtmp reconnect failed, ret=%d\n", ret);

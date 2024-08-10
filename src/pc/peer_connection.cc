@@ -54,7 +54,8 @@ int PeerConnection::SendToAddr(const std::vector<char> &vBufSend,
   tylog("sendto ret=%ld, bizDataLen=%zu, ip=%s, port=%d.", sendtoLen,
         vBufSend.size(), ip.data(), port);
 
-  assert(sendtoLen == static_cast<int>(vBufSend.size()));
+  assert(sendtoLen == static_cast<int>(vBufSend.size()) &&
+         "shouldn't use assert :)");
 
   return 0;
 }
@@ -154,12 +155,15 @@ int PeerConnection::HandlePacket(const std::vector<char> &vBufReceive,
         if (nullptr != url) {
           tylog("pull url=%s", url);
 
-          RtmpPuller &rtmpPuller = *new RtmpPuller(*this);  // FIXME
+          // FIXME memleak
+          RtmpPuller &rtmpPuller = *new RtmpPuller(*this);
 
           ret = pullHandler_.InitPullHandler(
-              &rtmpPuller.rtmp_.m_sb.sb_socket,
+              // now pull only one stream, use first position
+              &rtmpPuller.m_Clients[0].rtmp.m_sb.sb_socket,
               std::bind(&RtmpPuller::InitProtocolHandler, &rtmpPuller, url),
-              std::bind(&RtmpPuller::HandlePacket, &rtmpPuller),
+              std::bind(&RtmpPuller::HandleRtmpFd, &rtmpPuller,
+                        std::placeholders::_1),
               std::bind(&RtmpPuller::CloseStream, &rtmpPuller));
           if (ret) {
             tylog("Handler.handshakeTo ret=%d.", ret);

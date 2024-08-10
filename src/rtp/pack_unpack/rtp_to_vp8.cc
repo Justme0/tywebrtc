@@ -330,6 +330,7 @@ int RtpDepacketizerVp8::VideoUnPackVp8RtpStm(
 
       tylog("before decode, width=%d, height=%d.", Width_, Height_);
       assert(Width_ != 0 && Height_ != 0);
+      // assert(Width_ == kSideLenPix && Height_ == kSideLenPix);
       // for decode not very care
       Param.width = Width_;
       Param.height = Height_;

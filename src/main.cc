@@ -19,6 +19,7 @@
 #include <fstream>
 #include <map>
 #include <memory>
+#include <stack>
 #include <string>
 #include <vector>
 
@@ -36,7 +37,16 @@
 #include "src/pc/peer_connection.h"
 #include "src/pc/peer_connection_manager.h"
 #include "src/rtmp/rtmp_pull.h"
+#include "src/rtmp/rtmp_server.h"
 #include "src/timer/timer.h"
+
+struct task_t {
+  stCoRoutine_t *co;
+  int fd;
+  struct sockaddr_in addr;
+};
+
+static std::stack<task_t *> g_readwrite;
 
 using tywebrtc::g_startServer;
 using tywebrtc::g_recvPacketNum;
@@ -50,7 +60,7 @@ using tywebrtc::kUplossRateMul100;
 
 // Execute `system` and get output, OPT: move to lib
 // https://stackoverflow.com/questions/478898/how-do-i-execute-a-command-and-get-the-output-of-the-command-within-c-using-po
-std::string execCmd(const char* cmd) {
+std::string execCmd(const char *cmd) {
   std::array<char, 128> buffer;
   std::string result;
   std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
@@ -64,7 +74,7 @@ std::string execCmd(const char* cmd) {
 }
 
 // @brief return get local ip number, maybe <= 0
-int GetEthAddrs(char* ips[], int num) {
+int GetEthAddrs(char *ips[], int num) {
   struct ifconf ifc;
   struct ifreq ifr[64];
   struct sockaddr_in sa;
@@ -77,7 +87,7 @@ int GetEthAddrs(char* ips[], int num) {
     ifc.ifc_buf = (caddr_t)ifr;
     ifc.ifc_req = ifr;
 
-    if (ioctl(sock, SIOCGIFCONF, (char*)&ifc) == 0) {
+    if (ioctl(sock, SIOCGIFCONF, (char *)&ifc) == 0) {
       n = ifc.ifc_len / sizeof(struct ifreq);
       for (i = 0; i < n && i < num; i++) {
         if (ioctl(sock, SIOCGIFADDR, &ifr[i]) == 0) {
@@ -92,7 +102,7 @@ int GetEthAddrs(char* ips[], int num) {
   return (sock >= 0 && cnt > 0) ? cnt : -1;
 }
 
-bool IsLanAddr(const std::string& ip) {
+bool IsLanAddr(const std::string &ip) {
   /*
    * A类  10.0.0.0    - 10.255.255.255
           11.0.0.0/8
@@ -116,9 +126,9 @@ bool IsLanAddr(const std::string& ip) {
 }
 
 // to move to tylib, now no use
-int GetLanIp(std::string* o_ip) {
+int GetLanIp(std::string *o_ip) {
   // should also provided by env var or cmd option
-  const std::string& kIpFile = "conf/LOCAL_IP.txt";
+  const std::string &kIpFile = "conf/LOCAL_IP.txt";
   std::ifstream infile(kIpFile);
   if (!(infile >> *o_ip)) {
     tylog("open %s fail", kIpFile.data());
@@ -140,17 +150,14 @@ int HandleRequest() {
   // to use memory pool for so large buffer, UDP is enough, TCP?
   // OPT: media packet should less copy as possible
   const int kSendRecvUdpMaxLength = 1600;
-  static thread_local std::vector<char> vBufReceive;
-  vBufReceive.resize(kSendRecvUdpMaxLength);
+  std::vector<char> vBufReceive(kSendRecvUdpMaxLength);
 
   struct sockaddr_in address;
   socklen_t addr_size = sizeof(struct sockaddr_in);
 
   ssize_t iRecvLen =
       recvfrom(g_sock_fd, vBufReceive.data(), vBufReceive.size(), 0,
-               (struct sockaddr*)&address, (socklen_t*)&addr_size);
-
-  tylog("recv from return len=%ld (application layer)", iRecvLen);
+               (struct sockaddr *)&address, (socklen_t *)&addr_size);
 
   if (iRecvLen < -1) {
     // should not appear
@@ -173,21 +180,24 @@ int HandleRequest() {
     tylog("recv buffer overflow len=%ld", iRecvLen);
 
     return -3;
+  } else {
+    tylog("ok: recv from return len=%ld (application layer)", iRecvLen);
   }
+
   vBufReceive.resize(iRecvLen);
 
   std::string ip;
   int port = 0;
   tylib::ParseIpPort(address, ip, port);
   tylog(
-      "=================================="
+      "============="
       " src ip=%s, port=%d recv size=%zu "
-      "==================================",
+      "=============",
       ip.data(), port, vBufReceive.size());
 
   // get some pc according to clientip, port or ICE username (to FIX),
   // cannot handle ICE connection change
-  tywebrtc::PeerConnection* pc =
+  tywebrtc::PeerConnection *pc =
       tywebrtc::Singleton<tywebrtc::PCManager>::Instance().GetPeerConnection(
           ip, port, vBufReceive);
 
@@ -256,7 +266,7 @@ void CrossPlatformNetworkIO() {
     for (int i = 0; g_now.ComputeNow(),
              TimerManager::Instance()->UpdateTimers(g_now), i < eventNumber;
          i++) {
-      const struct kevent& activeEvent = evList[i];
+      const struct kevent &activeEvent = evList[i];
       int fd = activeEvent.ident;
 
       if (activeEvent.flags & EV_EOF) {
@@ -426,7 +436,7 @@ int InitDumpSock() {
   g_dumpRecvSockfd = ret;
 
   // bind
-  const char* kLocalIP = "127.0.0.1";  // maybe should in config
+  const char *kLocalIP = "127.0.0.1";  // maybe should in config
   int kListenPort = 12346;
   struct sockaddr_in address;
   bzero(&address, sizeof(address));
@@ -435,7 +445,7 @@ int InitDumpSock() {
   address.sin_port = htons(kListenPort);
   tylogAndPrintfln("sendSocket to bind to %s:%d", kLocalIP, kListenPort);
 
-  ret = bind(g_dumpRecvSockfd, reinterpret_cast<const sockaddr*>(&address),
+  ret = bind(g_dumpRecvSockfd, reinterpret_cast<const sockaddr *>(&address),
              sizeof(address));
   if (ret == -1) {
     tylogAndPrintfln("bind return -1, errno=%d[%s]", errno, strerror(errno));
@@ -461,7 +471,7 @@ int InitDumpSock() {
   address.sin_port = htons(kListenPort);
   tylogAndPrintfln("sendSocket to bind to %s:%d", kLocalIP, kListenPort);
 
-  ret = bind(g_dumpSendSockfd, reinterpret_cast<const sockaddr*>(&address),
+  ret = bind(g_dumpSendSockfd, reinterpret_cast<const sockaddr *>(&address),
              sizeof(address));
   if (ret == -1) {
     tylogAndPrintfln("bind return -1, errno=%d[%s]", errno, strerror(errno));
@@ -480,7 +490,7 @@ int InitMonitor() {
   tylogAndPrintfln("bind prometheus http port=%d", kMonitorPort);
   // Exporser object should always alive
   // https://github.com/jupp0r/prometheus-cpp/issues/559#issuecomment-1068933850
-  prometheus::Exposer* g_pExposer =
+  prometheus::Exposer *g_pExposer =
       new prometheus::Exposer{tylib::format_string("0.0.0.0:%d", kMonitorPort)};
   // prometheus::Exposer exposer{{
   // "listening_ports", "127.0.0.1:8091",
@@ -518,7 +528,7 @@ int InitMonitor() {
   return 0;
 }
 
-void* libcoStart(void*) {
+void *libcoStart(void *) {
   co_enable_hook_sys();
 
   for (;;) {
@@ -536,7 +546,7 @@ void* libcoStart(void*) {
   return nullptr;
 }
 
-void* mytimer(void*) {
+void *mytimer(void *) {
   co_enable_hook_sys();
 
   for (;;) {
@@ -544,6 +554,212 @@ void* mytimer(void*) {
     // sleep 1ms
     poll(NULL, 0, 1);
   }
+}
+
+tywebrtc::RtmpServer g_rtmpServer;
+
+int shitDoRTMP(int fd) {
+  pollfd pf{};
+  pf.fd = fd;
+  pf.events = (POLLIN | POLLERR | POLLHUP);
+  assert(0 == pf.revents);
+  co_poll(co_get_epoll_ct(), &pf, 1, 10000);
+
+  tywebrtc::Client *pClient =
+      &g_rtmpServer.m_Clients[tywebrtc::g_fd2ClientIndex[fd]];
+
+  // RTMP handshake, OPT: in callee set nonblock
+  bool ok = RTMP_Serve(&pClient->rtmp);
+  if (!ok) {
+    tylog("RTMP Serve err, errno=%d[%s] may useless.", errno, strerror(errno));
+
+    return -1;
+  }
+
+  tylog("good: rtmp serve ok");
+  tywebrtc::SetNonBlock(fd);
+  // in callee, loop to wait input
+  int ret = g_rtmpServer.HandleRtmpFd(fd);
+  if (ret) {
+    tylog("rtmpServer handlePacket ret=%d.", ret);
+
+    return ret;
+  }
+
+  return 0;
+}
+
+static void *readwrite_routine(void *arg) {
+  int ret = 0;
+  co_enable_hook_sys();
+
+  task_t *co = (task_t *)arg;
+  for (;;) {
+    // recycle co
+    if (-1 == co->fd) {
+      g_readwrite.push(co);
+      co_yield_ct();
+
+      tylog("NOTE: co->fd=%d.", co->fd);
+      continue;
+    }
+
+    ret = shitDoRTMP(co->fd);
+    if (ret) {
+      tylog("DoRTMP ret=%d.", ret);
+      // not return
+    } else {
+      tylog("good: DoRTMP finish succ");
+    }
+
+    g_rtmpServer.CleanupClient(g_rtmpServer.m_Clients);
+    co->fd = -1;
+  }
+
+  return nullptr;
+}
+
+int co_accept(int fd, struct sockaddr *addr, socklen_t *len);
+
+static void *accept_routine(void *arg_fd) {
+  int listenRtmpFd = int64_t(arg_fd);
+
+  co_enable_hook_sys();
+  tylog("in accept routine");
+
+  for (;;) {
+    if (g_readwrite.empty()) {
+      tylog("readwrite empty");  // sleep
+      struct pollfd pf {};
+      assert(pf.events == 0);
+      assert(pf.fd == 0);
+      assert(pf.revents == 0);
+      pf.fd = -1;
+      poll(&pf, 1, 10000);
+
+      continue;
+    }
+
+    struct sockaddr_in srcAddr;  // maybe sockaddr_un;
+    memset(&srcAddr, 0, sizeof(srcAddr));
+    socklen_t len = sizeof(srcAddr);
+
+    int fd = accept(listenRtmpFd, (struct sockaddr *)&srcAddr, &len);
+    if (fd == -1) {
+      tylog("accept ret=-1, errno=%d[%s], my pid=%d, g_readwrite.size=%ld.",
+            errno, strerror(errno), getpid(), g_readwrite.size());
+      struct pollfd pf {};
+      pf.fd = listenRtmpFd;
+      pf.events = (POLLIN | POLLERR | POLLHUP);
+      co_poll(co_get_epoll_ct(), &pf, 1, 10000);
+
+      continue;
+    }
+    if (g_readwrite.empty()) {
+      tylog("readwrite set empty :(");
+      close(fd);
+      continue;
+    }
+
+    // OPT: timer to check if RTMP connection is dead
+    int ret = g_rtmpServer.SetupClient(fd);
+    assert(ret == 0 && "tmp use assert");
+
+    task_t *co = g_readwrite.top();
+    co->fd = fd;
+    g_readwrite.pop();
+    co_resume(co->co);
+  }
+
+  return nullptr;
+}
+
+static void SetAddr(const char *pszIP, const unsigned short shPort,
+                    struct sockaddr_in &addr) {
+  bzero(&addr, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(shPort);
+  int nIP = 0;
+  if (!pszIP || '\0' == *pszIP || 0 == strcmp(pszIP, "0") ||
+      0 == strcmp(pszIP, "0.0.0.0") || 0 == strcmp(pszIP, "*")) {
+    nIP = htonl(INADDR_ANY);
+  } else {
+    nIP = inet_addr(pszIP);
+  }
+  addr.sin_addr.s_addr = nIP;
+}
+
+static int CreateTcpSocket(const unsigned short shPort = 0,
+                           const char *pszIP = "*", bool bReuse = false) {
+  int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (fd >= 0) {
+    if (shPort != 0) {
+      if (bReuse) {
+        int nReuseAddr = 1;
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &nReuseAddr,
+                   sizeof(nReuseAddr));
+      }
+      struct sockaddr_in addr;
+      SetAddr(pszIP, shPort, addr);
+      tylogAndPrintfln("to bind fd=%d socket %s:%d.", fd, pszIP, shPort);
+      int ret = bind(fd, (struct sockaddr *)&addr, sizeof(addr));
+      if (ret == -1) {
+        tylogAndPrintfln("bind return -1, errno=%d[%s]", errno,
+                         strerror(errno));
+
+        close(fd);
+        return -1;
+      }
+      tylogAndPrintfln("bind succ");
+    }
+  }
+  return fd;
+}
+
+int InitRtmpSvr() {
+  const char *kInterfaceAny = "0.0.0.0";  // maybe should in config
+  const int kListenPort = 8935;
+
+  int ret = CreateTcpSocket(kListenPort, kInterfaceAny, true);
+  if (ret == -1) {
+    tylogAndPrintfln("create socket failed, ret=%d, errno=%d[%s]", ret, errno,
+                     strerror(errno));
+    return ret;
+  }
+
+  int listenRtmpFd = ret;
+  ret = tywebrtc::SetNonBlock(listenRtmpFd);
+  if (ret) {
+    tylog("setNonBlock ret=%d.", ret);
+
+    return ret;
+  }
+
+  ret = listen(listenRtmpFd, 1024);
+  if (ret == -1) {
+    tylogAndPrintfln("listen ret=%d, error=%d[%s]", ret, errno,
+                     strerror(errno));
+    return ret;
+  }
+  tylogAndPrintfln("succ listen fd=%d to %s:%d.", listenRtmpFd, kInterfaceAny,
+                   kListenPort);
+
+  // coroutine number
+  const int cnt = 1;
+  for (int i = 0; i < cnt; i++) {
+    task_t *task = (task_t *)calloc(1, sizeof(task_t));
+    task->fd = -1;
+
+    co_create(&(task->co), NULL, readwrite_routine, task);
+    co_resume(task->co);
+  }
+
+  stCoRoutine_t *accept_co = NULL;
+  co_create(&accept_co, NULL, accept_routine,
+            reinterpret_cast<void *>(listenRtmpFd));
+  co_resume(accept_co);
+
+  return 0;
 }
 
 int main() {
@@ -584,15 +800,15 @@ int main() {
   // step 1: create socket
   ret = socket(PF_INET, SOCK_DGRAM, 0);
   if (ret == -1) {
-    tylogAndPrintfln("create listen socket failed, ret=%d, errno=%d[%s]", ret,
-                     errno, strerror(errno));
+    tylogAndPrintfln("create socket failed, ret=%d, errno=%d[%s]", ret, errno,
+                     strerror(errno));
     return ret;
   }
   g_sock_fd = ret;
   // TODO set nonblock
 
   // step 2: bind
-  const char* kInterfaceAny = "0.0.0.0";  // maybe should in config
+  const char *kInterfaceAny = "0.0.0.0";  // maybe should in config
   const int kListenPort = 8090;
 
   struct sockaddr_in address;
@@ -602,7 +818,7 @@ int main() {
   address.sin_port = htons(kListenPort);
   tylogAndPrintfln("to bind to %s:%d", kInterfaceAny, kListenPort);
 
-  ret = bind(g_sock_fd, reinterpret_cast<const sockaddr*>(&address),
+  ret = bind(g_sock_fd, reinterpret_cast<const sockaddr *>(&address),
              sizeof(address));
   if (ret == -1) {
     tylogAndPrintfln("bind return -1, errno=%d[%s]", errno, strerror(errno));
@@ -610,13 +826,6 @@ int main() {
     return ret;
   }
   tylogAndPrintfln("bind succ");
-
-  // udp no listen
-  // ret = listen(g_sock_fd, 5);
-  // if (-1 == ret) {
-  //     tylogAndPrintfln("listen return -1, errno=%d[%s]", errno,
-  //     strerror(errno)); return 0;
-  // }
 
   // * init timer
   InitTimer();
@@ -634,7 +843,7 @@ int main() {
     }
 
     // create recv client req
-    stCoRoutine_t* co = nullptr;
+    stCoRoutine_t *co = nullptr;
     ret = co_create(&co, nullptr, libcoStart, nullptr);
     if (ret) {
       tylog("co create ret=%d.", ret);
@@ -645,14 +854,23 @@ int main() {
 
   {
     // create timer
-    stCoRoutine_t* co = nullptr;
+    stCoRoutine_t *co = nullptr;
     ret = co_create(&co, nullptr, mytimer, nullptr);
     if (ret) {
       tylog("co create ret=%d.", ret);
+
       return ret;
     }
     co_resume(co);
   }
+
+  ret = InitRtmpSvr();
+  if (ret) {
+    tylog("init rtmp ret=%d.", ret);
+
+    return ret;
+  }
+  tylog("init rtmp svr done");
 
   co_eventloop(co_get_epoll_ct(), 0, 0);
 

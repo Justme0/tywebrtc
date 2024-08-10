@@ -82,18 +82,6 @@ class SctpGlobalEnv {
 
 class DataChannelHandler {
  public:
-  // class Observer {
-  //  public:
-  //   Observer() = default;
-  //   virtual ~Observer() = default;
-  //   virtual void OnRecvDataChannelMsg(const std::string& label,
-  //                                     std::unique_ptr<Packet> data) = 0;
-  //   virtual void OnDataChannelOpen(const std::string& label) = 0;
-  //   virtual void OnSendToDtlsChannel(char* data, size_t len) = 0;
-  // };
-
- public:
-  // DataChannelHandler(Observer* obs, const std::string& stream_id);
   explicit DataChannelHandler(PeerConnection& pc);
 
   DataChannelHandler(const DataChannelHandler&) = delete;

@@ -6,8 +6,8 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
-#ifndef SRC_RTMP_RTMP_HANDLER_H_
-#define SRC_RTMP_RTMP_HANDLER_H_
+#ifndef SRC_RTMP_RTMP_PUSH_H_
+#define SRC_RTMP_RTMP_PUSH_H_
 
 #include <cstdint>
 #include <string>
@@ -26,14 +26,13 @@ const uint32_t DEFAULT_TIMEOUT = 30;  // 30 seconds
 
 class PeerConnection;
 
-class RtmpHandler {
+class RtmpPusher {
  public:
-  explicit RtmpHandler(PeerConnection &pc);
+  explicit RtmpPusher(PeerConnection &pc);
 
   // note assignment and copy constructor
-  ~RtmpHandler();
+  ~RtmpPusher();
 
- public:
   int InitProtocolHandler(const std::string &rtmpUrl);
   bool InitSucc() const;
 
@@ -69,4 +68,4 @@ class RtmpHandler {
 
 }  // namespace tywebrtc
 
-#endif  // SRC_RTMP_RTMP_HANDLER_H_
+#endif  // SRC_RTMP_RTMP_PUSH_H_

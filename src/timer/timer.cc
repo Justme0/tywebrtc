@@ -16,7 +16,7 @@
 namespace tywebrtc {
 
 bool MonitorStateTimer::_OnTimer() {
-  tylog("on timer");
+  // tylog("on timer");
   Singleton<PCManager>::Instance().CleanTimeoutPeerConnection();
 
   tylog("pc num=%d, client num=%d.",

@@ -53,16 +53,17 @@ inline std::string PacketTypeToString(PacketType p) {
   }
 }
 
+// https://datatracker.ietf.org/doc/html/rfc5764#section-5.1.2
 inline PacketType getPacketType(uint8_t cSubCmd) {
   if (cSubCmd == 0 || cSubCmd == 1) {
     return PacketType::STUN;
   }
 
-  if (cSubCmd >= 20 && cSubCmd <= 64) {
+  if (20 <= cSubCmd && cSubCmd < 64) {
     return PacketType::DTLS;
   }
 
-  if (cSubCmd >= 128 && cSubCmd <= 191) {
+  if (128 <= cSubCmd && cSubCmd < 192) {
     // RTP/RTCP version is 2 (left two bit), so first char is
     // 1000 0000 ~ 1011 1111
     return PacketType::RTP;

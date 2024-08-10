@@ -9,6 +9,7 @@
 #include "src/global_tmp/global_tmp.h"
 
 #include "colib/co_routine.h"
+#include "librtmp/log.h"
 #include "tylib/ip/ip.h"
 #include "tylib/time/timer.h"
 
@@ -16,6 +17,9 @@
 #include "src/pc/peer_connection.h"
 
 namespace tywebrtc {
+
+// tmp
+std::map<int, int> g_fd2ClientIndex;
 
 prometheus::Family<prometheus::Gauge> *g_startServer;
 prometheus::Family<prometheus::Gauge> *g_recvPacketNum;
@@ -76,8 +80,8 @@ static const char *my_get_level_str(int level) {
 }
 
 // from rtmp lib static var
-static const char *levels[] = {"CRIT", "ERROR", "WARNING",
-                               "INFO", "DEBUG", "DEBUG2"};
+static const char *g_levels[] = {"CRIT", "ERROR", "WARNING",
+                                 "INFO", "DEBUG", "DEBUG2"};
 
 class SrsFFmpegLogHelper {
  public:
@@ -100,13 +104,15 @@ class SrsFFmpegLogHelper {
       return;
     }
 
-#define MAX_PRINT_LEN 2048
-    char str[MAX_PRINT_LEN] = "";
+    static char str[2048]{};
 
-    vsnprintf(str, MAX_PRINT_LEN - 1, format, vl);
+    vsnprintf(str, sizeof str, format, vl);
+    assert('\0' == str[sizeof(str) - 1]);
+    // tylog("to print str len=%zu.", strlen(str));
 
-    // should check level value
-    tylog("%s %s", levels[level], str);
+    assert(0 <= level &&
+           level < static_cast<int>(sizeof g_levels / sizeof *g_levels));
+    tylog("%s:%s", g_levels[level], str);
   }
 
   // @brief FFmpeg log callback function
@@ -155,4 +161,5 @@ class SrsFFmpegLogHelper {
 
 // Register FFmpeg log callback funciton.
 SrsFFmpegLogHelper _srs_ffmpeg_log_helper;
+
 }  // namespace tywebrtc

@@ -30,7 +30,7 @@ class PullHandler {
   PullHandler &operator=(const PullHandler &) = delete;
 
   int InitPullHandler(const int *p_playSocket, std::function<int()> initFunc,
-                      std::function<int()> handlePacket,
+                      std::function<int(int)> handlePacket,
                       std::function<int()> closeFunc);
 
   // no use
@@ -47,7 +47,7 @@ class PullHandler {
   int initRet_ = -1;  // default error
 
   std::function<int()> initFunc_;
-  std::function<int()> handlePacketFunc_;
+  std::function<int(int)> handlePacketFunc_;
   std::function<int()> closeFunc_;
 };
 

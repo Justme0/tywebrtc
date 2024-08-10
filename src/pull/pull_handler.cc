@@ -32,7 +32,7 @@ PullHandler::~PullHandler() {
 // or set functor in constructor?
 int PullHandler::InitPullHandler(const int *p_playSocket,
                                  std::function<int()> initFunc,
-                                 std::function<int()> handlePacketFunc,
+                                 std::function<int(int)> handlePacketFunc,
                                  std::function<int()> closeFunc) {
   p_playSocket_ = p_playSocket;
   initFunc_ = initFunc;
@@ -48,12 +48,13 @@ int PullHandler::InitPullHandler(const int *p_playSocket,
   return 0;
 }
 
+// now no use
 int PullHandler::HandlePacket() {
-  int ret = handlePacketFunc_();
-  if (ret) {
-    tylog("handlePacketFunc func ret=%d", ret);
-    return ret;
-  }
+  // int ret = handlePacketFunc_();
+  // if (ret) {
+  //   tylog("handlePacketFunc func ret=%d", ret);
+  //   return ret;
+  // }
 
   return 0;
 }

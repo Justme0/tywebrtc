@@ -32,12 +32,23 @@
 
 namespace tywebrtc {
 
+extern std::map<int, int> g_fd2ClientIndex;
+
 // may move to RTPHeaderExtension
 constexpr int kAbsSendTimeFraction = 18;
 constexpr int64_t kProcessInterval = 500;
 constexpr int64_t kStreamTimeOut = 2000;
 
+// if change audio channel number:
+// 1. OPUS in SDP
+// 2. transcode
 const int kAudioChannelNumber = 1;
+// 3. RTMP AAC
+const int kAACChannelNumber = 1;
+
+// uplink resolution, same as js config
+// OPT: parse from src stream
+const int kSideLenPix = 500;
 
 const int kUplossRateMul100 = 0;
 const int kDownlossRateMul100 = 0;
@@ -134,6 +145,18 @@ inline int mkdir_p(const char* path, mode_t mode) {
   return 0;
 }
 
+// set nodelay
+// int opt = 1;
+// int sock_ret = setsockopt(iSock, IPPROTO_TCP, TCP_NODELAY, &opt,
+// sizeof(int));
+// if (sock_ret) {
+//   printf("%s:%d ret %d errno %d %s\n", __func__, __LINE__, sock_ret, errno,
+//          strerror(errno));
+// } else {
+//   printf("%s:%d fd %d ret %d errno %d %s\n", __func__, __LINE__, iSock,
+//          sock_ret, errno, strerror(errno));
+// }
+
 inline int SetNonBlock(int iSock) {
   int iFlags = fcntl(iSock, F_GETFL, 0);
   if (iFlags == -1) {
@@ -141,8 +164,9 @@ inline int SetNonBlock(int iSock) {
 
     return -1;
   }
+  tylog("iflags=%X.", iFlags);
+  assert((iFlags & O_NONBLOCK) == 0);  // strict :)
   iFlags |= O_NONBLOCK;
-  iFlags |= O_NDELAY;
   int ret = fcntl(iSock, F_SETFL, iFlags);
   if (ret == -1) {
     tylog("fcntl return -1, errno=%d [%s]", errno, strerror(errno));
@@ -246,6 +270,8 @@ inline std::string RtmpMethodToString(const RTMP_METHOD& method) {
                               AValToString(method.name).data(), method.num);
 }
 
+inline std::string RTMPLinkToString(const RTMP_LNK&) { return "todo"; }
+
 inline std::string RTMPToString(const RTMP& r) {
   return tylib::format_string(
       "{m_inChunkSize=%d, m_outChunkSize=%d, m_nBWCheckCounter=%d, "
@@ -256,7 +282,7 @@ inline std::string RTMPToString(const RTMP& r) {
       "m_methodCalls=%s, m_channelsAllocatedIn=%d, m_channelsAllocatedOut=%d, "
       "m_fAudioCodecs=%f, m_fVideoCodecs=%f, m_fEncoding=%f, m_fDuration=%f, "
       "m_msgCounter=%d, m_polling=%d, m_resplen=%d, m_unackd=%d, "
-      "m_clientID=%s, m_write=%s, m_sb=%s}",
+      "m_clientID=%s, m_write=%s, m_sb=%s, Link=%s}",
 
       r.m_inChunkSize, r.m_outChunkSize, r.m_nBWCheckCounter, r.m_nBytesIn,
       r.m_nBytesInSent, r.m_nBufferMS, r.m_stream_id, r.m_mediaChannel,
@@ -268,7 +294,8 @@ inline std::string RTMPToString(const RTMP& r) {
       r.m_channelsAllocatedIn, r.m_channelsAllocatedOut, r.m_fAudioCodecs,
       r.m_fVideoCodecs, r.m_fEncoding, r.m_fDuration, r.m_msgCounter,
       r.m_polling, r.m_resplen, r.m_unackd, AValToString(r.m_clientID).data(),
-      RTMPPacketToString(r.m_write).data(), RTMPSockBufToString(r.m_sb).data());
+      RTMPPacketToString(r.m_write).data(), RTMPSockBufToString(r.m_sb).data(),
+      RTMPLinkToString(r.Link).data());
 }
 // January 1970, in NTP seconds.
 const uint32_t kNtpJan1970 = 2208988800UL;
@@ -403,5 +430,19 @@ inline int64_t CompactNtpRttToMs(uint32_t compact_ntp_interval) {
       AV_ERROR_MAX_STRING_SIZE, errnum)
 
 }  // namespace tywebrtc
+
+inline const char* VideoDumpHex(const char* data, int len) {
+  // OPT: check buffer overflow
+  static char buf[65535];
+  int size = 0;
+  int i = 0;
+  size += sprintf(buf + size, "\nData len %d\n", len);
+  for (i = 0; i < len; ++i) {
+    size += sprintf(buf + size, "%02X ", (unsigned char)data[i]);
+    if ((i % 4) == 3) size += sprintf(buf + size, "| ");
+    if ((i % 16) == 15) size += sprintf(buf + size, "\n");
+  }
+  return buf;
+}
 
 #endif  // SRC_GLOBAL_TMP_GLOBAL_TMP_H_
