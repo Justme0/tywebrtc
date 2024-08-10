@@ -28,6 +28,7 @@ WebRTC server play
 ```
 $ git clone --recursive https://github.com/Justme0/tywebrtc.git
 $ cd tywebrtc
+$ # compile third-party lib :)
 $ ./build.sh # only compile, exe file is tywebrtc; NOTE: my bazel version is 7.1.1
 $ ./tywebrtc # run
 ```
@@ -60,7 +61,6 @@ Target overall delay: network+decode+render, accounting for min_playout_delay_ms
 
 ![ice](doc_pic/ice.jpg)
 
-# 代码架构
-(在线阅读本项目代码推荐 https://sourcegraph.com/github.com/Justme0/tywebrtc )
+# 架构
 
 ![arch](doc_pic/arch.svg)
