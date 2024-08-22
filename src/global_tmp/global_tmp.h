@@ -431,8 +431,8 @@ inline int64_t CompactNtpRttToMs(uint32_t compact_ntp_interval) {
 
 }  // namespace tywebrtc
 
+// OPT: use ConvertToReadableHex instead; check buffer overflow
 inline const char* VideoDumpHex(const char* data, int len) {
-  // OPT: check buffer overflow
   static char buf[65535];
   int size = 0;
   int i = 0;
