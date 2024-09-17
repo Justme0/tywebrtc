@@ -19,7 +19,7 @@ cc_binary(
 
     # OPT: remove error=old-style-cast
     # shit sctp header file use condition compile
-    copts = ["-D SCTP_DEBUG", "-Werror", "-Wall", "-Wextra", "-Wno-error=old-style-cast", "-Wno-error=deprecated-declarations", "-Wno-unused-parameter"],
+    copts = ["-D SCTP_DEBUG", "-Werror", "-Wall", "-Wextra", "-Wno-error=old-style-cast", "-Wno-error=deprecated-declarations", "-Wno-error=unused-parameter"],
 
     # ffmpeg need bz2 tls drm, should be in WORKSPACE ffmpeg dep lib
     linkopts = ["-l dl -pthread -l z -l bz2 -l gnutls -l drm"],

@@ -12,7 +12,7 @@
 
 namespace tywebrtc {
 
-void bs_init(bs_t *s, void *p_data, int i_data) {
+static void bs_init(bs_t *s, void *p_data, int i_data) {
   //用传入的p_data首地址初始化p_start，只记下有效数据的首地址
   s->p_start = reinterpret_cast<unsigned char *>(p_data);
   //字节首地址，一开始用p_data初始化，每读完一个整字节，就移动到下一字节首地址
@@ -21,7 +21,7 @@ void bs_init(bs_t *s, void *p_data, int i_data) {
   s->i_left = 8;  //还没有开始读写，当前字节剩余未读取的位是8
 }
 
-int bs_read(bs_t *s, int i_count) {
+static int bs_read(bs_t *s, int i_count) {
   static uint32_t i_mask[33] = {
       0x00,       0x01,       0x03,      0x07,      0x0f,      0x1f,
       0x3f,       0x7f,       0xff,      0x1ff,     0x3ff,     0x7ff,
@@ -127,9 +127,9 @@ int bs_read(bs_t *s, int i_count) {
                       //(4字节长)
 }
 
-int bs_read1(bs_t *s) {
+static int bs_read1(bs_t *s) {
   if (s->p < s->p_end) {
-    unsigned int i_result;
+    int i_result;
 
     s->i_left--;  //当前字节未读取的位数少了1位
     i_result =
@@ -147,7 +147,7 @@ int bs_read1(bs_t *s) {
   return 0;  //返回0应该是没有读到东西
 }
 
-int bs_read_ue(bs_t *s) {
+static int bs_read_ue(bs_t *s) {
   int i = 0;
 
   while (bs_read1(s) == 0 && s->p < s->p_end &&

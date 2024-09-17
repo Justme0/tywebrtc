@@ -404,11 +404,10 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
 
       return ret;
     }
-
-    tylog("transcode opus->aac return succ, outFrames.size=%zu.",
-          outFrames.size());
-    assert(outFrames.size() <= 1);  // tmp
-
+    if (outFrames.size() >= 2) {
+      tylog("after transcode opus->aac, outFrames=(size=%zu)%s.",
+            outFrames.size(), tylib::AnyToString(outFrames).data());
+    }
     for (const SrsAudioFrame &outFrame : outFrames) {
       // to use string
 
@@ -445,9 +444,10 @@ int RtpHandler::DumpPacket(const std::vector<char> &packet,
 
       WriteFile(adts_frame);
 
-      // OPT: if output more than one frame, the ts should not be rtp ts
-      ret = this->belongingPC_.pushHandler_.SendAudioFrame(
-          adts_frame, (rtpHeader.getTimestamp() - firstRtpAudioTs_) / 48);
+      // FIXME: If output more than one frame, the ts should not be rtp ts.
+      // old: (rtpHeader.getTimestamp() - firstRtpAudioTs_) / 48
+      ret = this->belongingPC_.pushHandler_.SendAudioFrame(adts_frame,
+                                                           outFrame.ts_ms);
       if (ret) {
         tylog("rtmp send audio ret=%d", ret);
         return ret;

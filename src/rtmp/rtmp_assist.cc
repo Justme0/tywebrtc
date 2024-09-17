@@ -758,6 +758,7 @@ static sigjmp_buf jmpenv;
 
 static void ConnectTimeOuthandle(int) { siglongjmp(jmpenv, 1); }
 
+// now no use
 int RtmpConnectTimeOut(int Timeout, RTMP* r, RTMPPacket* cp) {
   signal(SIGALRM, ConnectTimeOuthandle);
 
@@ -2208,10 +2209,10 @@ int RtmpAssist::HandleAudioRawData(Client* pClient, const RTMPPacket* pPkg) {
 
     return ret;
   }
-
-  tylog("transcode aac->opus return succ, outFrames.size=%zu.",
-        outFrames.size());
-  // assert(outFrames.size() <= 1);  // tmp
+  if (outFrames.size() >= 2) {
+    tylog("after transcode aac->opus, outFrames=(size=%zu)%s.",
+          outFrames.size(), tylib::AnyToString(outFrames).data());
+  }
 
   for (const SrsAudioFrame& outFrame : outFrames) {
     // 48kHz * 1ms

@@ -1,18 +1,18 @@
 const kFrameRate: number = 20;
 const kSideLenPix: number = 500;
 const kStatBoxMsgNum: number = 20;
-let pc: RTCPeerConnection | null = null;
-let sendChannel: RTCDataChannel | null = null;
-let sendButton: HTMLButtonElement | null = null;
-let messageInputBox: HTMLInputElement | null = null;
-let g_vp8Payload: string | null = null;
+let pc: RTCPeerConnection = null;
+let sendChannel: RTCDataChannel = null;
+let sendButton: HTMLButtonElement  = null;
+let messageInputBox: HTMLInputElement  = null;
+let g_vp8Payload: string  = null;
 
 function addToStatBox(text: string, color: string): void {
     const messageElement: HTMLDivElement = document.createElement('div');
     messageElement.textContent = `${getTimeString()} ${text}`;
     messageElement.style.color = color;
 
-    const statBox: HTMLElement | null = document.getElementById('statBoxID');
+    const statBox: HTMLElement  = document.getElementById('statBoxID');
     if (statBox) {
         statBox.appendChild(messageElement);
         let messages: NodeListOf<HTMLDivElement> = statBox.querySelectorAll('div');
@@ -23,18 +23,21 @@ function addToStatBox(text: string, color: string): void {
     }
 }
 
-async function getStat(): Promise<any | null> {
+async function getStat(): Promise<RTCIceCandidatePairStats> {
     if (pc == null) {
         console.log("pc is nil");
         return null;
     }
 
-    let activeCandidatePair: any;
+    let activeCandidatePair: RTCIceCandidatePairStats;
     const stats: RTCStatsReport = await pc.getStats();
     stats.forEach((report: RTCStats) => {
-        console.log(`stat report=${JSON.stringify(report)}`);
+        // console.log(`stat report=${JSON.stringify(report)}`);
+
+        // maybe multiple transport type of report?
         if (report.type === 'transport') {
             activeCandidatePair = (<any>stats).get((<RTCTransportStats>report).selectedCandidatePairId);
+            console.debug(`transport report=${JSON.stringify(report)} => activeCandidatePair=${JSON.stringify(activeCandidatePair)}.`);
         }
     });
 
@@ -42,7 +45,7 @@ async function getStat(): Promise<any | null> {
 }
 
 async function printCandidate(): Promise<void> {
-    const candidatePair = await getStat();
+    const candidatePair: RTCIceCandidatePairStats = await getStat();
     if (candidatePair == null) {
         return;
     }
@@ -54,7 +57,7 @@ async function printCandidate(): Promise<void> {
 setInterval(printCandidate, 2000);
 
 async function getRemoteStream(e: RTCTrackEvent): Promise<void> {
-    const videoElement: HTMLVideoElement | null = document.getElementById('video_container_subscribe') as HTMLVideoElement;
+    const videoElement: HTMLVideoElement = document.getElementById('video_container_subscribe') as HTMLVideoElement;
     if (videoElement) {
         videoElement.width = videoElement.height = kSideLenPix;
     }
@@ -109,7 +112,7 @@ function addToDialog(strMessage: string): void {
     const txtNode: Text = document.createTextNode(text);
     const el: HTMLParagraphElement = document.createElement("p");
     el.appendChild(txtNode);
-    const receiveBox: HTMLElement | null = document.getElementById('receivebox');
+    const receiveBox: HTMLElement = document.getElementById('receivebox');
     if (receiveBox) {
         receiveBox.appendChild(el);
     }
@@ -159,10 +162,10 @@ function handleSendChannelStatusChange(event: Event): void {
     }
 }
 
-async function unpublish(): Promise<void> {
-    console.log("To unpublish");
-    const videoElement: HTMLVideoElement | null = document.getElementById('video_container_publish') as HTMLVideoElement;
+function unpublish() {
+    console.log("To Unpublish");
 
+    const videoElement: HTMLVideoElement = document.getElementById('video_container_publish') as HTMLVideoElement;
     const tracks: MediaStreamTrack[] = (<MediaStream>videoElement?.srcObject)?.getTracks() || [];
     tracks.forEach((track: MediaStreamTrack) => {
         track.stop();
@@ -179,12 +182,11 @@ async function unpublish(): Promise<void> {
 }
 
 async function publish(): Promise<void> {
+    console.log("To Publish");
+
     messageInputBox = document.getElementById('messageid') as HTMLInputElement;
     sendButton = document.getElementById('sendButtonid') as HTMLButtonElement;
-
-    console.log("To publish");
-
-    const videoElement: HTMLVideoElement | null = document.getElementById('video_container_publish') as HTMLVideoElement;
+    const videoElement: HTMLVideoElement = document.getElementById('video_container_publish') as HTMLVideoElement;
     if (videoElement) {
         videoElement.width = videoElement.height = kSideLenPix;
     }
@@ -223,6 +225,16 @@ async function publish(): Promise<void> {
         iceServers: [],
         iceTransportPolicy: "all"
     });
+
+    // restart only once, OPT: add more times
+    pc.onconnectionstatechange  = (ev) => {
+        console.log(`detect pc ConnectionState change to ${pc.connectionState}`);
+        if (pc.connectionState == "failed") {
+            console.log(`connectionState changed to failed, restart ...`);
+            unpublish();
+            publish();
+        }
+    };
 
     if (stream.getAudioTracks()[0]) {
         await pc.addTransceiver(stream.getAudioTracks()[0], {

@@ -209,6 +209,8 @@ int HandleRequest() {
     return -4;
   }
 
+  tylog("get pc ok=%s.", pc->ToString().data());
+
   // must before srtp if it's rtp, otherwise srtp_err_status_replay_fail
   // https://segmentfault.com/a/1190000040211375
   int r = rand() % 100;

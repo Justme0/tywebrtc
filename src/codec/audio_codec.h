@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 
+#include "tylib/string/format_string.h"
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/audio_fifo.h>
@@ -79,6 +81,11 @@ enum SrsAudioCodecId {
 struct SrsAudioFrame {
   std::string s;
   int64_t ts_ms = 0;
+
+  std::string ToString() const {
+    return tylib::format_string("{size=%zu, tsMs=%" PRId64 " }", s.size(),
+                                ts_ms);
+  }
 };
 
 class SrsAudioTranscoder {

@@ -13,11 +13,6 @@
 
 namespace tywebrtc {
 
-// @see: https://tools.ietf.org/html/rfc6184#section-5.2
-
-const int kH265StapA = 48;
-const int kH265FuA = 49;
-
 // H264协议中规定的nalu_unit_type所占的byte长度
 const int VIDEO_NALU_HEADER_LTH = 1;
 const int VIDEO_MAX_SPP_PPS_LEN = 100;
@@ -51,7 +46,7 @@ const int VIDEO_FU_INDICATOR_SIZE = sizeof(VideoFuIndicator);
 // FU_header的字节长度
 const int VIDEO_FU_HEADER_SIZE = sizeof(VideoFuHeader);
 
-// Nalu type定义，根据H264协议标准定义
+// 史上最全 H.264 NALU type 定义
 // https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-h264.c#L302
 enum enVideoH264NaluType {
   kVideoNaluUnspecific = 0,
@@ -70,9 +65,15 @@ enum enVideoH264NaluType {
   kVideoNaluSpsExtn = 13,
   kVideoNaluPrefix = 14,
   kVideoNaluSubSps = 15,
+  // https://source.chromium.org/chromium/chromium/src/+/main:media/parsers/h264_parser.h;l=60
+  kVideoNaluDPS = 16,
+  kVideoNaluReserved17 = 17,
+  kVideoNaluReserved18 = 18,
   kVideoNaluSliceAux = 19,
   kVideoNaluSliceExt = 20,
   kVideoNaluSliceExtDepth = 21,
+  kVideoNaluReserved22 = 22,
+  kVideoNaluReserved23 = 23,
   // https://datatracker.ietf.org/doc/html/rfc6184#section-5.2
   kVideoNaluStapA = 24,
   kVideoNaluStapB = 25,
@@ -118,9 +119,12 @@ inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
       return "NAL unit - Prefix";
     case kVideoNaluSubSps:
       return "NAL unit - Subset sequence parameter set";
-    // "NAL unit - Reserved" // 16
-    // "NAL unit - Reserved" // 17
-    // "NAL unit - Reserved" // 18
+    case kVideoNaluDPS:
+      return "NAL unit - DPS";
+    case kVideoNaluReserved17:
+      return "NAL unit - Reserved 17";
+    case kVideoNaluReserved18:
+      return "NAL unit - Reserved 18";
     case kVideoNaluSliceAux:
       return "NAL unit - Coded slice of an auxiliary coded picture without "
              "partitioning";
@@ -128,8 +132,10 @@ inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
       return "NAL unit - Coded slice extension";
     case kVideoNaluSliceExtDepth:
       return "NAL unit - Coded slice extension for depth view components";
-    // "NAL unit - Reserved" // 22
-    // "NAL unit - Reserved" // 23
+    case kVideoNaluReserved22:
+      return "NAL unit - Reserved 22";
+    case kVideoNaluReserved23:
+      return "NAL unit - Reserved 23";
     case kVideoNaluStapA:
       return "Single-time aggregation packet A (STAP-A)";
     case kVideoNaluStapB:

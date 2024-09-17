@@ -24,14 +24,14 @@ typedef enum WebVideoFrameType {
   WEB_VIDEO_FRAME_TYPE_BUTT
 } WEB_VIDEO_FRAME_TYPE;
 
-typedef struct Tag_bs_t {
+struct bs_t {
   unsigned char *p_start;  //缓冲区首地址(这个开始是最低地址)
   unsigned char *p;        //缓冲区当前的读写指针
                            //当前字节的地址，这个会不断的++，每次++，进入一个新的字节
-  unsigned char *p_end;  //缓冲区尾地址       //typedef unsigned char   uint8_t;
+  unsigned char *p_end;    //缓冲区尾地址
   int i_left;  // p所指字节当前还有多少 “位” 可读写 count number of
                // available(可用的)位
-} bs_t;
+};
 
 WebVideoFrameType GetFrameType(unsigned char *pNalu, int Len);
 }

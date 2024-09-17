@@ -91,6 +91,7 @@ PeerConnection *PCManager::GetPeerConnection(
     return &itPC->second;
   }
 
+  // could use `insert_or_assign`?
   auto itNewPC =
       pc_map_.emplace(std::piecewise_construct, std::forward_as_tuple(username),
                       std::forward_as_tuple(ip, port));
