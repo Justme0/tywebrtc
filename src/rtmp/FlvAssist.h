@@ -30,7 +30,7 @@ class FlvAssist {
   int SendAudioFrame(const std::vector<char>& audioFrame, uint64_t frameMs);
 
   FlvVideoFrameType AvcFrameType2FlvVideoFrameType(
-      const enVideoH264NaluType avcFrameType);
+      const EnVideoH264NaluType avcFrameType);
   FlvAacProfile AacProfile2FlvAacProfile(const Mpeg2AacProfile aacProfile);
 
   int toAvc(MediaBuffer& mediaBuffer);

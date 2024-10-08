@@ -79,9 +79,9 @@ void MediaBuffer::setCompositionTimeOffset(uint32_t timeOffset) {
   mCompositionTimeOffset = timeOffset;
 }
 
-enVideoH264NaluType MediaBuffer::getFrameType() { return mframeType; }
+EnVideoH264NaluType MediaBuffer::getFrameType() { return mframeType; }
 
-void MediaBuffer::setFrameType(enVideoH264NaluType frameType) {
+void MediaBuffer::setFrameType(EnVideoH264NaluType frameType) {
   mframeType = frameType;
 }
 

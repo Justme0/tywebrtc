@@ -9,20 +9,35 @@
 #ifndef SRC_GLOBAL_TMP_H264NALUDEC_H_
 #define SRC_GLOBAL_TMP_H264NALUDEC_H_
 
+#include <string>
+
 namespace tywebrtc {
 
-typedef enum WebVideoFrameType {
-  WEB_VIDEO_FRAME_TYPE_I = 0x0,
-  WEB_VIDEO_FRAME_TYPE_P = 0x1,
-  WEB_VIDEO_FRAME_TYPE_P_WITHSP = 0x2,
-  WEB_VIDEO_FRAME_TYPE_SP = 0x3,
-  WEB_VIDEO_FRAME_TYPE_GF = 0x4,
-  WEB_VIDEO_FRAME_TYPE_P_WITHB = 0x5,
-  WEB_VIDEO_FRAME_TYPE_B = 0x6,
-  WEB_VIDEO_FRAME_TYPE_P_MULTIREF = 0x7,  //急速模式下动态参考帧类型
-  WEB_VIDEO_FRAME_TYPE_I_NoIDR = 0x8,  //解码段遇到这个后不清理参考帧列表
-  WEB_VIDEO_FRAME_TYPE_BUTT
-} WEB_VIDEO_FRAME_TYPE;
+enum EnVideoFrameType {
+  VIDEO_FRAME_TYPE_I = 0x0,
+  VIDEO_FRAME_TYPE_P = 0x1,
+  VIDEO_FRAME_TYPE_P_WITHSP = 0x2,
+  VIDEO_FRAME_TYPE_SP = 0x3,
+  VIDEO_FRAME_TYPE_GF = 0x4,
+  VIDEO_FRAME_TYPE_P_WITHB = 0x5,
+  VIDEO_FRAME_TYPE_B = 0x6,
+  VIDEO_FRAME_TYPE_P_MULTIREF = 0x7,  //急速模式下动态参考帧类型
+  VIDEO_FRAME_TYPE_I_NoIDR = 0x8,  //解码段遇到这个后不清理参考帧列表
+  VIDEO_FRAME_TYPE_BUTT
+};
+
+inline std::string VideoFrameTypeToString(EnVideoFrameType frameType) {
+  switch (frameType) {
+    case VIDEO_FRAME_TYPE_I:
+      return "I";
+    case VIDEO_FRAME_TYPE_P:
+      return "P";
+    case VIDEO_FRAME_TYPE_B:
+      return "B";
+    default:
+      return std::to_string(frameType);
+  }
+}
 
 struct bs_t {
   unsigned char *p_start;  //缓冲区首地址(这个开始是最低地址)
@@ -33,7 +48,7 @@ struct bs_t {
                // available(可用的)位
 };
 
-WebVideoFrameType GetFrameType(unsigned char *pNalu, int Len);
+EnVideoFrameType GetFrameType(const void *pNalu, int Len);
 }
 
 #endif  // SRC_GLOBAL_TMP_H264NALUDEC_H_

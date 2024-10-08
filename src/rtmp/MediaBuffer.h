@@ -12,7 +12,7 @@
 #include <cstdint>
 
 #include "src/rtmp/FlvCommon.h"
-#include "src/rtp/pack_unpack/pack_unpack_common.h"
+#include "src/rtp/pack_unpack/h264_common.h"
 
 namespace tywebrtc {
 
@@ -49,8 +49,8 @@ class MediaBuffer {
   uint32_t getCompositionTimeOffset();
   void setCompositionTimeOffset(uint32_t timeOffset);
 
-  enVideoH264NaluType getFrameType();
-  void setFrameType(enVideoH264NaluType frameType);
+  EnVideoH264NaluType getFrameType();
+  void setFrameType(EnVideoH264NaluType frameType);
 
   int checkBuf();
 
@@ -69,7 +69,7 @@ class MediaBuffer {
   uint32_t mMediaTime;
   // AVC Video Packet特有，值为PTS - DTS，有符号3字节数（从不为负）
   uint32_t mCompositionTimeOffset;
-  enVideoH264NaluType mframeType;
+  EnVideoH264NaluType mframeType;
 };
 
 class H264Context {
@@ -77,7 +77,7 @@ class H264Context {
   H264Context();
 
  public:
-  enVideoH264NaluType mFrameType;
+  EnVideoH264NaluType mFrameType;
 
   uint8_t mSps[1024];  // 注意：后续优化为动态内存
   uint32_t mSpsLength;

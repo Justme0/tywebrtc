@@ -6,8 +6,8 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
-#ifndef SRC_RTP_PACK_UNPACK_PACK_UNPACK_COMMON_H_
-#define SRC_RTP_PACK_UNPACK_PACK_UNPACK_COMMON_H_
+#ifndef SRC_RTP_PACK_UNPACK_H264_COMMON_H_
+#define SRC_RTP_PACK_UNPACK_H264_COMMON_H_
 
 #include "tylib/string/format_string.h"
 
@@ -48,7 +48,7 @@ const int VIDEO_FU_HEADER_SIZE = sizeof(VideoFuHeader);
 
 // 史上最全 H.264 NALU type 定义
 // https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-h264.c#L302
-enum enVideoH264NaluType {
+enum EnVideoH264NaluType {
   kVideoNaluUnspecific = 0,
   kVideoNaluSlice = 1,
   kVideoNaluDpa = 2,
@@ -65,8 +65,7 @@ enum enVideoH264NaluType {
   kVideoNaluSpsExtn = 13,
   kVideoNaluPrefix = 14,
   kVideoNaluSubSps = 15,
-  // https://source.chromium.org/chromium/chromium/src/+/main:media/parsers/h264_parser.h;l=60
-  kVideoNaluDPS = 16,
+  kVideoNaluDps = 16,
   kVideoNaluReserved17 = 17,
   kVideoNaluReserved18 = 18,
   kVideoNaluSliceAux = 19,
@@ -85,57 +84,57 @@ enum enVideoH264NaluType {
   kVideoNaluExt = 31,
 };
 
-inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
+inline std::string EnVideoH264NaluTypeToString(EnVideoH264NaluType v) {
   switch (v) {
     case kVideoNaluUnspecific:
       return "Undefined";
     case kVideoNaluSlice:
-      return "NAL unit - Coded slice of a non-IDR picture";
+      return "Coded slice of a non-IDR picture";
     case kVideoNaluDpa:
-      return "NAL unit - Coded slice data partition A";
+      return "Coded slice data partition A";
     case kVideoNaluDpb:
-      return "NAL unit - Coded slice data partition B";
+      return "Coded slice data partition B";
     case kVideoNaluDpc:
-      return "NAL unit - Coded slice data partition C";
+      return "Coded slice data partition C";
     case kVideoNaluIdr:
-      return "NAL unit - Coded slice of an IDR picture";
+      return "Coded slice of an IDR picture";
     case kVideoNaluSei:
-      return "NAL unit - Supplemental enhancement information (SEI)";
+      return "Supplemental enhancement information (SEI)";
     case kVideoNaluSps:
-      return "NAL unit - Sequence parameter set";
+      return "Sequence parameter set";
     case kVideoNaluPps:
-      return "NAL unit - Picture parameter set";
+      return "Picture parameter set";
     case kVideoNaluDelimiterRbsp:
-      return "NAL unit - Access unit delimiter";
+      return "Access unit delimiter";
     case kVideoNaluEoseq:
-      return "NAL unit - End of sequence";
+      return "End of sequence";
     case kVideoNaluEostm:
-      return "NAL unit - End of stream";
+      return "End of stream";
     case kVideoNaluFillerData:
-      return "NAL unit - Filler data";
+      return "Filler data";
     case kVideoNaluSpsExtn:
-      return "NAL unit - Sequence parameter set extension";
+      return "Sequence parameter set extension";
     case kVideoNaluPrefix:
-      return "NAL unit - Prefix";
+      return "Prefix";
     case kVideoNaluSubSps:
-      return "NAL unit - Subset sequence parameter set";
-    case kVideoNaluDPS:
-      return "NAL unit - DPS";
+      return "Subset sequence parameter set";
+    case kVideoNaluDps:
+      return "Depth parameter set";
     case kVideoNaluReserved17:
-      return "NAL unit - Reserved 17";
+      return "Reserved 17";
     case kVideoNaluReserved18:
-      return "NAL unit - Reserved 18";
+      return "Reserved 18";
     case kVideoNaluSliceAux:
-      return "NAL unit - Coded slice of an auxiliary coded picture without "
+      return "Coded slice of an auxiliary coded picture without "
              "partitioning";
     case kVideoNaluSliceExt:
-      return "NAL unit - Coded slice extension";
+      return "Coded slice extension";
     case kVideoNaluSliceExtDepth:
-      return "NAL unit - Coded slice extension for depth view components";
+      return "Coded slice extension for depth view components";
     case kVideoNaluReserved22:
-      return "NAL unit - Reserved 22";
+      return "Reserved 22";
     case kVideoNaluReserved23:
-      return "NAL unit - Reserved 23";
+      return "Reserved 23";
     case kVideoNaluStapA:
       return "Single-time aggregation packet A (STAP-A)";
     case kVideoNaluStapB:
@@ -149,9 +148,9 @@ inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
     case kVideoNaluFuB:
       return "Fragmentation unit B (FU-B)";
     case kVideoNaluPacsi:
-      return "NAL unit - Payload Content Scalability Information (PACSI)";
+      return "Payload Content Scalability Information (PACSI)";
     case kVideoNaluExt:
-      return "NAL unit - Extended NAL Header";
+      return "Extended NAL Header";
     default:
       return tylib::format_string("Unknown[%d]", v);
   }
@@ -159,10 +158,10 @@ inline std::string enVideoH264NaluTypeToString(enVideoH264NaluType v) {
 
 // H.264 nalu header type mask.
 const int kH264TypeMask = 0x1F;
-inline enVideoH264NaluType GetNALUType(const char* nalu) {
-  return static_cast<enVideoH264NaluType>(nalu[0] & kH264TypeMask);
+inline EnVideoH264NaluType GetNaluType(const char* nalu) {
+  return static_cast<EnVideoH264NaluType>(nalu[0] & kH264TypeMask);
 }
 
 }  // namespace tywebrtc
 
-#endif  //  SRC_RTP_PACK_UNPACK_PACK_UNPACK_COMMON_H_
+#endif  //  SRC_RTP_PACK_UNPACK_H264_COMMON_H_

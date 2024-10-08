@@ -14,7 +14,7 @@
 #include <cstring>
 #include <vector>
 
-#include "src/rtp/pack_unpack/pack_unpack_common.h"
+#include "src/rtp/pack_unpack/h264_common.h"
 #include "src/rtp/rtp_parser.h"
 
 namespace tywebrtc {
@@ -26,14 +26,14 @@ static const uint8_t kStapAHeaderSize = kNalHeaderSize + kLengthFieldSize;
 static const uint8_t kNaluTypeSize = 1;
 
 struct NaluInfo {
-  enVideoH264NaluType type;
+  EnVideoH264NaluType type;
   // Offset and size are only valid for non-FuA packets.
   uint32_t offset;
   uint32_t size;
 
   std::string ToString() const {
     return tylib::format_string("{type=%d[%s], offset=%d, size=%d}", type,
-                                enVideoH264NaluTypeToString(type).data(),
+                                EnVideoH264NaluTypeToString(type).data(),
                                 offset, size);
   }
 };
@@ -103,11 +103,11 @@ int H264Unpacketizer::ParseFuaNalu_(const std::vector<char> &vBufReceive) {
   }
 
   // taylor not payload[0] ?
-  enVideoH264NaluType original_nal_type =
-      static_cast<enVideoH264NaluType>(payload[1] & kH264TypeMask);
+  EnVideoH264NaluType original_nal_type =
+      static_cast<EnVideoH264NaluType>(payload[1] & kH264TypeMask);
   bool first_fragment = ((payload[1] & kSBit) != 0);
   tylog("original_nal_type=%s, first_fragment=%d.",
-        enVideoH264NaluTypeToString(original_nal_type).data(), first_fragment);
+        EnVideoH264NaluTypeToString(original_nal_type).data(), first_fragment);
 
   if (first_fragment) {
     if (frame_buffer_.frames.empty() ||
@@ -275,8 +275,8 @@ int H264Unpacketizer::ParseStapAOrSingleNalu_(
 
   const char *nalu_start = payload + kNalHeaderSize;
   const size_t nalu_length = length - kNalHeaderSize;
-  enVideoH264NaluType nal_type =
-      static_cast<enVideoH264NaluType>(payload[0] & kH264TypeMask);
+  EnVideoH264NaluType nal_type =
+      static_cast<EnVideoH264NaluType>(payload[0] & kH264TypeMask);
   std::vector<size_t> nalu_start_offsets;
   if (nal_type == kVideoNaluStapA) {
     // Skip the StapA header (StapA NAL type + length).
@@ -294,7 +294,7 @@ int H264Unpacketizer::ParseStapAOrSingleNalu_(
       return ret;
     }
 
-    nal_type = static_cast<enVideoH264NaluType>(payload[kStapAHeaderSize] &
+    nal_type = static_cast<EnVideoH264NaluType>(payload[kStapAHeaderSize] &
                                                 kH264TypeMask);
     // no use?
   } else {
@@ -318,8 +318,8 @@ int H264Unpacketizer::ParseStapAOrSingleNalu_(
 
     NaluInfo nalu;
     nalu.type =
-        static_cast<enVideoH264NaluType>(payload[start_offset] & kH264TypeMask);
-    tylog("nalu.type=%s", enVideoH264NaluTypeToString(nalu.type).data());
+        static_cast<EnVideoH264NaluType>(payload[start_offset] & kH264TypeMask);
+    tylog("nalu.type=%s", EnVideoH264NaluTypeToString(nalu.type).data());
     nalu.offset = start_offset;
     nalu.size = end_offset - start_offset;
     // start_offset += kNaluTypeSize;
@@ -375,12 +375,12 @@ int H264Unpacketizer::ParseStapAOrSingleNalu_(
       case kVideoNaluStapA:
       case kVideoNaluFuA:
         tylog("error: after parse, recv %s",
-              enVideoH264NaluTypeToString(nalu.type).data());
+              EnVideoH264NaluTypeToString(nalu.type).data());
         return -4;
 
       default:
         tylog("warning: recv nalu type=%s",
-              enVideoH264NaluTypeToString(nalu.type).data());
+              EnVideoH264NaluTypeToString(nalu.type).data());
         break;
     }
 
@@ -451,10 +451,10 @@ int H264Unpacketizer::Unpacketize(const std::vector<char> &vBufReceive,
   }
 
   char const *const payload = vBufReceive.data() + rtpHeader.getHeaderLength();
-  enVideoH264NaluType nal_type =
-      static_cast<enVideoH264NaluType>(payload[0] & kH264TypeMask);
+  EnVideoH264NaluType nal_type =
+      static_cast<EnVideoH264NaluType>(payload[0] & kH264TypeMask);
   tylog("nalu type=%d[%s]", nal_type,
-        enVideoH264NaluTypeToString(nal_type).data());
+        EnVideoH264NaluTypeToString(nal_type).data());
   if (nal_type == kVideoNaluFuA) {
     ret = ParseFuaNalu_(vBufReceive);
     if (ret) {

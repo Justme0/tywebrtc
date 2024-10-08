@@ -11,7 +11,7 @@
 #include <cassert>
 
 #include "src/log/log.h"
-#include "src/rtp/pack_unpack/pack_unpack_common.h"
+#include "src/rtp/pack_unpack/h264_common.h"
 #include "src/rtp/rtp_parser.h"
 
 namespace tywebrtc {
@@ -102,7 +102,7 @@ int H264Packetizer::PacketStapA(const uint32_t timestamp,
 
   uint8_t header = sps_[0];
   uint8_t nal_type = header & kH264TypeMask;
-  assert(nal_type == enVideoH264NaluType::kVideoNaluSps);
+  assert(nal_type == EnVideoH264NaluType::kVideoNaluSps);
 
   std::vector<char> packet(MAX_PKT_BUF_SIZE);
   RtpHeader& rtp_header = *reinterpret_cast<RtpHeader*>(packet.data());
@@ -153,7 +153,7 @@ int H264Packetizer::PacketSingleNalu_(
     const Nalu& nalu, const uint32_t timestamp,
     const std::vector<std::shared_ptr<Extension>>&,
     std::vector<RtpBizPacket>& rtpBizPackets) {
-  switch (GetNALUType(nalu.data)) {
+  switch (GetNaluType(nalu.data)) {
     case kVideoNaluIdr:
       // PacketStapA(timestamp, extensions, rtpBizPackets);
       break;
@@ -205,7 +205,7 @@ int H264Packetizer::PacketFuA_(const Nalu& nalu, const uint32_t timestamp,
                                std::vector<RtpBizPacket>& rtpBizPackets) {
   assert(nalu.size > kGuessMtuByte);
 
-  // if (GetNALUType(frame) == enVideoH264NaluType::kVideoNaluIdr) {
+  // if (GetNaluType(frame) == EnVideoH264NaluType::kVideoNaluIdr) {
   //   PacketStapA(timestamp, extensions, rtpBizPackets);
   // }
 

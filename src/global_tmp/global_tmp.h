@@ -50,8 +50,9 @@ const int kAACChannelNumber = 1;
 // OPT: parse from src stream
 const int kSideLenPix = 500;
 
+// lost rate, e.g. if 20%, set 20
 const int kUplossRateMul100 = 0;
-const int kDownlossRateMul100 = 0;
+const int kDownlossRateMul100 = 15;
 
 // https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/modules/rtp_rtcp/include/rtp_rtcp_defines.h;l=50
 // rename kBogusRtpRateForAudioRtcp

@@ -56,8 +56,8 @@ int FlvAssist::SendVideoFrame(const std::vector<char>& h264Frame,
   }
 
   NalHeadPos++;
-  enVideoH264NaluType NaluType =
-      static_cast<enVideoH264NaluType>(pRawDataBuff[NalHeadPos] & 0x1F);
+  EnVideoH264NaluType NaluType =
+      static_cast<EnVideoH264NaluType>(pRawDataBuff[NalHeadPos] & 0x1F);
 
   if (kVideoNaluDelimiterRbsp == NaluType) {
     if (0 == (pRawDataBuff[NalHeadPos + 1] & 0xE0)) {
@@ -109,7 +109,7 @@ int FlvAssist::SendVideoFrame(const std::vector<char>& h264Frame,
       mediaBufferDbg.init(pRawDataBuff, RawBuffLen, (unsigned char*)dstBuf,
                           dstBufLen);
       mediaBufferDbg.setCompositionTimeOffset(0);
-      mediaBufferDbg.setFrameType((enVideoH264NaluType)NaluType);
+      mediaBufferDbg.setFrameType((EnVideoH264NaluType)NaluType);
       pClient->FlvAssistDbg.makeTag(mediaBufferDbg, e_MediaType_Avc);
       WriteFile(mediaBufferDbg.getDestBuffer(),
                 mediaBufferDbg.getDestContentLength(), pClient->pfOutfpFLV);
@@ -548,7 +548,7 @@ int FlvAssist::makeAacTag(MediaBuffer& mediaBuffer) {
 }
 
 FlvVideoFrameType FlvAssist::AvcFrameType2FlvVideoFrameType(
-    const enVideoH264NaluType avcFrameType) {
+    const EnVideoH264NaluType avcFrameType) {
   switch (avcFrameType) {
     case kVideoNaluIdr:
     case kVideoNaluSps:
@@ -763,7 +763,7 @@ int FlvAssist::toAvc(MediaBuffer& mediaBuffer) {
 
   mediaBuffer.setDestContentLength(commonAssist.getContentLength());
 
-  mContext.mFrameType = (enVideoH264NaluType)firstNalUnitType;
+  mContext.mFrameType = (EnVideoH264NaluType)firstNalUnitType;
 
   if (isSps(firstNalUnitType)) {
     mContext.mSpsLength =

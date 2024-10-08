@@ -6,9 +6,9 @@
 // in the file PATENTS.  All contributing project authors may
 // be found in the AUTHORS file in the root of the source tree.
 
-#include "src/rtp/rtcp/rtcp_packet/ps_fb/rtcp_remb.h"
+// RFC: https://datatracker.ietf.org/doc/html/draft-alvestrand-rmcat-remb-03
 
-#include <cassert>
+#include "src/rtp/rtcp/rtcp_packet/ps_fb/rtcp_remb.h"
 
 #include "src/global_tmp/global_tmp.h"
 #include "src/pc/peer_connection.h"

@@ -11,7 +11,7 @@
 #include <cassert>
 
 #include "src/log/log.h"
-#include "src/rtp/pack_unpack/pack_unpack_common.h"
+#include "src/rtp/pack_unpack/h264_common.h"
 #include "src/rtp/rtp_parser.h"
 
 namespace tywebrtc {

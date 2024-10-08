@@ -35,7 +35,7 @@
 #include "src/pc/peer_connection.h"
 #include "src/pc/peer_connection_manager.h"
 #include "src/rtmp/DomainResolve.h"
-#include "src/rtp/pack_unpack/pack_unpack_common.h"
+#include "src/rtp/pack_unpack/h264_common.h"
 
 namespace tywebrtc {
 
@@ -685,42 +685,24 @@ inline int GetSendLen(const char* pWorker, const char* pSendBuff) {
 }
 
 // 获取NALU内容的长度（由前面的四字节长度字段标识）
-inline unsigned int GetNaluLen(unsigned char* pNalu) {
-  return htonl(*reinterpret_cast<uint32_t*>(pNalu - 4));
+inline int GetNaluLen(const char* pNalu) {
+  return htonl(*reinterpret_cast<const uint32_t*>(pNalu - 4));
 }
 
 // 将pNalu指向的NALU内容拷至pWorker，之前填充"0001"
-inline int CopyNalUnit(Client* pClient, const RTMPPacket* pPkg,
-                       const char* SendBuff, unsigned char* pNalu,
-                       char*& pWorker, int& FrameType) {
-  const unsigned int NaluLen = GetNaluLen(pNalu);
+inline int CopyNalUnit(const RTMPPacket* pPkg, const char* SendBuff,
+                       const char* pNalu, char*& pWorker) {
+  const int NaluLen = GetNaluLen(pNalu);
 
-  /*先校验长度再拷贝，防止溢出*/
-  int kSendLen = GetSendLen(pWorker, SendBuff) + 4 +
-                 NaluLen;  // 将填充 "0001" 和 NALU 内容，
+  // 先校验长度再拷贝，防止溢出，将填充 "0001" 和 NALU 内容
+  int kSendLen = GetSendLen(pWorker, SendBuff) + 4 + NaluLen;
 
   if (VIDEO_RAW_STM_MAX_LEN <= kSendLen) {
     /*返回失败会断开连接*/
 
     tylog("Video Size Too Big %u Ts:%u SendLen:%u NaluLen:%u",
           pPkg->m_nBodySize, pPkg->m_nTimeStamp, kSendLen, NaluLen);
-    return -2;
-  }
-
-  /*B帧识别不能通过nalutype决定*/
-  if (WEB_VIDEO_FRAME_TYPE_P == FrameType) {
-    WebVideoFrameType RealSliceType = GetFrameType(pNalu, NaluLen);
-    if (WEB_VIDEO_FRAME_TYPE_B == RealSliceType) {
-      tylog("Recv Unsupport B-frame m_nTimeStamp:%u", pPkg->m_nTimeStamp);
-
-      pClient->RecvBframeNum++;
-
-      return -1;
-    }
-
-    if (WEB_VIDEO_FRAME_TYPE_I == RealSliceType) {
-      FrameType = RealSliceType;
-    }
+    return -1;
   }
 
   pWorker[0] = 0;
@@ -731,6 +713,7 @@ inline int CopyNalUnit(Client* pClient, const RTMPPacket* pPkg,
 
   memcpy(pWorker, pNalu, NaluLen);
   pWorker += NaluLen;
+
   return 0;
 }
 
@@ -1736,188 +1719,40 @@ int RtmpAssist::HandleVideoSpsAndPps(Client* pClient, const RTMPPacket* pPkg) {
   return 0;
 }
 
-int RtmpAssist::GetFrameTypeAndPrepareSpsPps(Client* pClient,
-                                             unsigned char* pNalu,
-                                             char* pRawBuff,
-                                             unsigned int& SendLen) {
-  int NaluType = (pNalu[0] & 0x1F);
-
-  if (kVideoNaluDelimiterRbsp == NaluType) {
-    if (0 == (pNalu[1] & 0xE0)) {
-      NaluType = kVideoNaluIdr;
-    } else {
-      NaluType = kVideoNaluSlice;
-    }
-  }
-
-  if (kVideoNaluIdr == NaluType) {
-    pClient->IFrameNum++;
-    pClient->GopLength = g_now_ms - pClient->LastRecvIframeTime;
-    pClient->LastRecvIframeTime = g_now_ms;
-  }
-
-  if (kVideoNaluIdr == NaluType) {
-    if (pClient->SpsLen) {
-      memcpy(pRawBuff, pClient->pSps, pClient->SpsLen);
-      pRawBuff += pClient->SpsLen;
-      SendLen += pClient->SpsLen;
-    }
-
-    if (pClient->PpsLen) {
-      memcpy(pRawBuff, pClient->pPps, pClient->PpsLen);
-      pRawBuff += pClient->PpsLen;
-      SendLen += pClient->PpsLen;
-    }
-  }
-
-  int FrameType = WEB_VIDEO_FRAME_TYPE_P;
-
-  /*这里不应该有有多人编码的视频需要封装多人UDT的，不存在,私有帧类型*/
-  if ((kVideoNaluSps == NaluType) || (kVideoNaluPps == NaluType) ||
-      (kVideoNaluIdr == NaluType)) {
-    FrameType = WEB_VIDEO_FRAME_TYPE_I;
-  } else if (kVideoNaluDelimiterRbsp == NaluType) {
-    if (0 == (pNalu[1] & 0xE0)) {
-      FrameType = WEB_VIDEO_FRAME_TYPE_I;
-    }
-  }
-
-  return FrameType;
-}
-
-// 兼容非RTMP规范, 暂不处理
-int RtmpAssist::HandleVideoSliceStartCodeMod(Client* pClient,
-                                             const RTMPPacket* pPkg) {
-  tylog("monitor shit");
-  assert(!"monitor shit");
-
-  static unsigned char SendBuff[VIDEO_RAW_STM_MAX_LEN];
-
-  if (9 >= pPkg->m_nBodySize) {
-    return -1;
-  }
-
-  unsigned char* pBuff = (unsigned char*)pPkg->m_body;
-  /*
-  | Frametype and CodecID(8)|AVCPacketType(8)|composition time(24)|
-  | size(32)|
-  */
-  /*这里需要注意内部会有多个nalu单元的情况，需要循环查找*/
-  unsigned char* pNalu = pBuff + 9;
-  unsigned int NaluLen = htonl(*(unsigned int*)(pBuff + 5));
-  unsigned int TotalLen = 9;
-  pClient->VideoFrCycle++;
-
-  unsigned int First4Bytes = (pNalu[0] << 24) | (pNalu[0 + 1] << 16) |
-                             (pNalu[0 + 2] << 8) | (pNalu[0 + 3]);
-  int SkipLen = 0;
-
-  if (First4Bytes == 0x00000001) {
-    SkipLen = 4;
-  } else if ((First4Bytes & 0xFFFFFF00) == 0x00000100) {
-    SkipLen = 3;
-  }
-
-  pNalu += SkipLen;
-  NaluLen -= SkipLen;
-  char* pRawBuff = (char*)SendBuff;
-  int SendLen = 0;
-  int FrameType = WEB_VIDEO_FRAME_TYPE_P;
-  VID_TAG_HEAD* pVideo = (VID_TAG_HEAD*)pBuff;
-  FrameType = (1 == pVideo->Frametype) ? WEB_VIDEO_FRAME_TYPE_I
-                                       : WEB_VIDEO_FRAME_TYPE_P;
-
-  if (WEB_VIDEO_FRAME_TYPE_I == FrameType) {
-    pClient->GopLength = g_now_ms - pClient->LastRecvIframeTime;
-    pClient->LastRecvIframeTime = g_now_ms;
-    pClient->IFrameNum++;
-
-    if (pClient->SpsLen) {
-      memcpy(pRawBuff, pClient->pSps, pClient->SpsLen);
-      pRawBuff += pClient->SpsLen;
-      SendLen += pClient->SpsLen;
-    }
-
-    if (pClient->PpsLen) {
-      memcpy(pRawBuff, pClient->pPps, pClient->PpsLen);
-      pRawBuff += pClient->PpsLen;
-      SendLen += pClient->PpsLen;
-    }
-  }
-
-  /*这里可能出现的是多slice的场景，多slice的话需要打入一个UDT的帧号，防止解码出现问题*/
-  while (TotalLen < pPkg->m_nBodySize) {
-    /*先校验长度再拷贝，防止溢出*/
-    SendLen = SendLen + 4 + NaluLen;
-
-    if (VIDEO_RAW_STM_MAX_LEN <= SendLen) {
-      /*返回失败会断开连接*/
-
-      tylog("Video Size Too Big %u", pPkg->m_nBodySize);
-      return -2;
-    }
-
-    /*B帧识别不能通过nalutype决定*/
-    if (WEB_VIDEO_FRAME_TYPE_P == FrameType) {
-      WebVideoFrameType RealSliceType = GetFrameType(pNalu, NaluLen);
-
-      if (WEB_VIDEO_FRAME_TYPE_B == RealSliceType) {
-        if (0 == pClient->RecvBframeNum % 60) {
-          tylog("Recv Unsupport B-frame m_nTimeStamp:%u", pPkg->m_nTimeStamp);
-        }
-
-        pClient->RecvBframeNum++;
-      }
-    }
-
-    pRawBuff[0] = 0;
-    pRawBuff[1] = 0;
-    pRawBuff[2] = 0;
-    pRawBuff[3] = 1;
-    pRawBuff += 4;
-    // tylog( "FrameType:%d pNalu:%s", FrameType,
-    // VideoDumpHex((char*)pNalu, NaluLen));
-    memcpy(pRawBuff, pNalu, NaluLen);
-    pRawBuff += NaluLen;
-    TotalLen += NaluLen;
-    TotalLen += 4;
-    TotalLen += SkipLen;
-
-    if (TotalLen < pPkg->m_nBodySize) {
-      pNalu = pNalu + NaluLen + 4;  // 加上四字节长度描述
-      NaluLen = htonl(*(unsigned int*)(pNalu - 4));
-      SkipLen = 0;
-      First4Bytes = (pNalu[0] << 24) | (pNalu[0 + 1] << 16) |
-                    (pNalu[0 + 2] << 8) | (pNalu[0 + 3]);
-
-      if (First4Bytes == 0x00000001) {
-        SkipLen = 4;
-      } else if ((First4Bytes & 0xFFFFFF00) == 0x00000100) {
-        SkipLen = 3;
-      }
-
-      pNalu += SkipLen;
-      NaluLen -= SkipLen;
-    }
-  }
-
-  // PackVideoData(SendBuff, SendLen, pPkg->m_nTimeStamp, FrameType, pClient);
-  return 0;
-}
-
 int RtmpAssist::HandleVideoSliceNormal(Client* pClient,
                                        const RTMPPacket* pPkg) {
   int ret = 0;
 
   // 发送buffer相关
   static char SendBuff[VIDEO_RAW_STM_MAX_LEN];
-  char* pWorker = SendBuff;  // pWorker指向发送buffer的空闲位置
+  // pWorker指向发送buffer的空闲位置，STL区间形式[SendBuff, pWorker)
+  char* pWorker = SendBuff;
 
   // pPkg->m_body 指向 Video Tag Data的FrameType字段
   const VID_TAG_HEAD* pVideo = reinterpret_cast<VID_TAG_HEAD*>(pPkg->m_body);
-  int FrameType = (1 == pVideo->Frametype) ? WEB_VIDEO_FRAME_TYPE_I
-                                           : WEB_VIDEO_FRAME_TYPE_P;
-  bool IsPrepareSpsPps = false;  // 是否贴过 SPS PPS (I帧的第一个NALU 5前面贴)
+  EnVideoFrameType FrameType =
+      (1 == pVideo->Frametype) ? VIDEO_FRAME_TYPE_I : VIDEO_FRAME_TYPE_P;
+
+  // 异常检测：首个NALU是IDR，前面没有SPS,PPS
+  if (pClient->SpsLen == 0 || pClient->PpsLen == 0) {
+    tylog("error: SPS or PPS not exist, ignore current frame=%s, client=%s.",
+          VideoFrameTypeToString(FrameType).data(), pClient->ToString().data());
+    // 不返错，for dump码流(WriteFileH264) OPT: return err
+    return 0;
+  }
+
+  if (VIDEO_FRAME_TYPE_I == FrameType) {
+    pClient->IFrameNum++;
+    if (pClient->SpsLen) {
+      memcpy(pWorker, pClient->pSps, pClient->SpsLen);
+      pWorker += pClient->SpsLen;
+    }
+
+    if (pClient->PpsLen) {
+      memcpy(pWorker, pClient->pPps, pClient->PpsLen);
+      pWorker += pClient->PpsLen;
+    }
+  }
 
   pClient->VideoFrCycle++;
 
@@ -1927,56 +1762,46 @@ int RtmpAssist::HandleVideoSliceNormal(Client* pClient,
   for (unsigned int TotalLen = 9; TotalLen < pPkg->m_nBodySize;
        TotalLen += NaluLen + 4) {
     // pNalu指向本次待处理的NALU内容
-    unsigned char* pNalu =
-        reinterpret_cast<unsigned char*>(pPkg->m_body) + TotalLen;
+    char* pNalu = reinterpret_cast<char*>(pPkg->m_body) + TotalLen;
     // 本次待处理的NALU内容的长度
     NaluLen = GetNaluLen(pNalu);
-    const int NaluType = (pNalu[0] & 0x1F);
+    const EnVideoH264NaluType NaluType = GetNaluType(pNalu);
+    std::string naluLog = tylib::format_string(
+        "TotalLen=%d, BodySize=%d, NaluLen=%u, NaluType=%s, FrameType=%d",
+        TotalLen, pPkg->m_nBodySize, NaluLen,
+        EnVideoH264NaluTypeToString(NaluType).data(), FrameType);
+    if (NaluType == kVideoNaluSps || NaluType == kVideoNaluPps ||
+        NaluType == kVideoNaluDelimiterRbsp) {
+      tylog("drop: %s.", naluLog.data());
+      continue;
+    }
+    tylog("pass: %s.", naluLog.data());
 
-    if (!IsPrepareSpsPps) {
-      unsigned int SpsPpsLen = 0;
-      GetFrameTypeAndPrepareSpsPps(pClient, pNalu, pWorker, SpsPpsLen);
-      if (SpsPpsLen > 0) {
-        IsPrepareSpsPps = true;
-        // 在GetFrameTypeAndPrepareSpsPps中贴了SpsPpsLen个字节
-        pWorker += SpsPpsLen;
+    // B帧识别需要解析NALU
+    // what if non-slice NALU in P frame ?
+    if (VIDEO_FRAME_TYPE_P == FrameType) {
+      EnVideoFrameType RealSliceType = GetFrameType(pNalu, NaluLen);
+      if (VIDEO_FRAME_TYPE_B == RealSliceType) {
+        FrameType = VIDEO_FRAME_TYPE_B;
+        tylog("warn: recv rtmp B frame");
       }
     }
 
-    tylog("TotalLen=%d,BodySize=%d,NaluLen=%u,NaluType=%d,FrameType=%d",
-          TotalLen, pPkg->m_nBodySize, NaluLen, NaluType, FrameType);
-
-    if (kVideoNaluSei == NaluType) {
-      if (pClient->IsSeiPass) {
-        int Ret =
-            CopyNalUnit(pClient, pPkg, SendBuff, pNalu, pWorker, FrameType);
-        if (0 != Ret) {
-          return Ret;
-        }
-
-        pClient->PassSeiNum++;
-      } else {
-        pClient->DropSeiNum++;
-      }
-    } else {
-      int Ret = CopyNalUnit(pClient, pPkg, SendBuff, pNalu, pWorker, FrameType);
-      if (0 != Ret) {
-        return Ret;
-      }
+    int Ret = CopyNalUnit(pPkg, SendBuff, pNalu, pWorker);
+    if (0 != Ret) {
+      return Ret;
     }
   }
 
-  const int kSendLen = GetSendLen(pWorker, SendBuff);
-  assert(0 != kSendLen);
-
+  assert(pWorker > SendBuff);
   auto* pc = this->GetRtmpPeerPC();
   if (nullptr == pc) {
     return 0;
   }
 
   // 90kHz * 1ms
-  ret = pc->rtpHandler_.DownlinkPackAndSend(
-      false, {SendBuff, SendBuff + kSendLen}, 90 * pPkg->m_nTimeStamp);
+  ret = pc->rtpHandler_.DownlinkPackAndSend(false, {SendBuff, pWorker},
+                                            90 * pPkg->m_nTimeStamp);
   if (ret) {
     tylog("downlinkPackAndSend video ret=%d.", ret);
     return ret;
@@ -1992,9 +1817,6 @@ int RtmpAssist::HandleVideoSlice(Client* pClient, const RTMPPacket* pPkg) {
 
   unsigned char* pBuff = (unsigned char*)pPkg->m_body;
 
-  // tylog( "rtmpPkg:%s",VideoDumpHex
-  // ((char*)pBuff,pPkg->m_nBodySize));
-
   /*
   | Frametype and CodecID(8)|AVCPacketType(8)|composition time(24)|
   | size(32)|
@@ -2008,7 +1830,8 @@ int RtmpAssist::HandleVideoSlice(Client* pClient, const RTMPPacket* pPkg) {
   // 携带了0x00001的模式
   if ((First4Bytes == 0x00000001) ||
       ((First4Bytes & 0xFFFFFF00) == 0x00000100)) {
-    return HandleVideoSliceStartCodeMod(pClient, pPkg);
+    // return HandleVideoSliceStartCodeMod(pClient, pPkg);
+    return -1;
   } else {
     return HandleVideoSliceNormal(pClient, pPkg);
   }
@@ -2064,13 +1887,11 @@ int RtmpAssist::HandleAudioHead(Client* pClient, const RTMPPacket* pPkg) {
   int SampleFrIdx = (((pAAcSeqHead->SampleFrIdxH & 0x7) << 1) |
                      (pAAcSeqHead->SampleFrIdxL & 0x1));
   tylog(
-      "%s, AACPackType:%d AudFormat:0x%x SoundRate:0x%x SoundSize:0x%x "
-      "SoundType:0x%x Chn:0x%x SampleFrIdx:0x%x-0x%x AudObjType:0x%x "
-      "Adts:%lu",
-      __FUNCTION__, pFlvAudTagHead->AACPackType,
-      pFlvAudTagHead->AudFormat & 0xF, pFlvAudTagHead->SoundRate & 0x3,
-      pFlvAudTagHead->SoundSize & 0x1, pFlvAudTagHead->SoundType & 0x1,
-      pAAcSeqHead->ChnCfg & 0xF, SampleFrIdx,
+      "AACPackType:%d AudFormat:0x%x SoundRate:0x%x SoundSize:0x%x "
+      "SoundType:0x%x Chn:0x%x SampleFrIdx:0x%x-0x%x AudObjType:0x%x Adts:%lu",
+      pFlvAudTagHead->AACPackType, pFlvAudTagHead->AudFormat & 0xF,
+      pFlvAudTagHead->SoundRate & 0x3, pFlvAudTagHead->SoundSize & 0x1,
+      pFlvAudTagHead->SoundType & 0x1, pAAcSeqHead->ChnCfg & 0xF, SampleFrIdx,
       ((pAAcSeqHead->SampleFrIdxH & 0x7) << 1), pAAcSeqHead->AudObjType & 0x1F,
       sizeof(ADTS_HEAD));
   pClient->AudFormat = pFlvAudTagHead->AudFormat & 0xF;

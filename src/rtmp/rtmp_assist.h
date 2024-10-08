@@ -14,6 +14,7 @@
 #include <string>
 
 #include "librtmp/rtmp_sys.h"
+#include "tylib/ip/ip.h"
 
 #include "src/global_tmp/snowflake.h"
 #include "src/pull/pull_handler.h"
@@ -297,7 +298,7 @@ typedef struct RtmpDataHead {
 
   unsigned int TimeStamp;
 
-  unsigned char FrameType;  // WEB_VIDEO_FRAME_TYPE
+  unsigned char FrameType;  // VIDEO_FRAME_TYPE
 
   unsigned char MediaType;  // MEDIA_TYPE
   unsigned long long SessionID;
@@ -308,15 +309,15 @@ typedef struct RtmpDataHead {
 
 #pragma pack()
 
-typedef enum enRtmpState {
+enum EnRtmpState {
   RTMP_STATE_INIT,
   RTMP_STATE_TCP_CONNECTED,
   RTMP_STATE_RTMP_CONNECTED,
   RTMP_STATE_PLAY,
   RTMP_STATE_PUBLISH,
-} RTMP_STATE;
+};
 
-inline std::string RtmpStateToString(RTMP_STATE rtmpState) {
+inline std::string RtmpStateToString(EnRtmpState rtmpState) {
   switch (rtmpState) {
     case RTMP_STATE_INIT:
       return "INIT";
@@ -352,7 +353,7 @@ struct Client {
   FILE* pfOutfpAAC = nullptr;
   FILE* pfOutfpFLV = nullptr;
   char DumpFlag = 0;  // 是否已开始dump
-  char State;         // RTMP_STATE
+  EnRtmpState State : 8;
   unsigned long long SessionID = 0;
   unsigned long long TinyId = 0;
   unsigned long long SrcTinyId;
@@ -441,9 +442,23 @@ struct Client {
 
   unsigned short AudioRtpTsInterVal;
 
+  // always allow transport SEI
   unsigned int IsSeiPass;
 
   // LIST_ENTRY(client) next;
+
+  std::string rtmpUrl;
+  bool bSupportBFrame{};
+
+  std::string ToString() const {
+    return tylib::format_string(
+        "{bDumpingFile=%d, rtmpState=%s, sessionid=%llu, tinyid=%llu, "
+        "srctinyid=%lld, ppsLen=%u, spsLen=%u, clientIp=%s, url=%s, "
+        "supportBFrame=%d}",
+        DumpFlag, RtmpStateToString(State).data(), SessionID, TinyId, SrcTinyId,
+        PpsLen, SpsLen, tylib::netOrderToString(ClientIp).data(),
+        rtmpUrl.data(), bSupportBFrame);
+  }
 };
 
 typedef int (*RtmpMsgSend)(unsigned char* pBuff, int len);
@@ -599,8 +614,6 @@ class RtmpAssist {
 
   int GetFrameTypeAndPrepareSpsPps(Client* pClient, unsigned char* pNalu,
                                    char* pRawBuff, unsigned int& SendLen);
-
-  int HandleVideoSliceStartCodeMod(Client* pClient, const RTMPPacket* pPacket);
 
   int HandleVideoSliceNormal(Client* pClient, const RTMPPacket* pPacket);
 

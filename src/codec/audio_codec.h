@@ -83,7 +83,7 @@ struct SrsAudioFrame {
   int64_t ts_ms = 0;
 
   std::string ToString() const {
-    return tylib::format_string("{size=%zu, tsMs=%" PRId64 " }", s.size(),
+    return tylib::format_string("{size=%zu, tsMs=%" PRId64 "}", s.size(),
                                 ts_ms);
   }
 };

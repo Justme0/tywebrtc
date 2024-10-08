@@ -150,17 +150,18 @@ static int bs_read1(bs_t *s) {
 static int bs_read_ue(bs_t *s) {
   int i = 0;
 
-  while (bs_read1(s) == 0 && s->p < s->p_end &&
-         i < 32)  //条件为：读到的当前比特=0，指针未越界，最多只能读32比特
-  {
+  //条件为：读到的当前比特=0，指针未越界，最多只能读32比特
+  while (bs_read1(s) == 0 && s->p < s->p_end && i < 32) {
     i++;
   }
   return ((1 << i) - 1 + bs_read(s, i));
 }
 
-WebVideoFrameType GetFrameType(unsigned char *pNalu, int Len) {
+EnVideoFrameType GetFrameType(const void *pNalu, int Len) {
   bs_t s;
-  bs_init(&s, pNalu + 1, Len - 1);
+  // OPT: bs_init should use const pointer ?
+  bs_init(&s, const_cast<char *>(reinterpret_cast<const char *>(pNalu) + 1),
+          Len - 1);
 
   /* i_first_mb */
   bs_read_ue(&s);
@@ -171,26 +172,26 @@ WebVideoFrameType GetFrameType(unsigned char *pNalu, int Len) {
   switch (frame_type) {
     case 0:
     case 5: /* P */
-      return WEB_VIDEO_FRAME_TYPE_P;
+      return VIDEO_FRAME_TYPE_P;
 
     case 1:
     case 6: /* B */
-      return WEB_VIDEO_FRAME_TYPE_B;
-
-    case 3:
-    case 8: /* SP */
-      return WEB_VIDEO_FRAME_TYPE_P;
+      return VIDEO_FRAME_TYPE_B;
 
     case 2:
     case 7: /* I */
-      return WEB_VIDEO_FRAME_TYPE_I;
+      return VIDEO_FRAME_TYPE_I;
+
+    case 3:
+    case 8: /* SP */
+      return VIDEO_FRAME_TYPE_P;
 
     case 4:
     case 9: /* SI */
-      return WEB_VIDEO_FRAME_TYPE_I;
+      return VIDEO_FRAME_TYPE_I;
   }
 
-  return WEB_VIDEO_FRAME_TYPE_P;
+  return VIDEO_FRAME_TYPE_P;
 }
 
 }  // namespace tywebrtc
